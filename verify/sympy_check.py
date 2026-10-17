@@ -48,12 +48,13 @@ def check(item):
     kind = spec["type"]
     if kind == "solve":
         names = names_in(*spec["equations"], *spec["unknowns"])
-        plain = set(spec["unknowns"])
+        positive = bool(spec.get("positive"))
+        plain = set() if positive else set(spec["unknowns"])
         eqs = []
         for e in spec["equations"]:
             lhs, rhs = e.split("=")
             eqs.append(sp.Eq(parse(lhs, names, plain), parse(rhs, names, plain)))
-        unknowns = [sp.Symbol(u) for u in spec["unknowns"]]
+        unknowns = [sp.Symbol(u, positive=True) if positive else sp.Symbol(u) for u in spec["unknowns"]]
         sols = sp.solve(eqs, unknowns, dict=True)
         if len(sols) != 1:
             return f"SymPy found {len(sols)} solutions: {sols}"

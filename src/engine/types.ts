@@ -44,8 +44,11 @@ export type AnswerInput = string | string[];
 // ---------------------------------------------------------------------------
 
 export type VerifySpec =
-  /** The answer's values, in `unknowns` order, satisfy every `lhs = rhs` equation. */
-  | { type: 'solve'; equations: string[]; unknowns: string[] }
+  /**
+   * The answer's values, in `unknowns` order, satisfy every `lhs = rhs` equation. With
+   * `positive`, the unknowns are positive (e.g. a quantity), which picks one root of a quadratic.
+   */
+  | { type: 'solve'; equations: string[]; unknowns: string[]; positive?: boolean }
   /** The answer (an expression) is d/d`variable` of `expr`. */
   | { type: 'diff'; expr: string; variable: string }
   /** The answer (an expression) is algebraically equivalent to `expr`. */

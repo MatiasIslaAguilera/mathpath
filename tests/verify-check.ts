@@ -43,6 +43,7 @@ export function verifyAnswer(spec: VerifySpec, answer: AnswerSpec): string | nul
       if (vals.length !== spec.unknowns.length) return `expected ${spec.unknowns.length} values, got ${vals.length}`;
       const scope: Record<string, number> = {};
       spec.unknowns.forEach((u, i) => (scope[u] = ev(vals[i])));
+      if (spec.positive && spec.unknowns.some((u) => !(scope[u] > 0))) return `expected positive values, got ${JSON.stringify(scope)}`;
       for (const eq of spec.equations) {
         const parts = eq.split('=');
         if (parts.length !== 2) return `bad equation: ${eq}`;
