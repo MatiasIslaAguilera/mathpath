@@ -19,6 +19,7 @@ export interface TreeNode {
 
 const m = (id: string, title: string, unit: string, prerequisites: string[], optional = false): TreeNode => ({ id, title, track: 'math', unit, prerequisites, optional });
 const e = (id: string, title: string, unit: string, prerequisites: string[]): TreeNode => ({ id, title, track: 'econ', unit, prerequisites });
+const g = (id: string, title: string, unit: string, prerequisites: string[]): TreeNode => ({ id, title, track: 'gre', unit, prerequisites });
 
 /** Topological order: every skill comes after all of its prerequisites. */
 export const TREE: TreeNode[] = [
@@ -80,6 +81,22 @@ export const TREE: TreeNode[] = [
   e('expected-value-risk', 'Expected value & risk', 'Data', ['expected-value-variance']),
   // Kuhn–Tucker is math, but builds on the Lagrangian, so it sits last.
   m('kuhn-tucker', 'Kuhn–Tucker conditions', 'Multivariable calculus', ['lagrangian-optimization']),
+  // ---------- GRE Quant (ETS content areas; prerequisites stay inside the GRE track) ----------
+  g('gre-integers', 'Integer properties', 'GRE · Arithmetic', []),
+  g('gre-fractions-percents', 'Fractions & percents', 'GRE · Arithmetic', ['gre-integers']),
+  g('gre-ratios-rates', 'Ratios, rates & work', 'GRE · Arithmetic', ['gre-fractions-percents']),
+  g('gre-exponents-roots', 'Exponents & roots', 'GRE · Arithmetic', ['gre-integers']),
+  g('gre-equations-word-problems', 'Equations & word problems', 'GRE · Algebra', ['gre-fractions-percents']),
+  g('gre-inequalities-absolute-value', 'Inequalities & absolute value', 'GRE · Algebra', ['gre-equations-word-problems']),
+  g('gre-quadratics-functions', 'Quadratics & functions', 'GRE · Algebra', ['gre-equations-word-problems', 'gre-exponents-roots']),
+  g('gre-coordinate-geometry', 'Coordinate geometry', 'GRE · Algebra', ['gre-equations-word-problems']),
+  g('gre-lines-angles-triangles', 'Lines, angles & triangles', 'GRE · Geometry', ['gre-integers']),
+  g('gre-circles-polygons', 'Circles & polygons', 'GRE · Geometry', ['gre-lines-angles-triangles']),
+  g('gre-solids', 'Solids: volume & surface area', 'GRE · Geometry', ['gre-circles-polygons']),
+  g('gre-descriptive-stats', 'Mean, median, range & SD', 'GRE · Data analysis', ['gre-fractions-percents']),
+  g('gre-counting-probability', 'Counting & probability', 'GRE · Data analysis', ['gre-integers']),
+  g('gre-data-interpretation', 'Data interpretation (tables & charts)', 'GRE · Data analysis', ['gre-descriptive-stats', 'gre-ratios-rates']),
+  g('gre-normal-distribution', 'Normal distribution & percentiles', 'GRE · Data analysis', ['gre-descriptive-stats']),
 ];
 
 const byId = new Map(TREE.map((n) => [n.id, n]));

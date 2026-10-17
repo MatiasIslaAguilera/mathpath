@@ -9,7 +9,7 @@
 // After a wrong answer or any help, a same-skill follow-up comes next. Problems are generated
 // lazily so difficulty adapts within the session.
 
-import { makeProblem, SKILLS } from '../engine/registry';
+import { getSkill, makeProblem, SKILLS } from '../engine/registry';
 import { randomSeed } from '../engine/rng';
 import type { Level, Problem } from '../engine/types';
 import { dateKey, emptySkill, type Progress } from '../storage/progress';
@@ -20,7 +20,7 @@ import { fragileReport, isSolid, MASTERY_LEVEL, retentionCheckDue, skillState, w
 import { daysAway, GENTLE_AFTER_DAYS } from './streak';
 import { unlockedSkills } from './unlock';
 
-export type SlotKind = 'warmup' | 'current' | 'review' | 'retention' | 'finisher' | 'followup';
+export type SlotKind = 'warmup' | 'current' | 'review' | 'retention' | 'gre' | 'finisher' | 'followup';
 
 export interface Slot {
   kind: Exclude<SlotKind, 'followup'>;
@@ -57,6 +57,11 @@ const skillOf = (p: Progress, id: string) => p.skills[id] ?? emptySkill();
 /** Skills you can practice: prerequisites solid, or already started (learning/unlock.ts). */
 export const availableSkills = (p: Progress) => unlockedSkills(p);
 
+const isGre = (id: string) => getSkill(id).track === 'gre';
+/** Math and econ: the master's path. GRE skills get their own daily slot instead. */
+const coreSkills = (p: Progress) => availableSkills(p).filter((id) => !isGre(id));
+const greSkills = (p: Progress) => availableSkills(p).filter(isGre);
+
 /**
  * The skill to spend ~70% of the session on, in tree order: one you're still learning, else the
  * next new one, else one that's practiced but not yet at mastery level. (Practiced skills keep
@@ -77,7 +82,7 @@ export interface Agenda {
 /** What's waiting today: shown on Home and used to build the session. */
 export function todaysAgenda(p: Progress, now = new Date()): Agenda {
   const today = dateKey(now);
-  const ids = availableSkills(p);
+  const ids = coreSkills(p);
   const retentionChecks = ids.filter((id) => retentionCheckDue(skillOf(p, id), today));
   const due = ids
     .filter((id) => !retentionChecks.includes(id))
@@ -101,15 +106,18 @@ export function startSession(p: Progress, goal: number, options: { only?: string
     return { ...base, slots, currentSkill: options.only, reviewQueue: [], interleaved: false, only: options.only };
   }
 
-  const available = availableSkills(p);
+  const available = coreSkills(p);
   const agenda = todaysAgenda(p, now);
+  // One GRE question in every session (when any GRE skill is open), placed mid-session.
+  const greSlots: Slot[] = greSkills(p).length ? [{ kind: 'gre' }] : [];
 
   // After a long break: an all-review session one level easier, so coming back starts with wins.
   // Retention checks wait for a normal day (they'd be measuring the break, not the learning).
   const practiced = available.filter((id) => skillOf(p, id).attempts > 0);
   if ((daysAway(p.days, now) ?? 0) > GENTLE_AFTER_DAYS && practiced.length) {
     const queue = [...practiced].sort((a, b) => recall(skillOf(p, a).fsrs, now) - recall(skillOf(p, b).fsrs, now));
-    const slots: Slot[] = [{ kind: 'warmup' }, ...Array.from({ length: n - 2 }, () => ({ kind: 'review' as const })), { kind: 'finisher' }];
+    const reviews: Slot[] = Array.from({ length: Math.max(0, n - 2 - greSlots.length) }, () => ({ kind: 'review' as const }));
+    const slots: Slot[] = [{ kind: 'warmup' }, ...reviews.slice(0, 1), ...greSlots, ...reviews.slice(1), { kind: 'finisher' }];
     return { ...base, slots, currentSkill: undefined, reviewQueue: queue, interleaved: false, gentle: true };
   }
   const retention = agenda.retentionChecks.slice(0, MAX_RETENTION_CHECKS);
@@ -123,7 +131,7 @@ export function startSession(p: Progress, goal: number, options: { only?: string
   if (!currentSkill && !reviewQueue.length) reviewQueue = available.filter((id) => !retention.includes(id));
   const interleaved = available.filter((id) => isSolid(skillState(skillOf(p, id)))).length >= 3;
 
-  const middle = Math.max(0, n - 2 - retention.length);
+  const middle = Math.max(0, n - 2 - retention.length - greSlots.length);
   const reviews = !currentSkill ? middle : reviewQueue.length ? Math.round(middle * 0.3) : 0;
   const mid: Slot['kind'][] = [...Array(middle - reviews).fill('current'), ...Array(reviews).fill('review')];
   for (let i = mid.length - 1; i > 0; i--) {
@@ -132,7 +140,14 @@ export function startSession(p: Progress, goal: number, options: { only?: string
   }
   return {
     ...base,
-    slots: [{ kind: 'warmup' }, ...retention.map((skillId) => ({ kind: 'retention' as const, skillId })), ...mid.map((kind) => ({ kind })), { kind: 'finisher' }],
+    slots: [
+      { kind: 'warmup' },
+      ...retention.map((skillId) => ({ kind: 'retention' as const, skillId })),
+      ...mid.slice(0, Math.ceil(mid.length / 2)).map((kind) => ({ kind })),
+      ...greSlots,
+      ...mid.slice(Math.ceil(mid.length / 2)).map((kind) => ({ kind })),
+      { kind: 'finisher' },
+    ],
     currentSkill,
     reviewQueue,
     interleaved,
@@ -202,6 +217,11 @@ export function nextProblem(s: Session, p: Progress, now = new Date()): { sessio
       const id = s.currentSkill ?? s.reviewQueue[0];
       return { session: advanced, next: { problem: make(id, gentleLevel(s, workingLevel(skillOf(p, id)))), kind: 'current', hideSkill: false } };
     }
+    case 'gre': {
+      const id = pickGreSkill(p, now);
+      if (!id) return nextProblem(advanced, p, now);
+      return { session: advanced, next: { problem: make(id, gentleLevel(s, workingLevel(skillOf(p, id)))), kind: 'gre', hideSkill: false } };
+    }
     case 'review': {
       const queue = s.reviewQueue.length ? s.reviewQueue : [s.currentSkill!];
       const id = queue[s.reviewCursor % queue.length];
@@ -211,6 +231,23 @@ export function nextProblem(s: Session, p: Progress, now = new Date()): { sessio
       };
     }
   }
+}
+
+/**
+ * Today's GRE skill: a due GRE review first (most forgotten), else the GRE skill you're learning,
+ * else the next new one, else the weakest. Undefined if no GRE skill is open.
+ */
+export function pickGreSkill(p: Progress, now = new Date()): string | undefined {
+  const ids = greSkills(p);
+  if (!ids.length) return undefined;
+  const today = dateKey(now);
+  const due = ids
+    .filter((id) => {
+      const sp = skillOf(p, id);
+      return sp.attempts > 0 && sp.lastPracticed !== today && (!sp.fsrs || isDue(sp.fsrs, now) || sp.rusty);
+    })
+    .sort((a, b) => recall(skillOf(p, a).fsrs, now) - recall(skillOf(p, b).fsrs, now));
+  return due[0] ?? pickCurrentSkill(p, ids) ?? [...ids].sort((a, b) => skillOf(p, a).rating - skillOf(p, b).rating)[0];
 }
 
 /** Call after each finished problem. Queues a same-skill follow-up after a miss or any help. */

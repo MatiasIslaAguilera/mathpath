@@ -114,8 +114,8 @@ export interface TreeUnit {
   items: TreeItem[];
 }
 
-export function treeView(p: Progress): { math: TreeUnit[]; econ: TreeUnit[] } {
-  const units = (track: 'math' | 'econ') => {
+export function treeView(p: Progress): { math: TreeUnit[]; econ: TreeUnit[]; gre: TreeUnit[] } {
+  const units = (track: 'math' | 'econ' | 'gre') => {
     const out: TreeUnit[] = [];
     for (const node of TREE.filter((n) => n.track === track)) {
       let status: TreeStatus;
@@ -130,12 +130,12 @@ export function treeView(p: Progress): { math: TreeUnit[]; econ: TreeUnit[] } {
     }
     return out;
   };
-  return { math: units('math'), econ: units('econ') };
+  return { math: units('math'), econ: units('econ'), gre: units('gre') };
 }
 
-/** Progress through the master's-relevant tree (optional skills excluded). */
+/** Progress through the master's-relevant tree (optional skills and the GRE track excluded). */
 export function overallProgress(p: Progress) {
-  const core = TREE.filter((n) => !n.optional);
+  const core = TREE.filter((n) => !n.optional && n.track !== 'gre');
   const states = core.filter((n) => hasSkill(n.id)).map((n) => skillState(p.skills[n.id] ?? emptySkill()));
   return {
     total: core.length,

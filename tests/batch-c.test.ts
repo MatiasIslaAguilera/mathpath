@@ -77,7 +77,8 @@ describe('gentle comeback session', () => {
     const now = D(20);
     const s = startSession(p, 5, { now });
     expect(s.gentle).toBe(true);
-    expect(s.slots.map((x) => x.kind)).toEqual(['warmup', 'review', 'review', 'review', 'finisher']);
+    // Review only (plus the daily GRE question), no current skill, no retention checks.
+    expect(s.slots.map((x) => x.kind)).toEqual(['warmup', 'review', 'gre', 'review', 'finisher']);
     let r = nextProblem(s, p, now)!;
     r = nextProblem(r.session, p, now)!;
     expect(r.next.kind).toBe('review');
@@ -120,7 +121,7 @@ describe('stats', () => {
 describe('skill-tree map', () => {
   it('shows every planned skill: built ones by state, the rest as coming soon', () => {
     const v = treeView(emptyProgress());
-    const all = [...v.math, ...v.econ].flatMap((u) => u.items);
+    const all = [...v.math, ...v.econ, ...v.gre].flatMap((u) => u.items);
     expect(all).toHaveLength(TREE.length);
     const by = (id: string) => all.find((i) => i.node.id === id)!;
     expect(by('linear-equations').status).toBe('new');
@@ -133,8 +134,35 @@ describe('skill-tree map', () => {
     const p = emptyProgress();
     p.skills['linear-equations'] = { ...emptySkill(), attempts: 20, rating: 2, readyAt: key(1), masteredAt: key(4) };
     const o = overallProgress(p);
-    expect(o.total).toBe(TREE.filter((n) => !n.optional).length);
-    expect(o.built).toBe(SKILLS.filter((s) => !TREE.find((n) => n.id === s.id)!.optional).length);
+    expect(o.total).toBe(TREE.filter((n) => !n.optional && n.track !== 'gre').length); // the master's path: no trig, no GRE
+    expect(o.built).toBe(SKILLS.filter((s) => s.track !== 'gre' && !TREE.find((n) => n.id === s.id)!.optional).length);
     expect(o.mastered).toBe(1);
+  });
+});
+
+describe('daily GRE question', () => {
+  it('every session has exactly one GRE slot, mid-session, and it serves a GRE skill', async () => {
+    const { startSession, nextProblem } = await import('../src/learning/session');
+    const { getSkill } = await import('../src/engine/registry');
+    for (const goal of [3, 5, 10, 15]) {
+      const s = startSession(emptyProgress(), goal);
+      const kinds = s.slots.map((x) => x.kind);
+      expect(kinds.filter((k) => k === 'gre'), `goal ${goal}`).toHaveLength(1);
+      expect(kinds[0]).toBe('warmup');
+      expect(kinds.at(-1)).toBe('finisher');
+      expect(s.slots).toHaveLength(Math.max(3, goal));
+      let r = nextProblem(s, emptyProgress());
+      let sawGre = false;
+      while (r) {
+        if (r.next.kind === 'gre') {
+          sawGre = true;
+          expect(getSkill(r.next.problem.skillId).track).toBe('gre');
+        } else {
+          expect(getSkill(r.next.problem.skillId).track, r.next.kind).not.toBe('gre');
+        }
+        r = nextProblem(r.session, emptyProgress());
+      }
+      expect(sawGre).toBe(true);
+    }
   });
 });

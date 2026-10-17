@@ -34,3 +34,21 @@ export function wrongNumber(id: string, compute: () => Q | number): Misconceptio
     return null; // e.g. division by zero: this misconception can't occur with these numbers
   }
 }
+
+/** The four fixed GRE quantitative-comparison options, always in this order (as on the test). */
+export const QC_OPTIONS: ChoiceOption[] = [
+  { id: 'a', label: 'Quantity A is greater.' },
+  { id: 'b', label: 'Quantity B is greater.' },
+  { id: 'c', label: 'The two quantities are equal.' },
+  { id: 'd', label: 'The relationship cannot be determined from the information given.' },
+];
+export type QcRelation = 'a' | 'b' | 'c' | 'd';
+
+export function qcAnswer(relation: QcRelation): AnswerSpec {
+  return { kind: 'choice', options: QC_OPTIONS, correct: relation };
+}
+
+/** Select-all-that-apply. */
+export function multiAnswer(options: ChoiceOption[], correct: string[]): AnswerSpec {
+  return { kind: 'multi', options, correct };
+}

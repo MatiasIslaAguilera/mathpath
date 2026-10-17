@@ -13,7 +13,7 @@ interface Props {
 }
 
 export function initialValue(spec: AnswerSpec): Value {
-  return spec.kind === 'tuple' ? spec.labels.map(() => '') : '';
+  return spec.kind === 'tuple' ? spec.labels.map(() => '') : spec.kind === 'multi' ? [] : '';
 }
 
 const KEYS = ['^', '(', ')', '/', '√(', '-'];
@@ -53,6 +53,33 @@ function TextField(props: {
 
 export function AnswerInput({ spec, value, onChange, onEnter, disabled, autoFocus }: Props) {
   const ref = useRef<HTMLInputElement>(null);
+
+  if (spec.kind === 'multi') {
+    const chosen = Array.isArray(value) ? value : [];
+    const toggle = (id: string) => onChange(chosen.includes(id) ? chosen.filter((c) => c !== id) : [...chosen, id]);
+    return (
+      <div className="choices" role="group" aria-label="Select all that apply">
+        <p className="fine select-all">Select all that apply.</p>
+        {spec.options.map((o) => (
+          <button
+            key={o.id}
+            type="button"
+            role="checkbox"
+            aria-checked={chosen.includes(o.id)}
+            data-option-id={o.id}
+            className={`choice multi ${chosen.includes(o.id) ? 'selected' : ''}`}
+            disabled={disabled}
+            onClick={() => toggle(o.id)}
+          >
+            <span className="box" aria-hidden="true">
+              {chosen.includes(o.id) ? '✓' : ''}
+            </span>
+            <MathText text={o.label} />
+          </button>
+        ))}
+      </div>
+    );
+  }
 
   if (spec.kind === 'choice') {
     return (

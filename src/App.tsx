@@ -68,6 +68,7 @@ export default function App() {
       {screen.name === 'home' && (
         <Home
           progress={progress}
+          syncStatus={status}
           updateProfile={actions.updateProfile}
           onStart={(goal) => start(undefined, goal)}
           onPractice={(id) => start(id)}

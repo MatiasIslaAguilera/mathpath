@@ -15,7 +15,7 @@ const N = Number(process.env.SEEDS ?? 1000);
 const KATEX_SEEDS = 40;
 
 const inputOf = (a: AnswerSpec): AnswerInput =>
-  a.kind === 'tuple' ? a.values : a.kind === 'choice' ? a.correct : a.value;
+  a.kind === 'tuple' ? a.values : a.kind === 'choice' ? a.correct : a.kind === 'multi' ? a.correct : a.value;
 
 function renderLatex(latex: string, where: string) {
   try {
@@ -28,7 +28,7 @@ function renderRich(text: string, where: string) {
   for (const seg of parseRichText(text)) if (seg.type === 'math') renderLatex(seg.value, where);
 }
 function answerLatex(a: AnswerSpec, where: string) {
-  if (a.kind === 'choice') a.options.forEach((o) => renderRich(o.label, where));
+  if (a.kind === 'choice' || a.kind === 'multi') a.options.forEach((o) => renderRich(o.label, where));
   else renderLatex(a.display, where);
 }
 
@@ -53,6 +53,20 @@ function checkProblem(skill: SkillDefinition, p: Problem, seed: number) {
   if (err) throw new Error(`${ctx}: answer fails verification: ${err}`);
   expect(checkAnswer(p.answer, inputOf(p.answer)).correct, `${ctx} checker accepts own answer`).toBe(true);
 
+  // Figures: well-formed, described, and never scripted.
+  if (p.figure?.kind === 'svg') {
+    const svg = p.figure.svg.trim();
+    if (!svg.startsWith('<svg') || !svg.endsWith('</svg>') || /<script|\son\w+\s*=|javascript:/i.test(svg)) throw new Error(`${ctx}: malformed or unsafe SVG figure`);
+    if (!p.figure.alt.trim()) throw new Error(`${ctx}: figure needs alt text`);
+  }
+  if (p.figure?.kind === 'table') {
+    for (const row of p.figure.rows) expect(row.length, `${ctx} table row width`).toBe(p.figure.headers.length);
+  }
+  if (p.answer.kind === 'multi') {
+    expect(p.answer.correct.length, `${ctx} select-all needs at least one correct option`).toBeGreaterThan(0);
+    expect(p.verify.type, `${ctx} select-all answers use a 'choice' verify + skill test`).toBe('choice');
+  }
+
   if (p.verify.type === 'choice' && !existsSync(`tests/skills/${skill.id}.test.ts`)) {
     throw new Error(`${ctx}: multiple-choice answers need tests/skills/${skill.id}.test.ts to re-derive the correct option`);
   }
@@ -76,6 +90,10 @@ function checkProblem(skill: SkillDefinition, p: Problem, seed: number) {
     const a = s.ask.answer;
     if (a.kind === 'choice') {
       expect(a.options.map((o) => o.id), where).toContain(a.correct);
+      return;
+    }
+    if (a.kind === 'multi') {
+      for (const id of a.correct) expect(a.options.map((o) => o.id), where).toContain(id);
       return;
     }
     if (!s.ask.verify) throw new Error(`${where}: non-choice ask needs a verify spec`);
@@ -103,6 +121,10 @@ function checkProblem(skill: SkillDefinition, p: Problem, seed: number) {
   // 7. All LaTeX renders (sampled: KaTeX is slow).
   if (seed <= KATEX_SEEDS) {
     renderRich(p.prompt, `${ctx} prompt`);
+    if (p.figure?.kind === 'table') {
+      renderRich(p.figure.caption, `${ctx} table caption`);
+      [...p.figure.headers, ...p.figure.rows.flat()].forEach((c) => renderRich(c, `${ctx} table cell`));
+    }
     answerLatex(p.answer, `${ctx} answer`);
     p.steps.forEach((s, i) => {
       renderRich(s.instruction, `${ctx} step ${i} instruction`);

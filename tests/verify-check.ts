@@ -23,13 +23,20 @@ function values(answer: AnswerSpec): string[] {
     case 'tuple':
       return answer.values;
     case 'choice':
+    case 'multi':
       throw new Error('choice answers are not verified numerically');
   }
 }
 
 /** Returns null when the answer satisfies the spec, else a description of the failure. */
 export function verifyAnswer(spec: VerifySpec, answer: AnswerSpec): string | null {
-  if (spec.type === 'choice') return answer.kind === 'choice' ? null : `'choice' verify used with a ${answer.kind} answer`;
+  if (spec.type === 'choice') return answer.kind === 'choice' || answer.kind === 'multi' ? null : `'choice' verify used with a ${answer.kind} answer`;
+  if (spec.type === 'qc') {
+    if (answer.kind !== 'choice') return `'qc' verify needs a choice answer, got ${answer.kind}`;
+    const found = qcRelation(spec);
+    if (typeof found !== 'string') return found.error;
+    return found === answer.correct ? null : `QC: sampling says '${found}' (${QC_NAMES[found]}), answer says '${answer.correct}'`;
+  }
   const vals = values(answer);
   switch (spec.type) {
     case 'solve': {
@@ -84,4 +91,61 @@ export function verifyAnswer(spec: VerifySpec, answer: AnswerSpec): string | nul
       return close(a, b, 1e-9) ? null : `${spec.expr} = ${a}, claimed ${vals[0]}`;
     }
   }
+}
+
+// ---------- GRE quantitative comparison ----------
+
+const QC_NAMES = { a: 'A greater', b: 'B greater', c: 'equal', d: 'cannot be determined' } as const;
+type QcSpec = Extract<VerifySpec, { type: 'qc' }>;
+
+/** Deterministic PRNG so failures are reproducible. */
+function prng(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), a | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Classify A vs B by sampling the allowed values. GRE traps live at special values, so the
+ * candidates always include 0, ±1, ±1/2, ±2, the bounds and their neighbors, plus random draws.
+ * Any two samples that disagree are a counterexample proving 'd'.
+ */
+export function qcRelation(spec: QcSpec, samples = 4000): keyof typeof QC_NAMES | { error: string } {
+  const rand = prng(12345);
+  const special = (v: QcSpec['variables'][number]) => {
+    const base = [0, 1, -1, 0.5, -0.5, 2, -2, 0.1, -0.1, 0.9, 1.1, 3, -3, 10, -10, v.min, v.max, v.min + 1, v.max - 1, (v.min + v.max) / 2];
+    return base.filter((x) => x >= v.min && x <= v.max && (!v.integer || Number.isInteger(x)));
+  };
+  const draw = (v: QcSpec['variables'][number], i: number) => {
+    const sp = special(v);
+    if (i < sp.length * 3 && sp.length) return sp[Math.floor(rand() * sp.length)];
+    const x = v.min + rand() * (v.max - v.min);
+    return v.integer ? Math.round(x) : x;
+  };
+  const signs = new Set<number>();
+  let valid = 0;
+  const total = spec.variables.length ? samples : 1;
+  for (let i = 0; i < total; i++) {
+    const scope: Record<string, number> = {};
+    for (const v of spec.variables) scope[v.name] = draw(v, i);
+    try {
+      if (!spec.constraints.every((c) => Boolean(math.evaluate(c, scope)))) continue;
+    } catch {
+      continue;
+    }
+    const a = ev(spec.quantityA, scope);
+    const b = ev(spec.quantityB, scope);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) continue;
+    valid++;
+    const d = a - b;
+    signs.add(Math.abs(d) <= 1e-9 * Math.max(1, Math.abs(a), Math.abs(b)) ? 0 : Math.sign(d));
+    if (signs.size > 1) return 'd';
+  }
+  if (valid < Math.min(total, 30)) return { error: `QC: only ${valid} samples satisfied the constraints` };
+  const only = [...signs][0];
+  return only > 0 ? 'a' : only < 0 ? 'b' : 'c';
 }

@@ -173,6 +173,13 @@ export function checkAnswer(spec: AnswerSpec, input: AnswerInput): CheckResult {
       case 'choice':
         if (!input) throw new InputError('Pick an option.');
         return { correct: input === spec.correct };
+      case 'multi': {
+        const chosen = Array.isArray(input) ? input : input ? [input] : [];
+        if (!chosen.length) throw new InputError('Select at least one option.');
+        const want = new Set(spec.correct);
+        const got = new Set(chosen);
+        return { correct: got.size === want.size && [...want].every((id) => got.has(id)) };
+      }
     }
   } catch (e) {
     if (e instanceof InputError) return { correct: false, error: e.message };

@@ -31,16 +31,18 @@ export interface PlacementState {
 }
 
 const ancestors = (id: string) => builtAncestors(id, hasSkill);
+/** The placement test covers the math and econ tracks (GRE adapts on its own via ratings). */
+const placeable = () => SKILLS.filter((s) => s.track !== 'gre');
 const NOT_SOLID: PlacementResult[] = ['failed', 'partial', 'blocked'];
 
 export function startPlacement(): PlacementState {
-  return { results: Object.fromEntries(SKILLS.map((s) => [s.id, 'untested' as PlacementResult])), items: [] };
+  return { results: Object.fromEntries(placeable().map((s) => [s.id, 'untested' as PlacementResult])), items: [] };
 }
 
 /** Mark untested skills whose prerequisites aren't solid as blocked. */
 function withBlocked(results: Record<string, PlacementResult>): Record<string, PlacementResult> {
   const out = { ...results };
-  for (const s of SKILLS) {
+  for (const s of placeable()) {
     if (out[s.id] === 'untested' && ancestors(s.id).some((a) => NOT_SOLID.includes(out[a]))) out[s.id] = 'blocked';
   }
   return out;
@@ -49,7 +51,7 @@ function withBlocked(results: Record<string, PlacementResult>): Record<string, P
 /** The middle untested skill (binary search), or none when finished or out of items. */
 function pickSkill(st: PlacementState): { results: Record<string, PlacementResult>; next?: string } {
   const results = withBlocked(st.results);
-  const untested = SKILLS.map((s) => s.id).filter((id) => results[id] === 'untested');
+  const untested = placeable().map((s) => s.id).filter((id) => results[id] === 'untested');
   if (!untested.length || st.items.length >= MAX_ITEMS) return { results };
   return { results, next: untested[Math.floor((untested.length - 1) / 2)] };
 }

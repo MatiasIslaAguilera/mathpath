@@ -11,7 +11,7 @@ import sympy as sp
 from sympy.parsing.sympy_parser import convert_xor, parse_expr, standard_transformations
 
 TRANSFORMS = standard_transformations + (convert_xor,)
-FUNCS = {"sqrt": sp.sqrt, "log": sp.log, "exp": sp.exp, "lcm": sp.lcm, "abs": sp.Abs}
+FUNCS = {"sqrt": sp.sqrt, "log": sp.log, "exp": sp.exp, "lcm": sp.lcm, "gcd": sp.gcd, "abs": sp.Abs, "mod": sp.Mod, "floor": sp.floor}
 
 
 def parse(text, names, plain=()):

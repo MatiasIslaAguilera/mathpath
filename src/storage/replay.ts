@@ -44,6 +44,9 @@ export function overlayProfile(p: Progress, profile: Profile): Progress {
 
 export function rebuild(events: LearningEvent[], profile: Profile, start: Progress = emptyProgress()): Progress {
   const p = structuredClone(start);
-  for (const e of sortEvents(events)) applyEvent(p, e);
+  const sorted = sortEvents(events);
+  for (const e of sorted) applyEvent(p, e);
+  // Deterministic: "created" is when the history starts, not when this rebuild ran.
+  if (sorted.length) p.createdAt = new Date(sorted[0].ts).toISOString();
   return overlayProfile(p, profile);
 }

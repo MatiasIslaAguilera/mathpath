@@ -6,11 +6,13 @@ import { fragileReport, skillState, type SkillState } from '../../learning/state
 import { overallProgress } from '../../learning/stats';
 import { comebackStatus, problemsToday, streakReport } from '../../learning/streak';
 import type { Profile } from '../../storage/events';
+import { syncConfigured, type SyncStatus } from '../../sync/sync';
 import { dateKey, emptySkill, type Progress, type SkillProgress } from '../../storage/progress';
 import { shortDate } from '../shortDate';
 
 interface Props {
   progress: Progress;
+  syncStatus: SyncStatus;
   updateProfile(patch: Partial<Omit<Profile, 'updatedAt'>>): void;
   /** Starts the daily session; a goal overrides the daily goal (the welcome-back restart). */
   onStart(goal?: number): void;
@@ -43,7 +45,15 @@ function stateLabel(state: SkillState, sp: SkillProgress, todayKey: string): str
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-export function Home({ progress, updateProfile, onStart, onPractice, onLearn, onSettings, onPlacement, onTree, onStats }: Props) {
+const DOT: Record<string, { cls: string; label: string }> = {
+  synced: { cls: 'good', label: 'Synced' },
+  syncing: { cls: 'accent', label: 'Syncing' },
+  offline: { cls: 'muted', label: 'Offline' },
+  error: { cls: 'warn', label: 'Sync problem' },
+  'signed-out': { cls: 'hollow', label: 'Not signed in' },
+};
+
+export function Home({ progress, syncStatus, updateProfile, onStart, onPractice, onLearn, onSettings, onPlacement, onTree, onStats }: Props) {
   const today = problemsToday(progress.days);
   const goal = progress.settings.dailyGoal;
   const report = streakReport(progress.days);
@@ -66,9 +76,16 @@ export function Home({ progress, updateProfile, onStart, onPractice, onLearn, on
     <div className="screen home">
       <header className="home-head">
         <h1>MathPath</h1>
-        <button className="icon-btn" onClick={onSettings} aria-label="Settings">
-          ⚙
-        </button>
+        <div className="head-actions">
+          {syncConfigured && DOT[syncStatus.state] && (
+            <button className="icon-btn" onClick={onSettings} aria-label={DOT[syncStatus.state].label} data-testid="sync-dot">
+              <span className={`sync-dot ${DOT[syncStatus.state].cls}`} />
+            </button>
+          )}
+          <button className="icon-btn" onClick={onSettings} aria-label="Settings">
+            ⚙
+          </button>
+        </div>
       </header>
 
       {showWelcome && comeback.kind === 'frozen' && (

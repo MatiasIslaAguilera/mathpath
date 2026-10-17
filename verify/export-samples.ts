@@ -17,7 +17,7 @@ interface Check {
 }
 
 const values = (a: AnswerSpec): string[] =>
-  a.kind === 'tuple' ? a.values : a.kind === 'choice' ? [] : [a.value];
+  a.kind === 'tuple' ? a.values : a.kind === 'choice' || a.kind === 'multi' ? [] : [a.value];
 
 const checks: Check[] = [];
 for (const skill of SKILLS) {
@@ -25,7 +25,7 @@ for (const skill of SKILLS) {
     for (let i = 0; i < perLevel; i++) {
       const seed = 100_000 + i * 7919; // different seeds from the unit tests
       const p = makeProblem(skill, level, seed);
-      if (p.verify.type !== 'choice') checks.push({ where: p.id, verify: p.verify, values: values(p.answer) });
+      if (p.verify.type !== 'choice' && p.verify.type !== 'qc') checks.push({ where: p.id, verify: p.verify, values: values(p.answer) });
       p.steps.forEach((s, k) => {
         if (s.ask?.verify) checks.push({ where: `${p.id} step ${k}`, verify: s.ask.verify, values: values(s.ask.answer) });
       });

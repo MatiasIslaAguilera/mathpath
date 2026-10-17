@@ -12,7 +12,7 @@ import { recordAttempt, recordInterpretation } from '../src/learning/record';
 import { mergeEvents, type LearningEvent, type Profile } from '../src/storage/events';
 import { emptyProgress, emptySkill, STORAGE_KEY, type Progress } from '../src/storage/progress';
 import { rebuild } from '../src/storage/replay';
-import { addEvents, applySyncResult, defaultProfile, exportFile, loadStore, parseImport, progressOf, type Store } from '../src/storage/store';
+import { addEvents, applySyncResult, defaultProfile, exportFile, fromLegacy, loadStore, parseImport, progressOf, type Store } from '../src/storage/store';
 
 // Node has no localStorage: a minimal in-memory one for the store and sync metadata.
 if (typeof globalThis.localStorage === 'undefined') {
@@ -254,5 +254,31 @@ describe('sync pass (fake Supabase)', () => {
     ({ store: storePC } = await sync(storePC, pcMeta));
     expect(server.events.length).toBe(before);
     void phoneMeta;
+  });
+});
+
+describe('baseline ordering (regression)', () => {
+  it("a PC migrating old data later never erases answers the phone made earlier", () => {
+    const legacy = emptyProgress();
+    legacy.createdAt = new Date(2026, 8, 1).toISOString(); // PC progress began Sep 1
+    legacy.days = { '2026-09-02': { problems: 4, xp: 40 } };
+    legacy.xp = 40;
+    const { baseline } = fromLegacy(legacy, new Date(2026, 9, 20).getTime()); // migrated Oct 20
+    // The phone (new version) answered on Oct 10, before the PC migrated.
+    const phone = recordAttempt(rebuild([], PROFILE), { problem: makeProblem(SKILLS[0], 1, 3), correct: true, help: 'none', hintsUsed: 0, missedSteps: [] }, new Date(2026, 9, 10, 9));
+    const p = rebuild(mergeEvents([phone.logged], [baseline]), PROFILE);
+    expect(p.days['2026-10-10'].problems).toBe(1);
+    expect(p.days['2026-09-02'].problems).toBe(4);
+    expect(p.xp).toBe(40 + phone.xp);
+  });
+
+  it('an answer in the same millisecond as a baseline still counts', () => {
+    const legacy = emptyProgress();
+    const { baseline } = fromLegacy(legacy);
+    const r = recordAttempt(rebuild([baseline], PROFILE), { problem: makeProblem(SKILLS[0], 1, 4), correct: true, help: 'none', hintsUsed: 0, missedSteps: [] }, new Date(baseline.ts));
+    for (let i = 0; i < 50; i++) {
+      const e = { ...r.logged, id: `${i.toString(16).padStart(8, '0')}-0000-4000-8000-000000000000` }; // ids that sort before AND after
+      expect(rebuild([baseline, e], PROFILE).xp).toBe(r.xp);
+    }
   });
 });

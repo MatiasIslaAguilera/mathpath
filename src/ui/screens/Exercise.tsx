@@ -7,6 +7,7 @@ import { prefilledSteps } from '../../learning/fading';
 import type { Help } from '../../learning/mastery';
 import type { AttemptResult, SkillEvent } from '../../learning/record';
 import type { SlotKind } from '../../learning/session';
+import { AnswerDisplay, FigureView } from '../components/AnswerDisplay';
 import { AnswerInput, initialValue } from '../components/AnswerInput';
 import { MathText, Tex } from '../components/MathText';
 import { StepCard, StepList } from '../components/StepCard';
@@ -94,6 +95,11 @@ export function Exercise({ problem, rating, kind, hideSkill, firstTime, onAttemp
         )}
       </div>
       {kind === 'followup' && <p className="followup-note">Same method, new numbers. Try this one on your own.</p>}
+      {kind === 'gre' && phase !== 'feedback' && (
+        <p className="followup-note" data-testid="gre-note">
+          Today's GRE question. No timer: take the time you need.
+        </p>
+      )}
       {kind === 'retention' && phase !== 'feedback' && (
         <p className="followup-note" data-testid="retention-note">
           Memory check: you haven't seen this skill for a few days. Solve it on your own, no hints, to confirm you've mastered it.
@@ -114,6 +120,7 @@ export function Exercise({ problem, rating, kind, hideSkill, firstTime, onAttemp
 
       <div className="prompt" data-testid="prompt">
         <MathText text={problem.prompt} />
+        {problem.figure && <FigureView figure={problem.figure} />}
       </div>
 
       {phase === 'answer' && (
@@ -190,11 +197,7 @@ export function Exercise({ problem, rating, kind, hideSkill, firstTime, onAttemp
 
           <div className="answer-box">
             <span className="label">Answer</span>
-            {problem.answer.kind === 'choice' ? (
-              <MathText text={problem.answer.options.find((o) => o.id === (problem.answer as { correct: string }).correct)!.label} />
-            ) : (
-              <Tex latex={problem.answer.display} display />
-            )}
+            <AnswerDisplay spec={problem.answer} />
           </div>
 
           <details className="formula" open>

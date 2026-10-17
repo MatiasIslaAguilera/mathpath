@@ -15,8 +15,9 @@ import {
 } from '../../learning/placement';
 import type { LearningEvent } from '../../storage/events';
 import type { PlacementResult, Progress } from '../../storage/progress';
+import { AnswerDisplay, FigureView } from '../components/AnswerDisplay';
 import { AnswerInput, initialValue } from '../components/AnswerInput';
-import { MathText, Tex } from '../components/MathText';
+import { MathText } from '../components/MathText';
 
 interface Props {
   progress: Progress;
@@ -154,6 +155,7 @@ export function Placement({ progress, record, onDone }: Props) {
 
       <div className="prompt" data-testid="prompt">
         <MathText text={problem.prompt} />
+        {problem.figure && <FigureView figure={problem.figure} />}
       </div>
 
       <AnswerInput key={problem.id} spec={problem.answer} value={input} onChange={setInput} onEnter={check} disabled={!!graded} autoFocus />
@@ -171,11 +173,7 @@ export function Placement({ progress, record, onDone }: Props) {
             ) : (
               <>
                 Not quite. The answer is{' '}
-                {problem.answer.kind === 'choice' ? (
-                  <MathText text={problem.answer.options.find((o) => o.id === (problem.answer as { correct: string }).correct)!.label} />
-                ) : (
-                  <Tex latex={problem.answer.display} />
-                )}
+                <AnswerDisplay spec={problem.answer} display={false} />
               </>
             )}
           </div>

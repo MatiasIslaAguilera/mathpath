@@ -76,7 +76,8 @@ describe('prerequisite locks', () => {
 });
 
 // These are properties of the search, so they hold however many skills are registered.
-const ids = SKILLS.map((s) => s.id);
+// The placement test covers math and econ; the GRE track adapts on its own.
+const ids = SKILLS.filter((s) => s.track !== 'gre').map((s) => s.id);
 const ancestorsOf = (id: string) => builtAncestors(id, hasSkill);
 const SOLID = ['passed', 'credited'];
 

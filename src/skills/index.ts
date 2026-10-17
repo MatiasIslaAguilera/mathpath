@@ -2,6 +2,7 @@
 // A skill's id and prerequisites must match its entry in tree.ts.
 
 import type { SkillDefinition } from '../engine/types';
+import { greIntegers } from './gre/gre-integers';
 import { supplyDemandEquilibrium } from './econ/supply-demand-equilibrium';
 import { derivativesPowerRule } from './math/derivatives-power-rule';
 import { linearEquations } from './math/linear-equations';
@@ -12,4 +13,4 @@ import { growthDecay } from './math/growth-decay';
 import { functionsBasics } from './math/functions-basics';
 import { functionComposition } from './math/function-composition';
 
-export const SKILLS: SkillDefinition[] = [linearEquations, derivativesPowerRule, supplyDemandEquilibrium, exponentRules, logarithmRules, expLogEquations, growthDecay, functionsBasics, functionComposition];
+export const SKILLS: SkillDefinition[] = [linearEquations, derivativesPowerRule, supplyDemandEquilibrium, exponentRules, logarithmRules, expLogEquations, growthDecay, functionsBasics, functionComposition, greIntegers];

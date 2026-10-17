@@ -1127,3 +1127,128 @@ details[open] summary {
   accent-color: var(--accent);
   flex: none;
 }
+
+/* ---------- account & sync ---------- */
+.sync-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.text-input {
+  font: inherit;
+  font-size: 1rem;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  min-height: 48px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.sync-form .btn-row {
+  margin-top: 4px;
+}
+.sync-form .input-error {
+  margin: 0;
+}
+.sync-email {
+  margin: 0 0 4px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.head-actions {
+  display: flex;
+  align-items: center;
+}
+.sync-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  border: 2px solid transparent;
+}
+.sync-dot.good {
+  background: var(--good);
+}
+.sync-dot.accent {
+  background: var(--accent);
+}
+.sync-dot.muted {
+  background: var(--muted);
+}
+.sync-dot.warn {
+  background: var(--warn);
+}
+.sync-dot.hollow {
+  border-color: var(--muted);
+}
+
+/* ---------- GRE: figures, tables, select-all ---------- */
+.figure {
+  margin-top: 12px;
+  display: flex;
+  justify-content: center;
+}
+.figure svg {
+  max-width: 100%;
+  height: auto;
+  color: var(--text);
+}
+.table-wrap {
+  overflow-x: auto;
+  justify-content: flex-start;
+}
+.data-table {
+  border-collapse: collapse;
+  font-size: 0.95rem;
+  min-width: 100%;
+}
+.data-table caption {
+  text-align: left;
+  font-weight: 600;
+  padding-bottom: 6px;
+}
+.data-table th,
+.data-table td {
+  border: 1px solid var(--line);
+  padding: 6px 10px;
+  text-align: right;
+}
+.data-table thead th,
+.data-table tbody th {
+  background: var(--accent-soft);
+  text-align: left;
+}
+.choice.multi {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.choice.multi .box {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--line);
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.choice.multi.selected .box {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.select-all {
+  margin: 0;
+}
+.answer-list {
+  margin: 4px 0 0;
+  padding-left: 20px;
+}
+.sync-email + .fine {
+  margin-top: 0;
+}

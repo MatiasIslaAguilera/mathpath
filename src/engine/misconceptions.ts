@@ -19,11 +19,13 @@ function specValues(spec: AnswerSpec): string[] {
       return [spec.value];
     case 'choice':
       return [spec.correct];
+    case 'multi':
+      return spec.correct;
   }
 }
 
 function asInput(spec: AnswerSpec): AnswerInput {
-  return spec.kind === 'tuple' ? spec.values : specValues(spec)[0];
+  return spec.kind === 'tuple' || spec.kind === 'multi' ? specValues(spec) : specValues(spec)[0];
 }
 
 /**
@@ -38,7 +40,7 @@ export function distinctMisconceptions(
   const kept: MisconceptionInstance[] = [];
   for (const c of candidates) {
     if (!c) continue;
-    if (c.wrong.kind !== 'expression' && c.wrong.kind !== 'choice') {
+    if (c.wrong.kind !== 'expression' && c.wrong.kind !== 'choice' && c.wrong.kind !== 'multi') {
       if (specValues(c.wrong).some((v) => !Number.isFinite(evalExact(v)))) continue;
     }
     const input = asInput(c.wrong);

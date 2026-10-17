@@ -66,9 +66,10 @@ export function newEventId(): string {
   });
 }
 
-/** Replay order: by time, ties broken by id so every device replays identically. */
+/** Replay order: by time; at equal times a baseline goes first; then by id, so every device agrees. */
 export function sortEvents(events: LearningEvent[]): LearningEvent[] {
-  return [...events].sort((a, b) => a.ts - b.ts || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const rank = (e: LearningEvent) => (e.type === 'baseline' ? 0 : 1);
+  return [...events].sort((a, b) => a.ts - b.ts || rank(a) - rank(b) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
 /** Union by id (events are immutable, so duplicates are identical). */

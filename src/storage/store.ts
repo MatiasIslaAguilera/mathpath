@@ -50,9 +50,14 @@ function parse<T>(text: string | null, fallback: T): T {
   }
 }
 
-/** A baseline event + profile from an old (pre-event-log) Progress object. */
+/**
+ * A baseline event + profile from an old (pre-event-log) Progress object. The baseline is
+ * stamped with when that progress BEGAN, so it replays before every event-log answer, from any
+ * device (e.g. the phone used before this PC migrated its old data).
+ */
 export function fromLegacy(progress: Progress, now = Date.now()): { baseline: BaselineEvent; profile: Profile } {
-  const baseline: BaselineEvent = { id: newEventId(), ts: now, type: 'baseline', progress };
+  const began = Date.parse(progress.createdAt);
+  const baseline: BaselineEvent = { id: newEventId(), ts: Number.isFinite(began) ? began : 0, type: 'baseline', progress };
   const profile: Profile = { settings: progress.settings, onboarding: progress.onboarding, welcomeShownOn: progress.welcomeShownOn, updatedAt: now };
   return { baseline, profile };
 }
