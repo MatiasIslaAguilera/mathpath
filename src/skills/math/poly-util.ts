@@ -46,3 +46,17 @@ export function powQ(x: Q, n: number): Q {
 
 /** Convert a param written as a decimal (0.5, 0.25) back to an exact fraction. */
 export const toQ = (x: number): Q => new Q(Math.round(x * 12), 12);
+
+export function polyAdd(a: Poly, b: Poly): Poly {
+  return Array.from({ length: Math.max(a.length, b.length) }, (_, i) => (a[i] ?? new Q(0)).add(b[i] ?? new Q(0)));
+}
+
+export function polyScale(p: Poly, k: Q | number): Poly {
+  return p.map((c) => c.mul(k));
+}
+
+export function polyMul(a: Poly, b: Poly): Poly {
+  const out: Poly = Array.from({ length: a.length + b.length - 1 }, () => new Q(0));
+  a.forEach((x, i) => b.forEach((y, j) => (out[i + j] = out[i + j].add(x.mul(y)))));
+  return out;
+}
