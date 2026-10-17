@@ -30,3 +30,7 @@ playwright-report/
 
 # learner data: never commit
 progress*.json
+
+# local secrets
+.env.local
+.env.*.local

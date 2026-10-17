@@ -34,6 +34,7 @@ async function seed(page: Page, skills: Record<string, unknown>, dailyGoal = 5) 
         stepMisses: {},
         settings: { dailyGoal: g },
       };
+      localStorage.clear(); // start from a pre-event-log install: exercises the migration
       localStorage.setItem('mathpath.progress', JSON.stringify(progress));
     },
     [skills, dailyGoal] as const,

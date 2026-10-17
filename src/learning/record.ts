@@ -1,7 +1,10 @@
-// Apply one finished problem to Progress: rating, FSRS, mastery state transitions, history,
-// XP, daily count, mistake log. Returns the state-change events so the UI can celebrate them.
+// Learning events → Progress. Every finished problem is an immutable event (storage/events.ts);
+// Progress is what you get by applying events in time order. The apply* functions MUTATE the
+// Progress they're given (fast replay); record* wrap them for live use: clone, apply, and also
+// return the event to store and sync.
 
 import type { Problem } from '../engine/types';
+import { newEventId, type AttemptEvent, type InterpretationEvent } from '../storage/events';
 import { dateKey, emptySkill, HISTORY_CAP, MISTAKE_CAP, type MistakeEntry, type Progress } from '../storage/progress';
 import { nextLevel, updateRating, type Help } from './mastery';
 import { gradeFor, reviewCard } from './scheduler';
@@ -31,30 +34,48 @@ export type SkillEvent =
   | { type: 'rusty'; skillId: string }
   | { type: 'recovered'; skillId: string };
 
-export function recordAttempt(prev: Progress, r: AttemptResult, now = new Date()): { progress: Progress; xp: number; events: SkillEvent[] } {
-  const p: Progress = structuredClone(prev);
+export function attemptEvent(r: AttemptResult, now = new Date()): AttemptEvent {
+  return {
+    id: newEventId(),
+    ts: now.getTime(),
+    type: 'attempt',
+    skillId: r.problem.skillId,
+    problemId: r.problem.id,
+    level: r.problem.level,
+    correct: r.correct,
+    help: r.help,
+    hintsUsed: r.hintsUsed,
+    input: r.correct ? undefined : r.input,
+    misconception: r.misconception,
+    missedSteps: r.missedSteps,
+    retentionCheck: r.retentionCheck || undefined,
+  };
+}
+
+/** Apply one attempt (mutates `p`). Returns XP earned and state-change events for the UI. */
+export function applyAttemptEvent(p: Progress, e: AttemptEvent): { xp: number; events: SkillEvent[] } {
+  const now = new Date(e.ts);
   const today = dateKey(now);
-  const { problem } = r;
-  const id = problem.skillId;
+  const id = e.skillId;
   const skill = p.skills[id] ?? emptySkill();
   const events: SkillEvent[] = [];
-  const solo = countsTowardMastery(r.correct, r.help);
+  const solo = countsTowardMastery(e.correct, e.help);
 
   const firstOfDay = skill.lastPracticed !== today;
   const stateBefore = skillState(skill);
   const levelBefore = nextLevel(skill.rating);
-  skill.rating = updateRating(skill.rating, skill.attempts, problem.level, r.correct, r.help);
+  skill.rating = updateRating(skill.rating, skill.attempts, e.level, e.correct, e.help);
   skill.attempts += 1;
   if (solo) skill.correctUnassisted += 1;
   skill.lastPracticed = today;
-  skill.history.push({ ts: now.getTime(), problemId: problem.id, level: problem.level, correct: r.correct, help: r.help, hintsUsed: r.hintsUsed, firstOfDay });
+  skill.history.push({ ts: e.ts, problemId: e.problemId, level: e.level, correct: e.correct, help: e.help, hintsUsed: e.hintsUsed, firstOfDay });
   if (skill.history.length > HISTORY_CAP) skill.history.splice(0, skill.history.length - HISTORY_CAP);
 
   // Spaced repetition: only the first attempt of the day is a real memory test.
-  if (firstOfDay) skill.fsrs = reviewCard(skill.fsrs, now, gradeFor(r.correct, r.help));
+  if (firstOfDay) skill.fsrs = reviewCard(skill.fsrs, now, gradeFor(e.correct, e.help));
 
   // Mastery state machine.
-  if (r.retentionCheck && firstOfDay && skill.readyAt && !skill.masteredAt) {
+  if (e.retentionCheck && firstOfDay && skill.readyAt && !skill.masteredAt) {
     if (solo) {
       skill.masteredAt = today;
       skill.rusty = false;
@@ -64,7 +85,7 @@ export function recordAttempt(prev: Progress, r: AttemptResult, now = new Date()
       skill.retentionFails = (skill.retentionFails ?? 0) + 1;
       events.push({ type: 'check-failed', skillId: id, retryOn: skill.retentionDue });
     }
-  } else if (!skill.readyAt && solo && problem.level >= MASTERY_LEVEL) {
+  } else if (!skill.readyAt && solo && e.level >= MASTERY_LEVEL) {
     skill.readyAt = today;
     skill.retentionDue = addDays(today, RETENTION_DELAY_DAYS);
     events.push({ type: 'check-scheduled', skillId: id, due: skill.retentionDue });
@@ -82,45 +103,69 @@ export function recordAttempt(prev: Progress, r: AttemptResult, now = new Date()
   if (levelAfter > levelBefore) events.push({ type: 'level-up', skillId: id, level: levelAfter });
   p.skills[id] = skill;
 
-  const xp = xpFor(problem.level, r.correct, r.help);
+  const xp = xpFor(e.level, e.correct, e.help);
   p.xp += xp;
   const day = (p.days[today] ??= { problems: 0, xp: 0 });
   day.problems += 1; // every finished problem counts toward the daily goal, help or not
   day.xp += xp;
 
-  const kind: MistakeEntry['kind'] | null = r.help === 'guided' || r.help === 'reveal' ? r.help : !r.correct ? 'wrong' : r.help === 'hint' ? 'hint' : null;
+  const kind: MistakeEntry['kind'] | null = e.help === 'guided' || e.help === 'reveal' ? e.help : !e.correct ? 'wrong' : e.help === 'hint' ? 'hint' : null;
   if (kind) {
     p.mistakes.push({
-      ts: now.getTime(),
+      ts: e.ts,
       skillId: id,
-      problemId: problem.id,
-      level: problem.level,
+      problemId: e.problemId,
+      level: e.level,
       kind,
-      input: r.correct ? undefined : r.input,
-      misconception: r.misconception,
-      missedSteps: r.missedSteps,
+      input: e.correct ? undefined : e.input,
+      misconception: e.misconception,
+      missedSteps: e.missedSteps,
     });
     if (p.mistakes.length > MISTAKE_CAP) p.mistakes.splice(0, p.mistakes.length - MISTAKE_CAP);
   }
-  if (r.misconception) {
-    const key = `${id}/${r.misconception}`;
+  if (e.misconception) {
+    const key = `${id}/${e.misconception}`;
     p.misconceptionCounts[key] = (p.misconceptionCounts[key] ?? 0) + 1;
   }
-  for (const step of new Set(r.missedSteps)) {
+  for (const step of new Set(e.missedSteps)) {
     const key = `${id}/${step}`;
     p.stepMisses[key] = (p.stepMisses[key] ?? 0) + 1;
   }
-  return { progress: p, xp, events };
+  return { xp, events };
 }
 
-export function recordInterpretation(prev: Progress, problem: Problem, correct: boolean, now = new Date()): Progress {
-  const p: Progress = structuredClone(prev);
-  const skill = p.skills[problem.skillId] ?? emptySkill();
+export function recordAttempt(
+  prev: Progress,
+  r: AttemptResult,
+  now = new Date(),
+): { progress: Progress; xp: number; events: SkillEvent[]; logged: AttemptEvent } {
+  const progress: Progress = structuredClone(prev);
+  const logged = attemptEvent(r, now);
+  const { xp, events } = applyAttemptEvent(progress, logged);
+  return { progress, xp, events, logged };
+}
+
+export function applyInterpretationEvent(p: Progress, e: InterpretationEvent): void {
+  const skill = p.skills[e.skillId] ?? emptySkill();
   skill.interpretation.total += 1;
-  if (correct) skill.interpretation.correct += 1;
-  p.skills[problem.skillId] = skill;
-  if (!correct) {
-    p.mistakes.push({ ts: now.getTime(), skillId: problem.skillId, problemId: problem.id, level: problem.level, kind: 'interpretation', missedSteps: [] });
+  if (e.correct) skill.interpretation.correct += 1;
+  p.skills[e.skillId] = skill;
+  if (!e.correct) {
+    p.mistakes.push({ ts: e.ts, skillId: e.skillId, problemId: e.problemId, level: e.level, kind: 'interpretation', missedSteps: [] });
   }
-  return p;
+}
+
+export function recordInterpretation(prev: Progress, problem: Problem, correct: boolean, now = new Date()): { progress: Progress; logged: InterpretationEvent } {
+  const progress: Progress = structuredClone(prev);
+  const logged: InterpretationEvent = {
+    id: newEventId(),
+    ts: now.getTime(),
+    type: 'interpretation',
+    skillId: problem.skillId,
+    problemId: problem.id,
+    level: problem.level,
+    correct,
+  };
+  applyInterpretationEvent(progress, logged);
+  return { progress, logged };
 }

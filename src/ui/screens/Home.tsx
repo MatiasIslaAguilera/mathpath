@@ -5,12 +5,13 @@ import { lockedBy } from '../../learning/unlock';
 import { fragileReport, skillState, type SkillState } from '../../learning/states';
 import { overallProgress } from '../../learning/stats';
 import { comebackStatus, problemsToday, streakReport } from '../../learning/streak';
+import type { Profile } from '../../storage/events';
 import { dateKey, emptySkill, type Progress, type SkillProgress } from '../../storage/progress';
 import { shortDate } from '../shortDate';
 
 interface Props {
   progress: Progress;
-  setProgress(p: Progress): void;
+  updateProfile(patch: Partial<Omit<Profile, 'updatedAt'>>): void;
   /** Starts the daily session; a goal overrides the daily goal (the welcome-back restart). */
   onStart(goal?: number): void;
   onPractice(skillId: string): void;
@@ -42,7 +43,7 @@ function stateLabel(state: SkillState, sp: SkillProgress, todayKey: string): str
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-export function Home({ progress, setProgress, onStart, onPractice, onLearn, onSettings, onPlacement, onTree, onStats }: Props) {
+export function Home({ progress, updateProfile, onStart, onPractice, onLearn, onSettings, onPlacement, onTree, onStats }: Props) {
   const today = problemsToday(progress.days);
   const goal = progress.settings.dailyGoal;
   const report = streakReport(progress.days);
@@ -59,7 +60,7 @@ export function Home({ progress, setProgress, onStart, onPractice, onLearn, onSe
   // Welcome back: at most once a day, and never on top of the onboarding choice.
   const comeback = comebackStatus(progress.days);
   const showWelcome = comeback.kind !== 'none' && progress.welcomeShownOn !== todayKey && !onboarding;
-  const dismissWelcome = () => setProgress({ ...progress, welcomeShownOn: todayKey });
+  const dismissWelcome = () => updateProfile({ welcomeShownOn: todayKey });
 
   return (
     <div className="screen home">
@@ -120,7 +121,7 @@ export function Home({ progress, setProgress, onStart, onPractice, onLearn, onSe
             <button className="btn primary big" onClick={onPlacement} data-testid="start-placement">
               Take the placement test
             </button>
-            <button className="btn subtle" onClick={() => setProgress({ ...progress, onboarding: 'skipped' })} data-testid="skip-placement">
+            <button className="btn subtle" onClick={() => updateProfile({ onboarding: 'skipped' })} data-testid="skip-placement">
               Skip: start from the beginning
             </button>
           </div>

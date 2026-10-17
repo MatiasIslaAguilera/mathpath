@@ -1,7 +1,9 @@
 import { useRef, useState } from 'react';
 import { dailyReminderIcs } from '../../reminders/ics';
 import { notificationsSupported, requestNotificationPermission } from '../../reminders/notify';
-import { downloadProgress, parseProgressFile } from '../../storage/exportImport';
+import type { Profile } from '../../storage/events';
+import type { SyncStatus } from '../../sync/sync';
+import { downloadText, exportFileName } from '../../storage/exportImport';
 import type { Progress } from '../../storage/progress';
 import { shortDate } from '../shortDate';
 
@@ -9,18 +11,22 @@ const GOALS = [3, 5, 10, 15];
 
 interface Props {
   progress: Progress;
-  setProgress(p: Progress): void;
+  updateProfile(patch: Partial<Omit<Profile, 'updatedAt'>>): void;
+  importText(text: string): void;
+  exportJson(): string;
+  syncStatus: SyncStatus;
+  onSyncNow(): void;
   onPlacement(): void;
   onBack(): void;
 }
 
-export function Settings({ progress, setProgress, onPlacement, onBack }: Props) {
+export function Settings({ progress, updateProfile, importText, exportJson, onPlacement, onBack }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [time, setTime] = useState(progress.settings.reminderTime ?? '19:00');
   const [reminderNote, setReminderNote] = useState<string | null>(null);
 
-  const saveSettings = (patch: Partial<Progress['settings']>) => setProgress({ ...progress, settings: { ...progress.settings, ...patch } });
+  const saveSettings = (patch: Partial<Progress['settings']>) => updateProfile({ settings: { ...progress.settings, ...patch } });
 
   const onTime = (value: string) => {
     setTime(value);
@@ -53,9 +59,9 @@ export function Settings({ progress, setProgress, onPlacement, onBack }: Props) 
   const onFile = async (file: File | undefined) => {
     if (!file) return;
     try {
-      const next = parseProgressFile(await file.text());
-      if (!window.confirm('Replace your current progress with this file?')) return;
-      setProgress(next);
+      const text = await file.text();
+      if (!window.confirm('Merge this file into your progress? (An old-format file replaces it.)')) return;
+      importText(text);
       setMessage({ ok: true, text: 'Progress imported.' });
     } catch (e) {
       setMessage({ ok: false, text: (e as Error).message });
@@ -84,7 +90,7 @@ export function Settings({ progress, setProgress, onPlacement, onBack }: Props) 
               role="radio"
               aria-checked={progress.settings.dailyGoal === g}
               className={`seg-btn ${progress.settings.dailyGoal === g ? 'selected' : ''}`}
-              onClick={() => setProgress({ ...progress, settings: { ...progress.settings, dailyGoal: g } })}
+              onClick={() => saveSettings({ dailyGoal: g })}
             >
               {g}
             </button>
@@ -141,7 +147,7 @@ export function Settings({ progress, setProgress, onPlacement, onBack }: Props) 
           the repo for weak-spot analysis.
         </p>
         <div className="btn-row">
-          <button className="btn" onClick={() => downloadProgress(progress)} data-testid="export">
+          <button className="btn" onClick={() => downloadText(exportJson(), exportFileName())} data-testid="export">
             Export progress.json
           </button>
           <button className="btn" onClick={() => fileRef.current?.click()}>

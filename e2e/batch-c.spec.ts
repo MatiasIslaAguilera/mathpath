@@ -13,6 +13,7 @@ async function seed(page: Page, dayOffsets: Record<number, number>, skills: Reco
       };
       const days = Object.fromEntries(Object.entries(offsets).map(([o, n]) => [key(Number(o)), { problems: n, xp: 0 }]));
       const progress = { version: 1, createdAt: '', xp: 50, days, skills: sk, mistakes: [], misconceptionCounts: {}, stepMisses: {}, settings: { dailyGoal: 10 }, onboarding: 'skipped' };
+      localStorage.clear(); // start from a pre-event-log install: exercises the migration
       localStorage.setItem('mathpath.progress', JSON.stringify(progress));
     },
     [dayOffsets, skills] as const,

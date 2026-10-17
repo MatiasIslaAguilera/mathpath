@@ -26,7 +26,7 @@ export async function requestNotificationPermission(): Promise<boolean> {
 export async function showReminder(): Promise<void> {
   if (!notificationsSupported() || Notification.permission !== 'granted') return;
   const title = "Time for today's MathPath session";
-  const options: NotificationOptions = { body: 'About 10 minutes. Even 3 problems keeps your streak going.', tag: 'mathpath-daily', icon: '/pwa-192x192.png' };
+  const options: NotificationOptions = { body: 'About 10 minutes. Even 3 problems keeps your streak going.', tag: 'mathpath-daily', icon: `${import.meta.env.BASE_URL}pwa-192x192.png` };
   try {
     const reg = await navigator.serviceWorker?.getRegistration();
     if (reg) return await reg.showNotification(title, options);

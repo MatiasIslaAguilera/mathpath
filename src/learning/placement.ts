@@ -12,6 +12,7 @@ import { Rating } from 'ts-fsrs';
 import { hasSkill, makeProblem, SKILLS } from '../engine/registry';
 import type { Level, Problem } from '../engine/types';
 import { builtAncestors } from '../skills/tree';
+import { newEventId, type PlacementEvent } from '../storage/events';
 import { dateKey, emptySkill, type PlacementRecord, type PlacementResult, type Progress } from '../storage/progress';
 import { reviewCard } from './scheduler';
 
@@ -95,12 +96,16 @@ export function placementProgress(st: PlacementState): number {
   return total ? decided / total : 1;
 }
 
-/** Write the results into Progress. Only raises ratings; never lowers or un-masters anything. */
-export function applyPlacement(prev: Progress, st: PlacementState, now = new Date()): Progress {
-  const p: Progress = structuredClone(prev);
+/** The finished test as an immutable event (stored and synced like any answer). */
+export function placementEvent(st: PlacementState, now = new Date()): PlacementEvent {
+  return { id: newEventId(), ts: now.getTime(), type: 'placement', results: pickSkill(st).results, items: st.items };
+}
+
+/** Apply a placement (mutates `p`). Only raises ratings; never lowers or un-masters anything. */
+export function applyPlacementEvent(p: Progress, e: PlacementEvent): void {
+  const now = new Date(e.ts);
   const today = dateKey(now);
-  const results = pickSkill(st).results;
-  for (const [id, result] of Object.entries(results)) {
+  for (const [id, result] of Object.entries(e.results)) {
     if (result !== 'passed' && result !== 'credited' && result !== 'partial') continue;
     const sp = p.skills[id] ?? emptySkill();
     sp.rating = Math.max(sp.rating, result === 'partial' ? PARTIAL_RATING : PLACED_RATING);
@@ -109,6 +114,12 @@ export function applyPlacement(prev: Progress, st: PlacementState, now = new Dat
     p.skills[id] = sp;
   }
   p.onboarding = 'placed';
-  p.placement = { date: today, results, items: st.items };
+  p.placement = { date: today, results: e.results, items: e.items };
+}
+
+/** Write the results into a copy of Progress (tests and previews; the app records the event). */
+export function applyPlacement(prev: Progress, st: PlacementState, now = new Date()): Progress {
+  const p: Progress = structuredClone(prev);
+  applyPlacementEvent(p, placementEvent(st, now));
   return p;
 }

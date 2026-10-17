@@ -123,9 +123,10 @@ test('export then import restores progress', async ({ page }) => {
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByTestId('export').click()]);
   const file = await download.path();
   const json = JSON.parse(readFileSync(file, 'utf-8'));
-  expect(json.version).toBe(1);
-  expect(json.skills['linear-equations'].attempts).toBe(1);
-  expect(Array.isArray(json.mistakes)).toBe(true);
+  expect(json.version).toBe(2);
+  expect(json.events.filter((e: { type: string }) => e.type === 'attempt')).toHaveLength(1);
+  expect(json.progress.skills['linear-equations'].attempts).toBe(1);
+  expect(Array.isArray(json.progress.mistakes)).toBe(true);
 
   await page.evaluate(() => localStorage.clear());
   await page.goto('/?e2e');

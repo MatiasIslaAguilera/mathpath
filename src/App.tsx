@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { startSession, type Session } from './learning/session';
 import { problemsToday } from './learning/streak';
 import { msUntilReminder, showReminder } from './reminders/notify';
-import { loadProgress, saveProgress, type Progress } from './storage/progress';
+import { useLearningStore } from './storage/useLearningStore';
 import { Home } from './ui/screens/Home';
 import { LearnCard } from './ui/screens/LearnCard';
 import { Placement } from './ui/screens/Placement';
@@ -22,13 +22,9 @@ type Screen =
   | { name: 'stats' };
 
 export default function App() {
-  const [progress, setProgressState] = useState<Progress>(loadProgress);
+  const { progress, status, storageOk, actions } = useLearningStore();
   const [screen, setScreen] = useState<Screen>({ name: 'home' });
   const [learnSkill, setLearnSkill] = useState<string | null>(null);
-  const [storageOk, setStorageOk] = useState(true);
-
-  const setProgress = useCallback((p: Progress) => setProgressState(p), []);
-  useEffect(() => setStorageOk(saveProgress(progress)), [progress]);
 
   // Best-effort in-app reminder; recomputed whenever progress or settings change.
   const { inAppReminder, reminderTime } = progress.settings;
@@ -72,7 +68,7 @@ export default function App() {
       {screen.name === 'home' && (
         <Home
           progress={progress}
-          setProgress={setProgress}
+          updateProfile={actions.updateProfile}
           onStart={(goal) => start(undefined, goal)}
           onPractice={(id) => start(id)}
           onLearn={setLearnSkill}
@@ -86,16 +82,25 @@ export default function App() {
         <SessionScreen
           initial={screen.session}
           progress={progress}
-          setProgress={setProgress}
+          record={actions.record}
           onFinish={(session) => setScreen({ name: 'summary', session })}
           onQuit={(session) => setScreen(session.answered > 0 ? { name: 'summary', session } : { name: 'home' })}
         />
       )}
       {screen.name === 'summary' && <Summary session={screen.session} progress={progress} onHome={home} />}
       {screen.name === 'settings' && (
-        <Settings progress={progress} setProgress={setProgress} onPlacement={() => setScreen({ name: 'placement' })} onBack={home} />
+        <Settings
+          progress={progress}
+          syncStatus={status}
+          onSyncNow={actions.syncNow}
+          updateProfile={actions.updateProfile}
+          importText={actions.importText}
+          exportJson={actions.exportJson}
+          onPlacement={() => setScreen({ name: 'placement' })}
+          onBack={home}
+        />
       )}
-      {screen.name === 'placement' && <Placement progress={progress} setProgress={setProgress} onDone={home} />}
+      {screen.name === 'placement' && <Placement progress={progress} record={actions.record} onDone={home} />}
       {screen.name === 'tree' && <SkillTree progress={progress} onPractice={(id) => start(id)} onLearn={setLearnSkill} onBack={home} />}
       {screen.name === 'stats' && <Stats progress={progress} onPractice={(id) => start(id)} onBack={home} />}
       {learnSkill && <LearnCard skillId={learnSkill} onClose={() => setLearnSkill(null)} />}

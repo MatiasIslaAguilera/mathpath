@@ -8,13 +8,13 @@ export function serializeProgress(p: Progress): string {
   return JSON.stringify({ ...p, exportedAt: new Date().toISOString() }, null, 2);
 }
 
-/** Trigger a download of progress.json in the browser. */
-export function downloadProgress(p: Progress): void {
-  const blob = new Blob([serializeProgress(p)], { type: 'application/json' });
+/** Trigger a download of a text file in the browser. */
+export function downloadText(text: string, filename: string, type = 'application/json'): void {
+  const blob = new Blob([text], { type });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = exportFileName();
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   a.remove();

@@ -5,20 +5,22 @@ import { randomSeed } from '../../engine/rng';
 import type { AnswerInput as Value, Problem } from '../../engine/types';
 import {
   answerPlacementItem,
-  applyPlacement,
+  applyPlacementEvent,
   MAX_ITEMS,
   nextPlacementItem,
+  placementEvent,
   placementProgress,
   startPlacement,
   type PlacementState,
 } from '../../learning/placement';
+import type { LearningEvent } from '../../storage/events';
 import type { PlacementResult, Progress } from '../../storage/progress';
 import { AnswerInput, initialValue } from '../components/AnswerInput';
 import { MathText, Tex } from '../components/MathText';
 
 interface Props {
   progress: Progress;
-  setProgress(p: Progress): void;
+  record(events: LearningEvent[], next: Progress): void;
   onDone(): void;
 }
 
@@ -36,7 +38,7 @@ const RESULT_TEXT: Record<PlacementResult, string> = {
   untested: 'Not tested',
 };
 
-export function Placement({ progress, setProgress, onDone }: Props) {
+export function Placement({ progress, record, onDone }: Props) {
   const [view, setView] = useState<View>({ name: 'intro' });
   const [input, setInput] = useState<Value>('');
   const [error, setError] = useState<string | null>(null);
@@ -51,8 +53,10 @@ export function Placement({ progress, setProgress, onDone }: Props) {
 
   /** Apply the placement to progress exactly once, from the event that ends the test. */
   const finish = (state: PlacementState) => {
-    const next = applyPlacement(progress, state);
-    setProgress(next);
+    const logged = placementEvent(state);
+    const next = structuredClone(progress);
+    applyPlacementEvent(next, logged);
+    record([logged], next);
     setGraded(null);
     setView({ name: 'results', results: next.placement!.results });
   };

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { recordAttempt, recordInterpretation, type AttemptResult } from '../../learning/record';
 import { afterProblem, nextProblem, type NextUp, type Session } from '../../learning/session';
+import type { LearningEvent } from '../../storage/events';
 import { emptySkill, type Progress } from '../../storage/progress';
 import { Exercise } from './Exercise';
 import { LearnCard } from './LearnCard';
@@ -8,7 +9,7 @@ import { LearnCard } from './LearnCard';
 interface Props {
   initial: Session;
   progress: Progress;
-  setProgress(p: Progress): void;
+  record(events: LearningEvent[], next: Progress): void;
   onFinish(s: Session): void;
   onQuit(s: Session): void;
 }
@@ -24,7 +25,7 @@ interface State {
 
 const isFirstTime = (p: Progress, n: NextUp) => !n.hideSkill && (p.skills[n.problem.skillId] ?? emptySkill()).attempts === 0;
 
-export function SessionScreen({ initial, progress, setProgress, onFinish, onQuit }: Props) {
+export function SessionScreen({ initial, progress, record, onFinish, onQuit }: Props) {
   const [state, setState] = useState<State>(() => {
     const first = nextProblem(initial, progress)!; // a new session always has ≥ 3 slots
     return { session: first.session, current: first.next, firstTime: isFirstTime(progress, first.next), serial: 0 };
@@ -35,8 +36,8 @@ export function SessionScreen({ initial, progress, setProgress, onFinish, onQuit
   const rating = (progress.skills[problem.skillId] ?? emptySkill()).rating;
 
   const onAttempt = (r: AttemptResult) => {
-    const { progress: next, xp, events } = recordAttempt(progress, { ...r, retentionCheck: current.kind === 'retention' });
-    setProgress(next);
+    const { progress: next, xp, events, logged } = recordAttempt(progress, { ...r, retentionCheck: current.kind === 'retention' });
+    record([logged], next);
     const needsFollowUp = !r.correct || r.help !== 'none';
     setState((st) => ({ ...st, session: afterProblem(st.session, problem, r.correct && r.help === 'none', needsFollowUp, xp, events) }));
     return { xp, events };
@@ -73,7 +74,10 @@ export function SessionScreen({ initial, progress, setProgress, onFinish, onQuit
         hideSkill={current.hideSkill}
         firstTime={firstTime}
         onAttempt={onAttempt}
-        onInterpretation={(ok) => setProgress(recordInterpretation(progress, problem, ok))}
+        onInterpretation={(ok) => {
+          const { progress: next, logged } = recordInterpretation(progress, problem, ok);
+          record([logged], next);
+        }}
         onNext={onNext}
         onOpenLearn={() => setLearnOpen(true)}
       />
