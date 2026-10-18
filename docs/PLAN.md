@@ -3,7 +3,7 @@
 A personal "Duolingo for math and economics." Goal: go from pre-Algebra-2 to the math
 used in Mizzou's online MA in Economics, through a daily habit that survives a full-time job.
 
-Status: **MVP + batches A–C built** (mastery states, FSRS, retention checks, interleaving, "What it's for", placement test, prerequisite locks, streak freezes, welcome-back, skill-tree map, stats). Batch D built (installable offline PWA, calendar reminder). Batches E (exponents, logs, functions), F (calculus core + first econ applications) and G (GRE Quant, 15 skills) built: 35 skills. Sync: event log + Supabase. Next: deploy (docs/SETUP.md), then the remaining tree (multivariable, matrices, integrals, statistics, the rest of econ).
+Status (Oct 18, 2026): **35 skills built and verified, with sync and the GRE track.** Waiting on deployment (docs/SETUP.md). See §7 for what's next and §6 for how the plan changed from the original brief.
 
 ---
 
@@ -161,121 +161,137 @@ Responses:
 
 ---
 
-## 3. Skill tree (revised)
+## 3. Skill tree
 
-Arrows are prerequisites. ★ = in the MVP.
+Arrows are prerequisites. ✅ = built (35 skills). The authoritative tree, including the
+skills not built yet, is `src/skills/tree.ts`. Prerequisites resolve *through* unbuilt
+skills: the power rule needs limits, which needs functions, which needs linear equations.
 
 **MATH**
-1. ★ Linear equations → linear inequalities → systems of 2 equations
+1. ✅ Linear equations → linear inequalities → systems of 2 equations
 2. Quadratics: factoring → quadratic formula → vertex form
-3. Functions: evaluation & domain/range → composition → inverses → transformations
-4. Exponents (rules) → logarithms (rules) → solving exp/log equations → growth/decay models
+3. Functions: ✅ evaluation & domain/range → ✅ composition → inverses → transformations
+4. ✅ Exponent rules → ✅ logarithm rules → ✅ exp/log equations → ✅ growth & decay
 5. Sequences & geometric series
-6. Limits & continuity
-7. Derivatives: ★ power rule → product/quotient → chain rule → exp & log derivatives → implicit differentiation
-8. Applications: differentials & linear approximation → concavity & second-derivative test → optimization
+6. ✅ Limits & continuity
+7. Derivatives: ✅ power rule → ✅ product/quotient → ✅ chain rule → ✅ exp & log
+   derivatives → implicit differentiation
+8. Applications: differentials & linear approximation → ✅ concavity & second-derivative test
+   → ✅ optimization
 9. Partial derivatives → total differential → multivariable optimization (FOC/SOC, Hessian)
-10. Matrices: operations → determinants → inverse (2×2, 3×3) → Cramer's rule
+10. Matrices: operations → determinants → inverse → Cramer's rule
 11. Integrals: antiderivatives → definite integrals → area between curves
-12. Probability & statistics: probability basics → expected value & variance → normal / z-scores → sampling, SE, CI, t-tests
+12. Probability & statistics: basics → expected value & variance → normal / z-scores →
+    SE, CIs, t-tests
 13. Kuhn–Tucker (light)
-14. *(optional)* Trig basics: unit circle, identities
+14. *(optional)* Trig basics
 
-**ECONOMICS** (each requires the listed math)
-1. ★ Supply & demand equilibrium (linear eq., systems)
-2. Elasticity: point (derivatives) & arc
-3. Surplus, taxes/subsidies, DWL (equilibrium, area)
-4. Cost functions & MR = MC (derivatives, optimization)
-5. Monopoly vs. competition (MR = MC, elasticity)
-6. Cobb-Douglas production: MP, returns to scale (partials)
-7. Utility maximization with budget (Cobb-Douglas) → demand functions
-8. Lagrangian optimization + λ interpretation; cost minimization
-9. Comparative statics (implicit / total differential, Cramer's rule)
-10. Cournot duopoly (systems, derivatives)
-11. Present value, discounting, compound interest, annuities/perpetuities (exp, series)
-12. Growth rates, logs as % changes, index numbers, rule of 70
-13. Two-period consumption & Solow steady state (exponents, optimization)
-14. Regression interpretation (logs, statistics)
-15. Expected value & risk (probability)
+**ECONOMICS** (each uses the math above)
+1. ✅ Supply & demand equilibrium (incl. taxes, interpretation questions)
+2. ✅ Elasticity: point, arc, constant-elasticity, the revenue reading
+3. Surplus, taxes/subsidies, deadweight loss
+4. ✅ Costs & profit maximization: MC, AC/AVC, P = MC, efficient scale, shutdown price
+5. Monopoly vs. competition
+6. Cobb-Douglas production
+7. Utility maximization with a budget → demand functions
+8. Lagrangian optimization + interpreting λ; cost minimization
+9. Comparative statics
+10. Cournot duopoly
+11. Present value, discounting, annuities
+12. Growth rates & logs, index numbers
+13. Two-period consumption & Solow steady state
+14. Regression interpretation
+15. Expected value & risk
+
+**GRE QUANT** (added at your request; its own track, one question in every session)
+- **Arithmetic:** ✅ integer properties, ✅ fractions & percents, ✅ ratios/rates/work,
+  ✅ exponents & roots
+- **Algebra:** ✅ equations & word problems, ✅ inequalities & absolute value, ✅ quadratics &
+  functions, ✅ coordinate geometry
+- **Geometry:** ✅ lines/angles/triangles, ✅ circles & polygons, ✅ solids
+- **Data analysis:** ✅ mean/median/SD, ✅ counting & probability, ✅ data interpretation
+  (charts, tables), ✅ normal distribution & percentiles
+
+These are generated from templates and verified like everything else, not copied from ETS or
+any question bank (copyright). They cover all four GRE formats:
+- numeric entry
+- multiple choice
+- select all that apply
+- quantitative comparison
+
+GRE is excluded from the placement test and from "master's progress". Note that the Mizzou
+online MA does not require the GRE; this track is quant-reasoning practice.
 
 ---
 
-## 4. Architecture
+## 4. Architecture (as built)
 
-### Core types (`src/engine/types.ts`)
+### Data flow
 
-```ts
-interface SkillDefinition<P> {
-  meta: { id; title; track: 'math'|'econ'; unit; prerequisites: string[];
-          levels: Record<1|2|3|4|5, ParamRanges> };      // declared ranges, used by generator AND tests
-  generate(rng: Rng, level: Level): Problem<P>;           // picks params, returns everything below
-  learnCard: LearnCard;                                    // formula, worked example (built by generate w/ fixed seed), common mistakes
-}
-
-interface Problem<P> {
-  skillId; level; seed; params: P;
-  prompt: RichText;                     // text + KaTeX
-  answer: AnswerSpec;                   // number | fraction | expression | choice | tuple, with tolerance
-  steps: Step[];                        // ordered; built from the same params
-  misconceptions: { id; name; explanation; wrongAnswer: AnswerSpec }[];  // computed wrong answers
-  interpretation?: ChoiceQuestion[];    // econ "beyond the number"
-  verify: VerifySpec;                   // machine-readable *problem statement* for SymPy (not the answer)
-}
-
-interface Step {
-  instruction: string;                  // "Set supply equal to demand"
-  math: string;                         // KaTeX
-  why: string;                          // the rule/concept
-  ask?: { prompt: string; answer: AnswerSpec };   // what guided mode asks you for
-  value?: unknown;                      // intermediate value, checked by tests
-}
+```
+skill generator (pure, seeded) ──► Problem ──► Exercise UI ──► AttemptResult
+                                                                    │
+                                     LearningEvent (immutable, uuid)◄┘
+                                                │
+              localStorage event log + outbox ◄─┴─► Supabase `events` table (append-only, RLS)
+                                                │
+                       Progress = replay(events) + profile  (deterministic on every device)
 ```
 
 ### Key decisions
 
-- **Seeded RNG** (mulberry32). Every problem is reproducible from `(skillId, level, seed)`,
-  which makes test failures, the mistake log, and SymPy disagreements replayable.
-- **Exact arithmetic** with mathjs `Fraction` inside generators, so "clean" answers are exact
-  and never off by float error.
-- **Answer checker** (mathjs):
-  - Numbers: parse fractions, decimals, and simple expressions (`1/2`, `0.5`, `3/6`), then
-    compare with relative/absolute tolerance.
-  - Expressions: numerical equivalence at ~20 random points per variable, avoiding
-    singularities, plus a symbolic `simplify(a-b)==0` fallback.
-  - Skills that require a *form* (e.g. "factor") add a form check.
-  - Misconception matching reuses the same equivalence test against each computed wrong answer.
-- **Guided mode** uses `step.ask`. Backward fading is decided in `learning/fading.ts`: the number
-  of prefilled steps = f(θ), and the last step is never prefilled.
-- **Storage:** a single versioned `ProgressV1` object in localStorage behind a try/catch wrapper
-  with migrations. It holds per-skill θ, FSRS card, state, attempt history, the mistake log
-  (skill, seed, level, missed step index, misconception id, help used), streak data, and settings.
-  Export/import as `progress.json` with schema validation on import.
-- **No runtime LLM, no backend.**
+- **Seeded RNG.** Every problem is reproducible from `(skill, level, seed)`.
+- **Exact arithmetic** (`Q` rationals, polynomial helpers) inside generators.
+- **The answer checker accepts equivalent forms:**
+  - numbers: fractions, decimals rounded to ≥ 2 places
+  - expressions: numeric equivalence at sample points
+  - tuples, multiple choice, select-all
+  - Unreadable input is reported, never graded as wrong.
+- **Progress is an event log.**
+  - Every attempt, interpretation answer and placement is an immutable event.
+  - Progress is rebuilt by replaying events in time order, so the phone and the PC merge by
+    union and nothing is ever lost.
+  - Your pre-sync progress became a baseline event, stamped with when that progress began, so
+    it can never erase answers from another device.
+  - Settings live in a small last-writer-wins profile.
+- **Local-first sync.**
+  - The app works fully offline; events wait in an outbox.
+  - A sync pass uploads them, reconciles the profile, and pulls new events by a server-time
+    watermark.
+  - Supabase row-level security means only your account can read your rows.
+- **Learning logic:**
+  - Elo-style rating per skill, picking a level at about 75% predicted success
+  - FSRS reviews graded only on the first attempt of the day
+  - cold retention checks for "mastered"
+  - backward fading in guided mode
+  - interleaving with hidden skill names
+  - an adaptive placement test (binary search over the tree)
+  - details in `CLAUDE.md` → "Learning logic"
+- **No runtime LLM.** Problems, answers, steps, misconceptions and figures are all generated
+  by code.
 
-### Verification (outside checks)
+### Verification (outside checks, run after every batch)
 
-1. **Generator harness** (Vitest, one shared test that runs every registered skill). For each
-   skill × level × 1,000 seeds:
-   - params fall within the declared `levels` ranges
-   - the answer satisfies the problem via an independent check (substitute back, or a
-     numeric derivative via finite differences)
-   - every `step.value` is consistent: each step re-checked by substitution where possible
-   - final step value == answer
-   - every `step.ask.answer` is accepted by the checker
-   - no misconception's wrong answer equals the correct answer (otherwise you'd get "wrong"
-     feedback for a right answer)
-   - answers are "clean" per skill policy
-2. **SymPy cross-check:** `verify/export-samples.ts` dumps N problems per skill as
-   `{verify spec, app answer}`. `verify/sympy_check.py` re-solves each spec with SymPy
-   (`solve`, `diff`, `integrate`, …) and reports every disagreement with a replay seed.
-   It runs as `npm run verify:sympy`. SymPy 1.12 is already installed on this machine.
-3. **Property tests** (fast-check) for the checker:
-   - equivalent rewrites (fraction ↔ decimal, expanded ↔ factored, reordered terms, scaled
-     num/den) are accepted
-   - random perturbations are rejected
-   - malformed input never throws
-4. **Playwright** at an iPhone-sized viewport (390×844): placement, full session, hints,
-   guided mode with a wrong step then a retry, and export → clear → import round-trip.
+1. **Generator harness:** every skill × 5 levels × 1,000 seeds. It checks:
+   - the answer against an independent check of the problem statement
+   - every guided step's answer
+   - parameter ranges, clean answers, distinct misconceptions, KaTeX rendering, figure safety
+2. **SymPy cross-check:** about 92,000 problems and steps re-solved by a computer algebra
+   system. For limits with logs, a guarded fallback covers a known `sympy.limit` bug.
+3. **Skill tests:** each skill re-derives answers a *different* way, such as:
+   - finite differences
+   - brute-force grid search
+   - enumeration
+   - exact big-integer arithmetic
+   - law of cosines
+   - a normal-distribution formula
+4. **GRE quantitative comparisons:** generators compute the relationship exactly. The harness
+   re-derives it by sampling with trap values. Any two disagreeing samples prove "cannot be
+   determined".
+5. **fast-check property tests** for the checker. Event-log properties too: live progress
+   equals a rebuild, and merging is order-independent. Plus a two-device sync test against a
+   fake Supabase.
+6. **Playwright end-to-end tests** at phone size (22 tests).
 
 ---
 
@@ -283,95 +299,63 @@ interface Step {
 
 ```
 app/
-├─ CLAUDE.md                     architecture, how to add a skill, progress.json analysis workflow
-├─ docs/PLAN.md                  this file
-├─ package.json  vite.config.ts  tsconfig.json  index.html  playwright.config.ts
-├─ public/                       PWA icons
+├─ CLAUDE.md                 architecture, adding a skill, progress analysis workflow
+├─ docs/PLAN.md              this file
+├─ docs/SETUP.md             Supabase + GitHub Pages + phone install (your steps)
+├─ docs/skill-specs/         the specs given to skill-writing subagents (batches E, F, G)
+├─ supabase/migrations/      database schema (events, profiles, attempt_log view, RLS)
+├─ .github/workflows/        test + build + deploy to GitHub Pages on every push
+├─ public/                   PWA icons
 ├─ src/
-│  ├─ main.tsx  App.tsx
-│  ├─ engine/
-│  │  ├─ types.ts                SkillDefinition, Problem, Step, AnswerSpec, VerifySpec
-│  │  ├─ rng.ts                  seeded RNG + helpers (randInt, pick, nonzero, cleanFraction)
-│  │  ├─ format.ts               exact-number → LaTeX / plain string helpers
-│  │  ├─ checker.ts              answer equivalence (mathjs)
-│  │  ├─ misconceptions.ts       match wrong answer → misconception
-│  │  └─ registry.ts             skill list, prerequisite DAG helpers
-│  ├─ skills/
-│  │  ├─ index.ts                registers all skills
-│  │  ├─ math/linear-equations.ts            ★ reference skill
-│  │  ├─ math/derivatives-power-rule.ts      ★ reference skill
-│  │  └─ econ/supply-demand-equilibrium.ts   ★ reference skill (with interpretation items)
-│  ├─ learning/
-│  │  ├─ mastery.ts              Elo rating, skill states, fragile/rusty detection
-│  │  ├─ scheduler.ts            FSRS wrapper (ts-fsrs)
-│  │  ├─ session.ts              session builder: warm-up, 70/30, interleave, end on success
-│  │  ├─ fading.ts               guided-mode prefilled-step count
-│  │  ├─ scoring.ts              XP / mastery credit rules
-│  │  ├─ streak.ts               streaks, freezes, total days, weekly consistency
-│  │  └─ placement.ts            adaptive diagnostic (batch 2)
-│  ├─ storage/
-│  │  ├─ progress.ts             schema, versioning, safe localStorage
-│  │  └─ exportImport.ts
-│  └─ ui/
-│     ├─ components/             MathText, AnswerInput, StepCard, FeedbackPanel, ProgressRing…
-│     ├─ screens/                Home, Session, Exercise, GuidedMode, LearnCard, SkillTree,
-│     │                          Stats, Settings, Placement, WelcomeBack, SessionSummary
-│     └─ styles/
-├─ tests/
-│  ├─ generators.test.ts         shared 1,000-seed harness over all skills
-│  ├─ checker.property.test.ts   fast-check
-│  └─ learning/*.test.ts         mastery, scheduler, session builder, streak
-├─ e2e/*.spec.ts                 Playwright, phone viewport
-└─ verify/
-   ├─ export-samples.ts
-   └─ sympy_check.py
+│  ├─ engine/                types, rationals, RNG, checker, misconceptions, figures, registry
+│  ├─ skills/                math/, econ/, gre/ (one file per skill), tree.ts (full planned tree)
+│  ├─ learning/              mastery, scheduler (FSRS), states, session, placement, unlock,
+│  │                         streak, stats, fading, scoring, record (events → progress)
+│  ├─ storage/               events, replay, store (local log + outbox), useLearningStore
+│  ├─ sync/                  Supabase client + sync pass
+│  ├─ reminders/             .ics calendar reminder, best-effort notification
+│  └─ ui/                    components (MathText, AnswerInput, AnswerDisplay/Figure, StepCard)
+│                            and screens (Home, Exercise, GuidedMode, LearnCard, Placement,
+│                            SkillTree, Stats, Settings, Summary)
+├─ tests/                    harness, verifiers, learning/sync tests, tests/skills/<id>.test.ts
+├─ e2e/                      Playwright specs
+└─ verify/                   SymPy cross-check
 ```
 
 ---
 
-## 6. Things you should know before approving
+## 6. Decisions that changed the original brief
 
-- **Daily reminder limitation.** A local-only PWA *cannot reliably fire a notification at a
-  fixed time* when the app is closed. Web Push needs a server, and the Notification Triggers
-  API was never shipped. My plan:
-  1. Settings generates a **recurring calendar event (.ics)** at your chosen time. It works
-     on any phone, offline, and actually fires.
-  2. When the PWA is open or in the background, the app shows a best-effort notification.
-
-  If you'd rather add a tiny free push server later, the design leaves room for it.
-- **Placement test** (batch 2): adaptive search over each track's prerequisite chain.
-  - It starts mid-track and gives 1–2 items at level 3 per probed skill.
-  - A pass credits that skill and its prerequisites as provisionally "practiced."
-  - A miss probes downward.
-  - It takes about 20–25 items (15–20 min) and can be retaken anytime. Retaking never lowers
-    a skill you've already mastered through practice.
-- **Expression answers:** you'll type things like `6x^2 - 4/x^3` or `6x^2-4x^(-3)`. A small
-  math keyboard row (^, /, √, x, parentheses) will sit above the input on mobile.
+| Original brief | Now | Why |
+|---|---|---|
+| "No backend, no login", localStorage + export | Supabase sync with an account, local-first | You asked for phone use and continuous learning with a database. Export/import still exists as a backup. |
+| Runs locally | GitHub Pages (public repo, app code only) + installable PWA | Phone install needs HTTPS. |
+| Daily notification at a chosen time | Recurring calendar event (.ics) + best-effort in-app notification | A web app can't schedule notifications while closed without a push server. |
+| Math + econ tracks | + GRE Quant track, one question per session | Your request. |
+| Trig on the main path | Optional | None of the core Mizzou courses really uses it. |
+| Matrices and statistics "later" | Core path | 7370 (linear algebra) and 7371/8473 (econometrics) require them. |
+| Sonnet writes the skills | Batch F written by Opus | Sonnet hit a usage limit. Same specs and checks. |
 
 ---
 
-## 7. Build order
+## 7. Build order and status
 
-1. **This plan** ← you are here
-2. **MVP (Opus, me):**
-   - Vite+React+TS shell
-   - engine (types, rng, checker, misconceptions)
-   - storage + export/import
-   - Exercise screen with Check / Hint / "I don't know" → guided mode with "Show me"
-   - misconception feedback
-   - immediate same-skill follow-up after help
-   - simple Home with "Today's session"
-   - the 3 ★ skills with Learn cards
-   - generator harness, fast-check checker tests, SymPy cross-check, Playwright smoke tests
-   - CLAUDE.md
-3. **Batches** (each followed by a full test run + my review):
-   - **A.** Mastery (Elo + states + retention check), FSRS, session builder, fading
-     (me: learning-science logic)
-   - **B.** Placement test (me) + its UI (Sonnet)
-   - **C.** Gamification (XP, streak/freezes, welcome-back, skill-tree map, stats page)
-     (logic: me; UI: Sonnet)
-   - **D.** PWA (manifest, service worker, .ics reminder) (Sonnet)
-   - **E–H.** Remaining skills in groups of 4–6 (Sonnet subagents). Each gets this spec plus
-     `linear-equations.ts` / `supply-demand-equilibrium.ts` as references. I review every
-     file's math and run the harness + SymPy check before merging. Calculus-heavy and
-     Lagrangian skills: I review the math line by line.
+1. ✅ Plan + research
+2. ✅ MVP: engine, checker, guided mode, misconceptions, 3 reference skills, all verification
+3. ✅ **A** mastery states, FSRS, retention checks, interleaving, "What it's for" ·
+   ✅ **B** placement test + prerequisite locks · ✅ **C** streak freezes, welcome-back,
+   skill-tree map, stats · ✅ **D** offline PWA + calendar reminder
+4. ✅ Event log + Supabase sync + account UI; GitHub Pages workflow
+5. ✅ **E** exponents, logs, functions (6) · ✅ **F** calculus core + first econ (8) ·
+   ✅ **G** GRE Quant (15)
+6. ⏳ **Deploy:** waiting on your Supabase project + GitHub repo (`docs/SETUP.md`)
+7. **Next skills (H and beyond), in this order** (matches the first-semester courses):
+   1. partial derivatives → total differential → multivariable optimization
+   2. Cobb-Douglas → utility maximization → Lagrangian
+   3. present value, growth rates
+   4. matrices → Cramer's rule → comparative statics
+   5. statistics → regression interpretation
+   6. integrals → surplus/DWL
+   7. remaining algebra (quadratics, inverses, transformations, systems)
+8. **After a few days of real use:** analyze your answer history (`attempt_log` in Supabase
+   or progress.json) and adjust generators, hints and Learn cards to your weak spots.
