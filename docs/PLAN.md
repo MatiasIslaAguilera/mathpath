@@ -3,7 +3,7 @@
 A personal "Duolingo for math and economics." Goal: go from pre-Algebra-2 to the math
 used in Mizzou's online MA in Economics, through a daily habit that survives a full-time job.
 
-Status: **MVP + batches A–C built** (mastery states, FSRS, retention checks, interleaving, "What it's for", placement test, prerequisite locks, streak freezes, welcome-back, skill-tree map, stats). Batch D built (installable offline PWA, calendar reminder). Next: batch E skills (exponents, logs, functions), then F–H.
+Status: **MVP + batches A–C built** (mastery states, FSRS, retention checks, interleaving, "What it's for", placement test, prerequisite locks, streak freezes, welcome-back, skill-tree map, stats). Batch D built (installable offline PWA, calendar reminder). Batches E (exponents, logs, functions), F (calculus core + first econ applications) and G (GRE Quant, 15 skills) built: 35 skills. Sync: event log + Supabase. Next: deploy (docs/SETUP.md), then the remaining tree (multivariable, matrices, integrals, statistics, the rest of econ).
 
 ---
 

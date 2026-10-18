@@ -3,6 +3,20 @@
 
 import type { SkillDefinition } from '../engine/types';
 import { greIntegers } from './gre/gre-integers';
+import { greFractionsPercents } from './gre/gre-fractions-percents';
+import { greRatiosRates } from './gre/gre-ratios-rates';
+import { greExponentsRoots } from './gre/gre-exponents-roots';
+import { greEquationsWordProblems } from './gre/gre-equations-word-problems';
+import { greInequalitiesAbsoluteValue } from './gre/gre-inequalities-absolute-value';
+import { greQuadraticsFunctions } from './gre/gre-quadratics-functions';
+import { greCoordinateGeometry } from './gre/gre-coordinate-geometry';
+import { greLinesAnglesTriangles } from './gre/gre-lines-angles-triangles';
+import { greCirclesPolygons } from './gre/gre-circles-polygons';
+import { greSolids } from './gre/gre-solids';
+import { greDescriptiveStats } from './gre/gre-descriptive-stats';
+import { greCountingProbability } from './gre/gre-counting-probability';
+import { greDataInterpretation } from './gre/gre-data-interpretation';
+import { greNormalDistribution } from './gre/gre-normal-distribution';
 import { concavitySecondDerivative } from './math/concavity-second-derivative';
 import { optimization } from './math/optimization';
 import { costProfitMaximization } from './econ/cost-profit-maximization';
@@ -21,4 +35,4 @@ import { growthDecay } from './math/growth-decay';
 import { functionsBasics } from './math/functions-basics';
 import { functionComposition } from './math/function-composition';
 
-export const SKILLS: SkillDefinition[] = [linearEquations, derivativesPowerRule, supplyDemandEquilibrium, exponentRules, logarithmRules, expLogEquations, growthDecay, functionsBasics, functionComposition, greIntegers, concavitySecondDerivative, optimization, costProfitMaximization, elasticity, limits, derivativesProductQuotient, derivativesChainRule, derivativesExpLog];
+export const SKILLS: SkillDefinition[] = [linearEquations, derivativesPowerRule, supplyDemandEquilibrium, exponentRules, logarithmRules, expLogEquations, growthDecay, functionsBasics, functionComposition, greIntegers, greQuadraticsFunctions, greCoordinateGeometry, greLinesAnglesTriangles, greCirclesPolygons, greSolids, concavitySecondDerivative, optimization, costProfitMaximization, elasticity, limits, derivativesProductQuotient, derivativesChainRule, derivativesExpLog, greDescriptiveStats, greFractionsPercents, greRatiosRates, greExponentsRoots, greEquationsWordProblems, greInequalitiesAbsoluteValue, greCountingProbability, greDataInterpretation, greNormalDistribution];

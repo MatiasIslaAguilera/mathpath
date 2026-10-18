@@ -115,6 +115,23 @@ Checklist:
      `sqrt()`, `log()` (natural), fractions as `(7/3)`. Use `Q.toExpr()` and `Q.toString()`.
 7. Register the skill in `src/skills/index.ts`, then run `npm test` and `npm run verify:sympy`.
 
+## GRE Quant track
+
+- **Location and tree:** skills live in `src/skills/gre/` (`track: 'gre'`), with their own
+  tree section (prerequisites stay inside the GRE track). Reference skill:
+  `gre-integers.ts`. Specs are in `docs/skill-specs/batch-g-gre.md`.
+- **Sessions:** every session has exactly one `gre` slot, mid-session. GRE is excluded from
+  the placement test and from "master's progress". There is no timer by design.
+- **Formats:** numeric entry; multiple choice; select-all (`multi` answer + `choice`
+  verify + a required skill test); quantitative comparison (`qcAnswer` + `qc` verify).
+  - The generator must compute a comparison exactly: exact arithmetic, enumeration of a
+    small integer domain, or a proven case analysis.
+  - The harness re-derives it independently by sampling with trap values (0, ±1, ±½,
+    bounds). Any two disagreeing samples prove "cannot be determined".
+  - Samples where both quantities are ~0 are skipped as uninformative.
+- **Figures:** only through `src/engine/figures.ts` (triangle, circle, coordinate plane, bar
+  chart, table), always with alt text.
+
 ## PWA and reminders
 
 - **Offline:** `npm run build` produces a service worker that precaches the app (woff2 fonts

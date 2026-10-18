@@ -41,3 +41,10 @@ describe('independent verifier: GRE quantitative comparison', () => {
     expect(verifyAnswer(qc('x^2', 'x', x(-10, 10)), qcAnswer('d'))).toBeNull();
   });
 });
+
+describe('QC verifier: tiny values', () => {
+  it('does not mistake tiny-but-different values for equal', () => {
+    const spec = { type: 'qc' as const, quantityA: 'x^4', quantityB: 'x^3', variables: [{ name: 'x', min: 0, max: 1 }], constraints: ['x > 0', 'x < 1'] };
+    expect(qcRelation(spec)).toBe('b');
+  });
+});

@@ -61,7 +61,7 @@ test('skill tree shows locked, coming-soon, and practiceable skills', async ({ p
   await page.getByTestId('nav-tree').click();
   await expect(page.getByTestId('tree-item-derivatives-power-rule')).toHaveAttribute('data-status', 'locked');
   await expect(page.getByTestId('tree-item-derivatives-power-rule')).toContainText('Unlocks after');
-  await expect(page.getByTestId('tree-item-derivatives-chain-rule')).toHaveAttribute('data-status', 'coming-soon');
+  await expect(page.getByTestId('tree-item-partial-derivatives')).toHaveAttribute('data-status', 'coming-soon');
   const lin = page.getByTestId('tree-item-linear-equations');
   await lin.click();
   await lin.getByRole('button', { name: 'Practice' }).click();

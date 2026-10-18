@@ -156,7 +156,7 @@ export interface BarChartOptions {
 export function barChartFigure(o: BarChartOptions): Figure {
   const width = Math.max(W, 60 * o.categories.length + 2 * PAD);
   const height = 220;
-  const top = 34;
+  const top = 48; // room for the title (y=14) above the tallest bar's value label
   const bottom = height - 30;
   const max = Math.max(...o.values, 0) || 1;
   const bw = (width - 2 * PAD) / o.categories.length;

@@ -127,6 +127,18 @@ export function qcRelation(spec: QcSpec, samples = 4000): keyof typeof QC_NAMES 
     const x = v.min + rand() * (v.max - v.min);
     return v.integer ? Math.round(x) : x;
   };
+  // Compile once: re-parsing on every sample made this the slowest part of the harness.
+  const constraints = spec.constraints.map((c) => math.compile(c));
+  const qa = math.compile(spec.quantityA);
+  const qb = math.compile(spec.quantityB);
+  const num = (code: ReturnType<typeof math.compile>, scope: Record<string, number>) => {
+    try {
+      const v = code.evaluate(scope);
+      return typeof v === 'number' ? v : Number(v);
+    } catch {
+      return NaN;
+    }
+  };
   const signs = new Set<number>();
   let valid = 0;
   const total = spec.variables.length ? samples : 1;
@@ -134,16 +146,23 @@ export function qcRelation(spec: QcSpec, samples = 4000): keyof typeof QC_NAMES 
     const scope: Record<string, number> = {};
     for (const v of spec.variables) scope[v.name] = draw(v, i);
     try {
-      if (!spec.constraints.every((c) => Boolean(math.evaluate(c, scope)))) continue;
+      if (!constraints.every((c) => Boolean(c.evaluate(scope)))) continue;
     } catch {
       continue;
     }
-    const a = ev(spec.quantityA, scope);
-    const b = ev(spec.quantityB, scope);
+    const a = num(qa, scope);
+    const b = num(qb, scope);
     if (!Number.isFinite(a) || !Number.isFinite(b)) continue;
+    // Both essentially zero: floating-point noise decides the sign, so the sample says nothing.
+    // (Absolute tolerances misread x⁴ vs x³ near 0 as equal; relative ones misread
+    // (x+1)² vs x²+2x+1 near −1 as different. Skipping these avoids both.)
+    const scale = Math.max(Math.abs(a), Math.abs(b));
+    // Exactly 0 vs exactly 0 is a genuine tie (n² vs kn at n = 0); only tiny NONZERO pairs are noise.
+    if (scale < 1e-9 && scale !== 0) continue;
     valid++;
     const d = a - b;
-    signs.add(Math.abs(d) <= 1e-9 * Math.max(1, Math.abs(a), Math.abs(b)) ? 0 : Math.sign(d));
+    // Rounding error scales with the TERMS (≈1), not the result: relative + a tiny absolute floor.
+    signs.add(Math.abs(d) <= 1e-9 * scale + 1e-12 ? 0 : Math.sign(d));
     if (signs.size > 1) return 'd';
   }
   if (valid < Math.min(total, 30)) return { error: `QC: only ${valid} samples satisfied the constraints` };
