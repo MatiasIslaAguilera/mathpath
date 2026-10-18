@@ -43,6 +43,15 @@ def same(a, b):
     return False
 
 
+def numeric_near(expr, var, point, direction, value):
+    if point in (sp.oo, -sp.oo):
+        x = sp.Integer(10) ** 30 * (1 if point is sp.oo else -1)
+    else:
+        x = point + (sp.Rational(1, 10**20) if direction == "+" else -sp.Rational(1, 10**20))
+    near = sp.N(expr.subs(var, x), 50)
+    return abs(near - sp.N(value, 50)) < sp.Float("1e-8")
+
+
 def check(item):
     spec, values = item["verify"], item["values"]
     kind = spec["type"]
@@ -81,9 +90,17 @@ def check(item):
         dirs = [spec["side"]] if spec.get("side") else (["+"] if point is sp.oo else ["-"] if point is -sp.oo else ["+", "-"])
         got = parse(values[0], set())
         for d in dirs:
-            expected = sp.limit(expr, var, point, dir=d) if point not in (sp.oo, -sp.oo) else sp.limit(expr, var, point)
-            if not same(expected, got):
-                return f"SymPy limit ({d}) {expected}, app {got}"
+            take = (lambda e: sp.limit(e, var, point, dir=d)) if point not in (sp.oo, -sp.oo) else (lambda e: sp.limit(e, var, point))
+            expected = take(expr)
+            if same(expected, got):
+                continue
+            # sympy.limit has known bugs with logs of constants (e.g. returns -oo for a finite
+            # log-difference quotient). Retry on the simplified expression, and accept only if that
+            # agrees AND a 50-digit numeric evaluation right next to the point agrees too.
+            retry = take(sp.simplify(expr))
+            if same(retry, got) and numeric_near(expr, var, point, d, got):
+                continue
+            return f"SymPy limit ({d}) {expected} (simplified: {retry}), app {got}"
         return None
     if kind == "evaluate":
         a, b = parse(spec["expr"], set()), parse(values[0], set())

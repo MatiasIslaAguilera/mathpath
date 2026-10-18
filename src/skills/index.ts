@@ -9,6 +9,8 @@ import { costProfitMaximization } from './econ/cost-profit-maximization';
 import { elasticity } from './econ/elasticity';
 import { limits } from './math/limits';
 import { derivativesProductQuotient } from './math/derivatives-product-quotient';
+import { derivativesChainRule } from './math/derivatives-chain-rule';
+import { derivativesExpLog } from './math/derivatives-exp-log';
 import { supplyDemandEquilibrium } from './econ/supply-demand-equilibrium';
 import { derivativesPowerRule } from './math/derivatives-power-rule';
 import { linearEquations } from './math/linear-equations';
@@ -19,4 +21,4 @@ import { growthDecay } from './math/growth-decay';
 import { functionsBasics } from './math/functions-basics';
 import { functionComposition } from './math/function-composition';
 
-export const SKILLS: SkillDefinition[] = [linearEquations, derivativesPowerRule, supplyDemandEquilibrium, exponentRules, logarithmRules, expLogEquations, growthDecay, functionsBasics, functionComposition, greIntegers, concavitySecondDerivative, optimization, costProfitMaximization, elasticity, limits, derivativesProductQuotient];
+export const SKILLS: SkillDefinition[] = [linearEquations, derivativesPowerRule, supplyDemandEquilibrium, exponentRules, logarithmRules, expLogEquations, growthDecay, functionsBasics, functionComposition, greIntegers, concavitySecondDerivative, optimization, costProfitMaximization, elasticity, limits, derivativesProductQuotient, derivativesChainRule, derivativesExpLog];

@@ -127,7 +127,7 @@ describe('skill-tree map', () => {
     expect(by('linear-equations').status).toBe('new');
     expect(by('derivatives-power-rule').status).toBe('locked');
     expect(by('derivatives-power-rule').lockedBy.sort()).toEqual(activePrerequisites(getSkill('derivatives-power-rule')).sort());
-    expect(by('derivatives-chain-rule').status).toBe('coming-soon');
+    expect(by('partial-derivatives').status).toBe('coming-soon');
   });
 
   it("overall progress counts the master's-relevant tree, excluding optional trig", () => {
