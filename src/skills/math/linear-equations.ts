@@ -274,7 +274,12 @@ export const linearEquations: SkillDefinition = {
     const D = base.right.konst;
     const k = A.sub(C);
     const r = D.sub(B);
-    const kx = `${k.eq(1) ? '' : k.eq(-1) ? '-' : k.toLatex()}x`;
+    const xTerm = (c: Q) => `${c.eq(1) ? '' : c.eq(-1) ? '-' : c.toLatex()}x`;
+    const kx = xTerm(k);
+    // Show the moved terms (Ax − Cx = D − B) before the result, so the step never just states x.
+    const moved = `${xTerm(A)} ${C.sign() < 0 ? '+' : '-'} ${xTerm(C.abs())} = ${D.toLatex()}${
+      B.isZero() ? '' : ` ${B.sign() < 0 ? '+' : '-'} ${B.abs().toLatex()}`
+    }`;
     steps.push({
       key: 'collect',
       instruction: C.isZero()
@@ -282,7 +287,7 @@ export const linearEquations: SkillDefinition = {
         : 'Move the x-terms to the left side and the numbers to the right side.',
       math: C.isZero()
         ? `${kx} = ${D.toLatex()} ${B.sign() < 0 ? '+' : '-'} ${B.abs().toLatex()} = ${r.toLatex()}`
-        : `${kx} = ${r.toLatex()}`,
+        : `${moved} \\;\\Rightarrow\\; ${kx} = ${r.toLatex()}`,
       why: 'Subtracting the same term from both sides keeps the equation balanced. That is why a term changes sign when it crosses the equals sign.',
       ask: {
         prompt: `After collecting terms, $${kx} = \\;?$`,
@@ -308,6 +313,8 @@ export const linearEquations: SkillDefinition = {
     const candidates = [
       B.isZero() ? null : wrongNumber('sign-constant', () => D.add(B).div(k)),
       C.isZero() ? null : wrongNumber('sign-x-term', () => r.div(A.add(C))),
+      // The same slip made moving Ax to the right instead: B − D = (C + A)x.
+      C.isZero() ? null : wrongNumber('sign-x-term', () => B.sub(D).div(A.add(C))),
       wrongNumber('divide-flipped', () => k.div(r)),
       k.eq(1) ? null : wrongNumber('subtract-coefficient', () => r.sub(k)),
     ];
