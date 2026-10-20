@@ -95,6 +95,11 @@ export function Exercise({ problem, rating, kind, hideSkill, firstTime, onAttemp
         )}
       </div>
       {kind === 'followup' && <p className="followup-note">Same method, new numbers. Try this one on your own.</p>}
+      {kind === 'stretch' && phase !== 'feedback' && (
+        <p className="followup-note" data-testid="stretch-note">
+          Stretch: one level above your usual. A solve here moves you up faster, and a miss costs less than usual.
+        </p>
+      )}
       {kind === 'gre' && phase !== 'feedback' && (
         <p className="followup-note" data-testid="gre-note">
           Today's GRE question. No timer: take the time you need.

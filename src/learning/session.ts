@@ -1,7 +1,7 @@
 // Builds a daily session (PLAN §2.2):
 //   warm-up (likely success, never a skill awaiting its retention check)
 //   → retention checks (cold: the first attempt of the day on that skill, unassisted, level ≥ 4)
-//   → ~70% current skill / ~30% review, interleaved
+//   → ~70% current skill / ~30% review, interleaved; every 5th current item is a stretch, one level up
 //   → finisher (likely success)
 // Reviews are FSRS-due skills (most-forgotten first), plus rusty and fragile skills. Until there
 // are due reviews, the 30% explores other available skills. Once ≥ 3 skills are solid, review
@@ -16,16 +16,18 @@ import { dateKey, emptySkill, type Progress } from '../storage/progress';
 import { nextLevel, pCorrect } from './mastery';
 import type { SkillEvent } from './record';
 import { isDue, retrievability, type StoredCard } from './scheduler';
-import { fragileReport, isSolid, MASTERY_LEVEL, retentionCheckDue, skillState, workingLevel } from './states';
+import { fragileReport, isFoundation, isSolid, MASTERY_LEVEL, retentionCheckDue, skillState, workingLevel } from './states';
 import { daysAway, GENTLE_AFTER_DAYS } from './streak';
 import { unlockedSkills } from './unlock';
 
-export type SlotKind = 'warmup' | 'current' | 'review' | 'retention' | 'gre' | 'finisher' | 'followup';
+export type SlotKind = 'warmup' | 'current' | 'review' | 'retention' | 'gre' | 'finisher' | 'followup' | 'stretch';
 
 export interface Slot {
-  kind: Exclude<SlotKind, 'followup'>;
+  kind: Exclude<SlotKind, 'followup' | 'stretch'>;
   /** Fixed skill for retention slots. */
   skillId?: string;
+  /** A current-skill item served one level above the working level. */
+  stretch?: boolean;
 }
 
 export interface Session {
@@ -51,6 +53,20 @@ export interface Session {
 
 const MAX_FOLLOWUPS = 4;
 const MAX_RETENTION_CHECKS = 2;
+/** Every STRETCH_EVERY-th current item (starting with the 3rd) is a stretch. */
+const STRETCH_EVERY = 5;
+/** No stretches until the rating has settled a little. */
+const STRETCH_MIN_ATTEMPTS = 5;
+
+/**
+ * Turn slot kinds into slots, marking stretch items. A stretch lets the rating climb faster
+ * (a solve one level up is worth more than one at the working level, a miss costs less) and
+ * shows the next problem type before the learner is expected to be good at it.
+ */
+function toSlots(kinds: Slot['kind'][]): Slot[] {
+  let current = 0;
+  return kinds.map((kind) => (kind === 'current' && current++ % STRETCH_EVERY === 2 ? { kind, stretch: true } : { kind }));
+}
 
 const skillOf = (p: Progress, id: string) => p.skills[id] ?? emptySkill();
 
@@ -63,13 +79,20 @@ const coreSkills = (p: Progress) => availableSkills(p).filter((id) => !isGre(id)
 const greSkills = (p: Progress) => availableSkills(p).filter(isGre);
 
 /**
- * The skill to spend ~70% of the session on, in tree order: one you're still learning, else the
- * next new one, else one that's practiced but not yet at mastery level. (Practiced skills keep
- * moving toward level 4 and the retention check through reviews, so new material isn't held up.)
+ * The skill to spend ~70% of the session on, in tree order: one you're still learning that isn't
+ * yet a foundation (solid at level 2), else the next new one, else any you're learning, else one
+ * that's practiced but not yet at mastery level. (Foundation and practiced skills keep climbing
+ * toward level 4 and the retention check through reviews, so new material isn't held up.)
  */
 export function pickCurrentSkill(p: Progress, candidates: string[]): string | undefined {
-  const inState = (s: string) => candidates.find((id) => skillState(skillOf(p, id)) === s);
-  return inState('learning') ?? inState('new') ?? inState('practiced');
+  const find = (ok: (id: string) => boolean) => candidates.find(ok);
+  const state = (id: string) => skillState(skillOf(p, id));
+  return (
+    find((id) => state(id) === 'learning' && !isFoundation(skillOf(p, id))) ??
+    find((id) => state(id) === 'new') ??
+    find((id) => state(id) === 'learning') ??
+    find((id) => state(id) === 'practiced')
+  );
 }
 
 const recall = (card: StoredCard | undefined, now = new Date()) => (card ? retrievability(card, now) : 0);
@@ -102,7 +125,7 @@ export function startSession(p: Progress, goal: number, options: { only?: string
   const base = { goal: n, index: 0, followUpsUsed: 0, answered: 0, correct: 0, xp: 0, events: [], reviewCursor: 0, gentle: false };
 
   if (options.only) {
-    const slots: Slot[] = [{ kind: 'warmup' }, ...Array.from({ length: n - 2 }, () => ({ kind: 'current' as const })), { kind: 'finisher' }];
+    const slots: Slot[] = [{ kind: 'warmup' }, ...toSlots(Array(n - 2).fill('current')), { kind: 'finisher' }];
     return { ...base, slots, currentSkill: options.only, reviewQueue: [], interleaved: false, only: options.only };
   }
 
@@ -138,14 +161,15 @@ export function startSession(p: Progress, goal: number, options: { only?: string
     const j = Math.floor(rand() * (i + 1));
     [mid[i], mid[j]] = [mid[j], mid[i]];
   }
+  const midSlots = toSlots(mid);
   return {
     ...base,
     slots: [
       { kind: 'warmup' },
       ...retention.map((skillId) => ({ kind: 'retention' as const, skillId })),
-      ...mid.slice(0, Math.ceil(mid.length / 2)).map((kind) => ({ kind })),
+      ...midSlots.slice(0, Math.ceil(midSlots.length / 2)),
       ...greSlots,
-      ...mid.slice(Math.ceil(mid.length / 2)).map((kind) => ({ kind })),
+      ...midSlots.slice(Math.ceil(midSlots.length / 2)),
       { kind: 'finisher' },
     ],
     currentSkill,
@@ -215,7 +239,11 @@ export function nextProblem(s: Session, p: Progress, now = new Date()): { sessio
     }
     case 'current': {
       const id = s.currentSkill ?? s.reviewQueue[0];
-      return { session: advanced, next: { problem: make(id, gentleLevel(s, workingLevel(skillOf(p, id)))), kind: 'current', hideSkill: false } };
+      const sp = skillOf(p, id);
+      const working = gentleLevel(s, workingLevel(sp));
+      const stretch = !!slot.stretch && !s.gentle && !sp.rusty && working < 5 && sp.attempts >= STRETCH_MIN_ATTEMPTS;
+      const level = (stretch ? working + 1 : working) as Level;
+      return { session: advanced, next: { problem: make(id, level), kind: stretch ? 'stretch' : 'current', hideSkill: false } };
     }
     case 'gre': {
       const id = pickGreSkill(p, now);

@@ -24,8 +24,24 @@ export function skillState(sp: SkillProgress): SkillState {
   return pCorrect(sp.rating, 3) >= TARGET_P ? 'practiced' : 'learning';
 }
 
-/** States that count as "you can do this" for unlocking and for turning on interleaving. */
+/** States that count as "you can do this" for turning on interleaving. */
 export const isSolid = (s: SkillState) => s === 'practiced' || s === 'check-pending' || s === 'mastered' || s === 'rusty';
+
+/** A prerequisite is solid enough to build on once you'd likely solve this level unassisted. */
+export const UNLOCK_LEVEL = 2;
+/** Earned evidence required at UNLOCK_LEVEL or above (a placement's partial credit isn't enough). */
+const UNLOCK_MIN_SOLVES = 3;
+
+/**
+ * Solid enough to open the skills that build on it: practiced or better, or likely to solve a
+ * level-2 problem with at least 3 unassisted level ≥ 2 solves behind it. Waiting for "practiced"
+ * (level 3) held new material hostage to a level the session never served.
+ */
+export function isFoundation(sp: SkillProgress): boolean {
+  if (isSolid(skillState(sp))) return true;
+  const earned = sp.history.filter((a) => a.level >= UNLOCK_LEVEL && a.correct && a.help === 'none').length;
+  return earned >= UNLOCK_MIN_SOLVES && pCorrect(sp.rating, UNLOCK_LEVEL) >= TARGET_P;
+}
 
 export interface FragileReport {
   fragile: boolean;

@@ -196,6 +196,21 @@ export const linearEquations: SkillDefinition = {
       explanation:
         '$4x$ means $4 \\cdot x$. To undo multiplication you divide: $4x = 12 \\Rightarrow x = 3$. Subtracting 4 would undo an addition, which is not what is happening here.',
     },
+    'forgot-divide': {
+      name: 'Stopped before dividing by the coefficient',
+      explanation:
+        'After collecting terms, $2x = 4$ tells you what $2x$ is, not what $x$ is. Finish by dividing both sides by the coefficient: $x = \\frac{4}{2} = 2$.',
+    },
+    'divide-one-coefficient': {
+      name: 'Divided by only one of the x-coefficients',
+      explanation:
+        'When $x$ is on both sides, combine the x-terms first: $7x - 18 = -7x - 158$ becomes $14x = -140$, so $x = -10$. Divide by the combined coefficient ($14$), not by one of the original ones ($7$).',
+    },
+    'sign-answer': {
+      name: 'Got the sign of the answer wrong',
+      explanation:
+        'Check the signs in the last division: negative ÷ positive is negative, and negative ÷ negative is positive. From $4x = -8$, $x = -2$. Substituting your answer back into the original equation catches this.',
+    },
     'distribute-first-only': {
       name: 'Multiplied only the first term inside the parentheses',
       explanation:
@@ -223,7 +238,11 @@ export const linearEquations: SkillDefinition = {
       { latex: 'ax + b = c \\;\\Rightarrow\\; ax = c - b \\;\\Rightarrow\\; x = \\frac{c - b}{a}', note: 'Undo addition first, then multiplication.' },
     ],
     example: { seed: 7, level: 3 },
-    tips: ['Check your answer by substituting it back into the original equation. Both sides should give the same number.'],
+    tips: [
+      'Check your answer by substituting it back into the original equation. Both sides should give the same number.',
+      'Go slowly with negatives when you move a number across. From $3x - 12 = -30$, add 12 to both sides: $-30 + 12 = -18$. Adding a positive to a negative moves toward zero, so the answer is closer to zero than $-30$ (not $-42$, not $-21$).',
+      'With x on both sides, combine the x-terms into one coefficient first ($7x + 7x = 14x$), then divide by that.',
+    ],
   },
 
   generate(rng, level) {
@@ -317,6 +336,12 @@ export const linearEquations: SkillDefinition = {
       C.isZero() ? null : wrongNumber('sign-x-term', () => B.sub(D).div(A.add(C))),
       wrongNumber('divide-flipped', () => k.div(r)),
       k.eq(1) ? null : wrongNumber('subtract-coefficient', () => r.sub(k)),
+      // Answered kx = r with r itself.
+      k.eq(1) ? null : wrongNumber('forgot-divide', () => r),
+      // x on both sides: divided by A (or by −C, collecting on the right) instead of A − C.
+      C.isZero() ? null : wrongNumber('divide-one-coefficient', () => r.div(A)),
+      C.isZero() ? null : wrongNumber('divide-one-coefficient', () => r.div(C.neg())),
+      x.isZero() ? null : wrongNumber('sign-answer', () => x.neg()),
     ];
     if (level === 3) {
       const wrongL = firstTermOnly(left, p.b, 0);

@@ -60,7 +60,7 @@ them first and the tree routes through them before calculus.
 | **Spacing** (Cepeda et al. 2006 meta-analysis) | Each skill has an FSRS memory state (`ts-fsrs` library). Due skills make up the ~30% review share of each session. |
 | **Interleaving** (Rohrer & Taylor 2007; strongest for *choosing* a method) | Once ≥3 skills reach "practiced," review items are mixed and the prompt doesn't say which skill it is (it says "Solve," not "Use the chain rule"). Later, "which method applies?" items are added for skills that are easy to confuse (product rule vs. chain rule; point vs. arc elasticity). |
 | **Worked examples → fading** (Sweller; Renkl & Atkinson backward fading) | First contact with a skill: the Learn card's worked example plus a *completion problem* where every step is filled in except the last. Guided mode fills in fewer steps as mastery grows, removing the *last* steps first (backward fading). |
-| **Mastery learning** (Bloom; Kulik et al. 1990) | A skill unlocks once its prerequisites reach "practiced" (unassisted success at difficulty ≥3). "Mastered" also requires a delayed retention check (§2.4). |
+| **Mastery learning** (Bloom; Kulik et al. 1990) | A skill unlocks once its prerequisites are solid at level 2 (P ≥ 0.75 at level 2, with ≥ 3 unassisted level-2+ solves); the prerequisite keeps climbing through reviews and stretch items. "Mastered" also requires a delayed retention check (§2.4). |
 | **Elaborative feedback** (Shute 2008) | When a wrong answer matches a known misconception, the app names it and explains it. Every step shows a one-line "why." |
 | **Desirable difficulty** | Difficulty is chosen so the predicted success rate is about 75–85%. Too easy builds no memory; too hard kills motivation. |
 | **Self-explanation** (Chi 1994) | Econ interpretation questions (sign, units, meaning). In guided mode, some steps ask "which rule applies?" instead of asking for a number. |
@@ -72,7 +72,7 @@ them first and the tree routes through them before calculus.
 - After an *unassisted* attempt: θ ← θ + K·(outcome − P), with K shrinking as attempts accumulate.
 - Hint use: the attempt counts as incorrect-ish (outcome 0.3) and never raises θ above its prior value.
 - Guided/reveal: outcome 0, small K (the attempt still carries information).
-- Difficulty for the next item is the highest level with P ≥ 0.75.
+- Difficulty for the next item is the highest level with P ≥ 0.75. Every 5th current-skill item (from the 3rd) is a **stretch**, one level up, once the skill has ≥ 5 attempts.
 - Why not BKT? BKT models a binary "known/unknown" state and doesn't map naturally onto
   five difficulty levels. Elo is transparent, works with few observations, and produces
   the "next difficulty" directly.
@@ -335,6 +335,7 @@ app/
 | Trig on the main path | Optional | None of the core Mizzou courses really uses it. |
 | Matrices and statistics "later" | Core path | 7370 (linear algebra) and 7371/8473 (econometrics) require them. |
 | Sonnet writes the skills | Batch F written by Opus | Sonnet hit a usage limit. Same specs and checks. |
+| Unlock when prerequisites are "practiced" (level 3) | Unlock when solid at level 2; stretch items one level up | First real progress file (Oct 2026): 75 linear-equations problems, 89% at level 1, never shown level 3, nothing unlocked. One level-1 miss erased ~7 solves, so the rating sat on the level 1/2 line; a simulation gave 9% odds of unlocking in the next 100 problems. |
 
 ---
 

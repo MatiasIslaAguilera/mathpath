@@ -5,6 +5,8 @@ import { prefilledSteps } from '../src/learning/fading';
 import { INITIAL_RATING, nextLevel, pCorrect, skillStatus, updateRating } from '../src/learning/mastery';
 import { recordAttempt } from '../src/learning/record';
 import { afterProblem, nextProblem, sessionDone, startSession } from '../src/learning/session';
+import { skillState } from '../src/learning/states';
+import { isUnlocked } from '../src/learning/unlock';
 import { currentStreak, totalPracticeDays } from '../src/learning/streak';
 import { xpFor } from '../src/learning/scoring';
 import { parseProgressFile, serializeProgress } from '../src/storage/exportImport';
@@ -116,6 +118,49 @@ describe('session builder', () => {
       n++;
     }
     expect(n).toBe(5);
+  });
+
+  const LIN = 'linear-equations';
+  const solves = (level: 1 | 2, count: number) =>
+    Array.from({ length: count }, (_, i) => ({
+      ts: i, problemId: `${LIN}:${level}:${i}`, level, correct: true, help: 'none' as const, hintsUsed: 0, firstOfDay: false,
+    }));
+
+  it('opens dependent skills once a prerequisite is solid at level 2, and moves on to one', () => {
+    const p = emptyProgress();
+    // Solid at level 2 (P ≈ 0.79) but not practiced (P(level 3) ≈ 0.57).
+    p.skills[LIN] = { ...emptySkill(), rating: 0.3, attempts: 20, history: solves(2, 3), lastPracticed: '2026-01-01' };
+    expect(skillState(p.skills[LIN])).toBe('learning');
+    expect(isUnlocked(p, 'supply-demand-equilibrium')).toBe(true);
+    const s = startSession(p, 10, { random: () => 0.3 });
+    expect(s.currentSkill).not.toBe(LIN);
+    expect(p.skills[s.currentSkill!]).toBeUndefined(); // a new skill
+    expect(s.reviewQueue).toContain(LIN); // and the old one keeps climbing through reviews
+
+    // The rating alone isn't enough: it needs earned level-2 solves.
+    p.skills[LIN] = { ...p.skills[LIN], history: solves(1, 20) };
+    expect(isUnlocked(p, 'supply-demand-equilibrium')).toBe(false);
+    // A placement's partial credit (rating 0.2, no attempts) keeps dependents locked.
+    p.skills[LIN] = { ...emptySkill(), rating: 0.2, placedAt: '2026-01-01' };
+    expect(isUnlocked(p, 'supply-demand-equilibrium')).toBe(false);
+  });
+
+  it('serves every 5th current item (from the 3rd) one level up, once the rating has settled', () => {
+    const run = (attempts: number) => {
+      const p = emptyProgress();
+      p.skills[LIN] = { ...emptySkill(), rating: 0.3, attempts };
+      let s = startSession(p, 10, { only: LIN });
+      const out: string[] = [];
+      while (!sessionDone(s)) {
+        const r = nextProblem(s, p)!;
+        if (r.next.kind === 'current' || r.next.kind === 'stretch') out.push(`${r.next.kind}${r.next.problem.level}`);
+        s = afterProblem(r.session, r.next.problem, true, false, 10);
+      }
+      return out;
+    };
+    expect(nextLevel(0.3)).toBe(2);
+    expect(run(20)).toEqual(['current2', 'current2', 'stretch3', 'current2', 'current2', 'current2', 'current2', 'stretch3']);
+    expect(run(2).every((k) => k === 'current2')).toBe(true);
   });
 });
 
