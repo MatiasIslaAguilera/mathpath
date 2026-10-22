@@ -1,7 +1,9 @@
 // Builds a daily session (PLAN §2.2):
 //   warm-up (likely success, never a skill awaiting its retention check)
-//   → retention checks (cold: the first attempt of the day on that skill, unassisted, level ≥ 4)
-//   → ~70% current skill / ~30% review, interleaved; every 5th current item is a stretch, one level up
+//   → retention checks (cold: the first attempt of the day on that skill, unassisted, at the
+//     level that earned it — 3 with a strong record, otherwise 4)
+//   → ~70% current skill / ~30% review, interleaved; every 5th current item is a stretch, one
+//     level up (every 3rd once recent solo accuracy is above the 75–85% band)
 //   → finisher (likely success)
 // Reviews are FSRS-due skills (most-forgotten first), plus rusty and fragile skills. Until there
 // are due reviews, the 30% explores other available skills. Once ≥ 3 skills are solid, review
@@ -12,11 +14,11 @@
 import { getSkill, makeProblem, SKILLS } from '../engine/registry';
 import { randomSeed } from '../engine/rng';
 import type { Level, Problem } from '../engine/types';
-import { dateKey, emptySkill, type Progress } from '../storage/progress';
+import { dateKey, emptySkill, type Progress, type SkillProgress } from '../storage/progress';
 import { nextLevel, pCorrect } from './mastery';
 import type { SkillEvent } from './record';
 import { isDue, retrievability, type StoredCard } from './scheduler';
-import { fragileReport, isFoundation, isSolid, MASTERY_LEVEL, retentionCheckDue, skillState, workingLevel } from './states';
+import { fragileReport, isAboveTargetBand, isFoundation, isSolid, MASTERY_LEVEL, retentionCheckDue, skillState, workingLevel } from './states';
 import { daysAway, GENTLE_AFTER_DAYS } from './streak';
 import { unlockedSkills } from './unlock';
 
@@ -55,6 +57,8 @@ const MAX_FOLLOWUPS = 4;
 const MAX_RETENTION_CHECKS = 2;
 /** Every STRETCH_EVERY-th current item (starting with the 3rd) is a stretch. */
 const STRETCH_EVERY = 5;
+/** Above the 75–85% band the working level is too easy: stretch more often (states.ts). */
+const STRETCH_EVERY_ABOVE_BAND = 3;
 /** No stretches until the rating has settled a little. */
 const STRETCH_MIN_ATTEMPTS = 5;
 
@@ -63,10 +67,13 @@ const STRETCH_MIN_ATTEMPTS = 5;
  * (a solve one level up is worth more than one at the working level, a miss costs less) and
  * shows the next problem type before the learner is expected to be good at it.
  */
-function toSlots(kinds: Slot['kind'][]): Slot[] {
+function toSlots(kinds: Slot['kind'][], every = STRETCH_EVERY): Slot[] {
   let current = 0;
-  return kinds.map((kind) => (kind === 'current' && current++ % STRETCH_EVERY === 2 ? { kind, stretch: true } : { kind }));
+  return kinds.map((kind) => (kind === 'current' && current++ % every === 2 ? { kind, stretch: true } : { kind }));
 }
+
+/** Stretch cadence for the session: every 3rd current item when the learner is above the band. */
+const cadenceFor = (sp: SkillProgress) => (isAboveTargetBand(sp) ? STRETCH_EVERY_ABOVE_BAND : STRETCH_EVERY);
 
 const skillOf = (p: Progress, id: string) => p.skills[id] ?? emptySkill();
 
@@ -125,7 +132,11 @@ export function startSession(p: Progress, goal: number, options: { only?: string
   const base = { goal: n, index: 0, followUpsUsed: 0, answered: 0, correct: 0, xp: 0, events: [], reviewCursor: 0, gentle: false };
 
   if (options.only) {
-    const slots: Slot[] = [{ kind: 'warmup' }, ...toSlots(Array(n - 2).fill('current')), { kind: 'finisher' }];
+    const slots: Slot[] = [
+      { kind: 'warmup' },
+      ...toSlots(Array(n - 2).fill('current'), cadenceFor(skillOf(p, options.only))),
+      { kind: 'finisher' },
+    ];
     return { ...base, slots, currentSkill: options.only, reviewQueue: [], interleaved: false, only: options.only };
   }
 
@@ -161,7 +172,7 @@ export function startSession(p: Progress, goal: number, options: { only?: string
     const j = Math.floor(rand() * (i + 1));
     [mid[i], mid[j]] = [mid[j], mid[i]];
   }
-  const midSlots = toSlots(mid);
+  const midSlots = toSlots(mid, cadenceFor(currentSkill ? skillOf(p, currentSkill) : emptySkill()));
   return {
     ...base,
     slots: [
@@ -230,11 +241,14 @@ export function nextProblem(s: Session, p: Progress, now = new Date()): { sessio
     }
     case 'retention': {
       const id = slot.skillId!;
-      if (skillOf(p, id).lastPracticed === today) {
+      const sp = skillOf(p, id);
+      if (sp.lastPracticed === today) {
         // Already touched today, so it can't be a cold check: skip it (it stays due for tomorrow).
         return nextProblem(advanced, p, now);
       }
-      const level = Math.max(MASTERY_LEVEL, nextLevel(skillOf(p, id).rating)) as Level;
+      // Serve the check at the level that earned it (3 or 4), or the working level if higher now.
+      const earned = sp.readyLevel ?? MASTERY_LEVEL;
+      const level = (Math.max(earned, nextLevel(sp.rating)) as Level);
       return { session: advanced, next: { problem: make(id, level), kind: 'retention', hideSkill: s.interleaved } };
     }
     case 'current': {

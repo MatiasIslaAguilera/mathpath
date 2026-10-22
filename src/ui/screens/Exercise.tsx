@@ -183,7 +183,7 @@ export function Exercise({ problem, rating, kind, hideSkill, firstTime, onAttemp
               </div>
             ) : e.type === 'check-scheduled' ? (
               <div key={e.type} className="callout info" data-testid="event-check-scheduled">
-                {skill.title}: memory check scheduled for {shortDate(e.due)}. You solved a level-4 problem on your own; the check confirms it stuck.
+                {skill.title}: memory check scheduled for {shortDate(e.due)}. You solved it on your own at the level that counts; the check confirms it stuck.
               </div>
             ) : null,
           )}
@@ -193,6 +193,11 @@ export function Exercise({ problem, rating, kind, hideSkill, firstTime, onAttemp
               <strong>{skill.misconceptions[outcome.misconception].name}.</strong>{' '}
               <MathText text={skill.misconceptions[outcome.misconception].explanation} />
             </div>
+          )}
+          {!outcome.correct && problem.verify.type === 'solve' && (
+            <p className="fine" data-testid="substitute-nudge">
+              Quick check: put your answer back into the original equation. Both sides should give the same number.
+            </p>
           )}
           {outcome.parts && !outcome.correct && problem.answer.kind === 'tuple' && (
             <p className="parts">

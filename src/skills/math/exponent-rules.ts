@@ -73,10 +73,20 @@ export const exponentRules: SkillDefinition = {
       explanation:
         'A power of a power multiplies the exponents: $(x^3)^4 = x^{3\\cdot 4} = x^{12}$, not $x^7$. Four copies of $x^3$ is twelve $x$\'s.',
     },
+    'power-as-product': {
+      name: 'Read a power of a power as a product',
+      explanation:
+        '$(3x^4)^3$ is not $3x^{4+3}$. The power applies to the whole bracket, so multiply *both* exponents, including the coefficient\'s hidden exponent of 1: $(3x^4)^3 = 3^3\\,x^{12} = 27x^{12}$. Ask "power of a power, or multiplying two powers?" first.',
+    },
     'divide-for-quotient': {
       name: 'Divided the exponents instead of subtracting',
       explanation:
         'Dividing powers of the same base subtracts the exponents: $\\frac{x^7}{x^3} = x^{7-3} = x^4$. Cancel three of the seven $x$\'s and four are left.',
+    },
+    'add-for-quotient': {
+      name: 'Added the exponents in a quotient',
+      explanation:
+        'Adding is the rule for *multiplying*, not for dividing. Dividing powers of the same base subtracts: $\\frac{x^8}{x^5} = x^{8-5} = x^3$, not $x^{13}$. Say the rule out loud before you compute: same base, dividing → subtract.',
     },
     'coefficient-not-raised': {
       name: 'Forgot to raise the coefficient',
@@ -105,6 +115,7 @@ export const exponentRules: SkillDefinition = {
     },
   },
   stepLabels: {
+    rule: 'Name the rule first',
     product: 'Add exponents (same base, multiplying)',
     quotient: 'Subtract exponents (dividing)',
     power: 'Multiply exponents (power of a power)',
@@ -197,7 +208,7 @@ function level1(rng: Rng): Body {
   const mis: (MisconceptionInstance | null)[] =
     form === 0
       ? [wrongNumber('multiply-for-product', () => a * b)]
-      : [wrongNumber('divide-for-quotient', () => q(a, b))];
+      : [wrongNumber('divide-for-quotient', () => q(a, b)), wrongNumber('add-for-quotient', () => a + b)];
   return {
     params: { form, a, b },
     prompt:
@@ -261,6 +272,20 @@ function level2(rng: Rng): Body {
     answer,
     steps: [
       {
+        key: 'rule',
+        instruction: 'Name the rule before computing: a power of a power multiplies the exponents, and the outside power applies to the coefficient too.',
+        math: `(${c}x^{${a}})^{${b}} \\;\\Rightarrow\\; ${c}^{${b}} \\text{ and } x^{${a}\\cdot ${b}}`,
+        why: '$(cx^a)^b = c^b\\,x^{ab}$. Both exponents multiply; never add them, and never leave $c$ alone.',
+        ask: {
+          prompt: `Which rule applies to $(${c}x^{${a}})^{${b}}$?`,
+          answer: choice(
+            rng,
+            'Raise the coefficient and multiply the exponents',
+            ['Leave the coefficient alone and multiply the exponents', 'Raise the coefficient and add the exponents'],
+          ),
+        },
+      },
+      {
         key: 'coefficient',
         instruction: `Raise the coefficient ${c} to the power ${b}.`,
         math: `${c}^{${b}} = ${k}`,
@@ -289,6 +314,7 @@ function level2(rng: Rng): Body {
     misconceptions: distinctMisconceptions(answer, [
       { id: 'coefficient-not-raised', wrong: tupleAnswer(['Coefficient', 'Exponent'], [c, e]) },
       { id: 'add-for-power', wrong: tupleAnswer(['Coefficient', 'Exponent'], [k, a + b]) },
+      { id: 'power-as-product', wrong: tupleAnswer(['Coefficient', 'Exponent'], [c, a + b]) },
     ]),
     verify: { type: 'solve', equations: [`u = (${c})^(${b})`, `v = (${a})*(${b})`], unknowns: ['u', 'v'] },
   };

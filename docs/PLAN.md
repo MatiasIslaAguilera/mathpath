@@ -149,6 +149,15 @@ Responses:
 - **"Mastered" requires** reaching level 4 unassisted (θ high enough) **and then** passing a
   **retention check ≥3 days later**. The check is a cold, interleaved, unassisted item at
   level ≥4 and must be the first attempt of the day on that skill.
+- **Level-3 start, for high-accuracy learners:** the rating moves slowly when a miss cancels
+  several solves, so a level-4 item can take ~100 problems to appear (measured on the Oct 2026
+  attempt log: 105 linear-equation attempts, 0 at level 4, 0 retention checks). If the skill is
+  *practiced* and the last 25 unassisted attempts are ≥ 90% correct, the first solo level-3
+  solve also starts the clock. The check is then served at the level that earned it (3), or at
+  the working level if that is higher, so mastery stays tied to demonstrated ability.
+- **Stretch cadence:** every 5th current item is one level up; every 3rd once recent solo
+  accuracy is above the 75–85% desirable-difficulty band, because the working level is then
+  too easy (70% of the Oct 2026 log was level 1, solved at 89%).
 - **States:**
   - locked → available → learning → practiced → *retention check pending* → mastered
   - Off the main path: **rusty** (a failed review after mastery) and **fragile**

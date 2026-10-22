@@ -29,8 +29,10 @@ export interface SkillProgress {
   interpretation: { correct: number; total: number };
   /** FSRS memory state; graded on the first attempt of each day. */
   fsrs?: StoredCard;
-  /** Date of the first unassisted solve at level ≥ 4: the retention check is now scheduled. */
+  /** Date the first unassisted solve at level ≥ 4 (or a level-3 one with a strong solo record): the retention check is now scheduled. */
   readyAt?: string;
+  /** The level that earned the check (3 or 4); the check is served at this level or the working level, whichever is higher. */
+  readyLevel?: Level;
   /** Date the cold retention check becomes due. */
   retentionDue?: string;
   retentionFails?: number;

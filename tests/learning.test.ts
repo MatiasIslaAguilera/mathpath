@@ -162,6 +162,19 @@ describe('session builder', () => {
     expect(run(20)).toEqual(['current2', 'current2', 'stretch3', 'current2', 'current2', 'current2', 'current2', 'stretch3']);
     expect(run(2).every((k) => k === 'current2')).toBe(true);
   });
+
+  it('stretches every 3rd current item once recent solo accuracy is above the band', () => {
+    const p = emptyProgress();
+    p.skills[LIN] = { ...emptySkill(), rating: 0.3, attempts: 25, history: solves(2, 25) };
+    let s = startSession(p, 10, { only: LIN });
+    const out: string[] = [];
+    while (!sessionDone(s)) {
+      const r = nextProblem(s, p)!;
+      if (r.next.kind === 'current' || r.next.kind === 'stretch') out.push(`${r.next.kind}${r.next.problem.level}`);
+      s = afterProblem(r.session, r.next.problem, true, false, 10);
+    }
+    expect(out).toEqual(['current2', 'current2', 'stretch3', 'current2', 'current2', 'stretch3', 'current2', 'current2']);
+  });
 });
 
 describe('progress storage', () => {

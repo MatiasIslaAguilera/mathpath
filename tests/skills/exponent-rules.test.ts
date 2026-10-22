@@ -70,6 +70,15 @@ describe('exponent-rules', () => {
         const w = values(m.wrong)[0];
         if (m.id === 'multiply-for-product') expect(w).toBe(p1.params.a * p1.params.b);
         if (m.id === 'divide-for-quotient') expect(w).toBeCloseTo(p1.params.a / p1.params.b, 9);
+        if (m.id === 'add-for-quotient') expect(w).toBe(p1.params.a + p1.params.b);
+      }
+      const p2 = makeProblem(skill, 2, seed);
+      for (const m of p2.misconceptions) {
+        const [kWrong, eWrong] = values(m.wrong);
+        if (m.id === 'power-as-product') {
+          expect(kWrong, p2.id).toBe(p2.params.c);
+          expect(eWrong, p2.id).toBe(p2.params.a + p2.params.b);
+        }
       }
       const p3 = makeProblem(skill, 3, seed);
       for (const m of p3.misconceptions) {

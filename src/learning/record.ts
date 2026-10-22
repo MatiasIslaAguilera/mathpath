@@ -6,10 +6,10 @@
 import type { Problem } from '../engine/types';
 import { newEventId, type AttemptEvent, type InterpretationEvent } from '../storage/events';
 import { dateKey, emptySkill, HISTORY_CAP, MISTAKE_CAP, type MistakeEntry, type Progress } from '../storage/progress';
-import { nextLevel, updateRating, type Help } from './mastery';
+import { nextLevel, pCorrect, TARGET_P, updateRating, type Help } from './mastery';
 import { gradeFor, reviewCard } from './scheduler';
 import { countsTowardMastery, xpFor } from './scoring';
-import { addDays, MASTERY_LEVEL, RETENTION_DELAY_DAYS, skillState } from './states';
+import { addDays, CHECK_START_LEVEL, MASTERY_LEVEL, RETENTION_DELAY_DAYS, skillState, strongRecentRecord } from './states';
 
 export interface AttemptResult {
   problem: Problem;
@@ -74,6 +74,11 @@ export function applyAttemptEvent(p: Progress, e: AttemptEvent): { xp: number; e
   // Spaced repetition: only the first attempt of the day is a real memory test.
   if (firstOfDay) skill.fsrs = reviewCard(skill.fsrs, now, gradeFor(e.correct, e.help));
 
+  // A level-3 start also needs the app's own "practiced" bar and a strong recent solo record:
+  // 90%+ over the last 25 unassisted attempts (states.ts). Otherwise level 4 stays the gate.
+  const readyByRecord =
+    e.level === CHECK_START_LEVEL && pCorrect(skill.rating, CHECK_START_LEVEL) >= TARGET_P && strongRecentRecord(skill);
+
   // Mastery state machine.
   if (e.retentionCheck && firstOfDay && skill.readyAt && !skill.masteredAt) {
     if (solo) {
@@ -85,8 +90,9 @@ export function applyAttemptEvent(p: Progress, e: AttemptEvent): { xp: number; e
       skill.retentionFails = (skill.retentionFails ?? 0) + 1;
       events.push({ type: 'check-failed', skillId: id, retryOn: skill.retentionDue });
     }
-  } else if (!skill.readyAt && solo && e.level >= MASTERY_LEVEL) {
+  } else if (!skill.readyAt && solo && (e.level >= MASTERY_LEVEL || readyByRecord)) {
     skill.readyAt = today;
+    skill.readyLevel = e.level;
     skill.retentionDue = addDays(today, RETENTION_DELAY_DAYS);
     events.push({ type: 'check-scheduled', skillId: id, due: skill.retentionDue });
   } else if (skill.masteredAt && firstOfDay) {

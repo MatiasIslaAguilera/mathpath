@@ -4,8 +4,10 @@
 //                                      ↑               ↓ (failed first-of-day review)
 //                                      └── retry ──  rusty → (unassisted first-of-day success) → mastered
 //
-// "check-pending": you solved a level ≥ 4 problem unassisted, and a cold retention check is
-// scheduled RETENTION_DELAY_DAYS later. Only passing it makes the skill "mastered".
+// "check-pending": you solved a level ≥ 4 problem unassisted — or a level ≥ 3 one with a strong
+// recent solo record (≥ 90% over 25 attempts) — and a cold retention check is scheduled
+// RETENTION_DELAY_DAYS later at the level that earned it. Only passing it makes the skill
+// "mastered".
 // "fragile" is an overlay flag: you do much better later in a session than on your first
 // attempt of the day, which means the skill is warmed up, not remembered.
 
@@ -14,6 +16,22 @@ import { nextLevel, pCorrect, TARGET_P } from './mastery';
 
 export const RETENTION_DELAY_DAYS = 3;
 export const MASTERY_LEVEL = 4;
+/**
+ * A cold check may also start from this level when the recent solo record is strong (see
+ * `strongRecentRecord`). The normal gate stays at MASTERY_LEVEL: this is the escape hatch for a
+ * learner the rating moves too slowly for (a level-4 item is only served once the rating says so,
+ * otherwise the check could never be earned).
+ */
+export const CHECK_START_LEVEL = 3;
+
+/** Recent solo attempts the stretch and check-readiness signals look at. */
+const RECENT_SOLO_WINDOW = 25;
+/** A level-3 check needs this unassisted accuracy over the window. */
+const STRONG_ACCURACY = 0.9;
+/** The desirable-difficulty band tops out at TARGET_P + 0.1; above it, items are too easy. */
+const BAND_TOP = 0.85;
+/** Don't call anything "above the band" on a handful of attempts. */
+const ABOVE_BAND_MIN = 10;
 
 export type SkillState = 'new' | 'learning' | 'practiced' | 'check-pending' | 'mastered' | 'rusty';
 
@@ -78,6 +96,42 @@ export function fragileReport(sp: SkillProgress): FragileReport {
 export function workingLevel(sp: SkillProgress) {
   const l = nextLevel(sp.rating);
   return sp.rusty ? (Math.max(1, l - 1) as typeof l) : l;
+}
+
+export interface SoloAccuracy {
+  accuracy: number;
+  count: number;
+}
+
+/**
+ * Unassisted accuracy over the last `window` solo attempts. Hinted, guided and revealed solves
+ * are left out: they don't prove you can do it alone (learning/scoring.ts).
+ */
+export function recentSoloAccuracy(sp: SkillProgress, window = RECENT_SOLO_WINDOW): SoloAccuracy {
+  const solo = sp.history.filter((a) => a.help === 'none').slice(-window);
+  return {
+    accuracy: solo.length ? solo.filter((a) => a.correct).length / solo.length : 0,
+    count: solo.length,
+  };
+}
+
+/**
+ * Enough recent solo evidence to start a cold check from level 3: at least 25 unassisted
+ * attempts at ≥ 90% correct. Calibrated on a real attempt log (docs: the analysis of Oct 2026):
+ * the two skills at 92–96% recent solo accuracy qualified; the one at 80% correctly did not.
+ */
+export function strongRecentRecord(sp: SkillProgress): boolean {
+  const { accuracy, count } = recentSoloAccuracy(sp);
+  return count >= RECENT_SOLO_WINDOW && accuracy >= STRONG_ACCURACY;
+}
+
+/**
+ * The learner is solving above the 75–85% band, so the working level is too easy: sessions
+ * stretch more often (session.ts). Needs a real recent sample, not two lucky answers.
+ */
+export function isAboveTargetBand(sp: SkillProgress): boolean {
+  const { accuracy, count } = recentSoloAccuracy(sp);
+  return count >= ABOVE_BAND_MIN && accuracy > BAND_TOP;
 }
 
 export function addDays(dateKey: string, days: number): string {

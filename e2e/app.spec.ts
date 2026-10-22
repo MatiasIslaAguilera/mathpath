@@ -88,6 +88,8 @@ test('a known wrong answer names the misconception', async ({ page }) => {
       await fillAnswer(page, p.answer, correctInput(m.wrong));
       await page.getByRole('button', { name: 'Check', exact: true }).click();
       await expect(page.getByTestId('misconception')).toBeVisible();
+      // A wrong solve also gets the "put it back into the equation" check habit.
+      await expect(page.getByTestId('substitute-nudge')).toBeVisible();
       return;
     }
     await fillAnswer(page, p.answer, correctInput(p.answer));

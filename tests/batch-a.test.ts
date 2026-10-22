@@ -26,6 +26,17 @@ function attempt(p: Progress, when: Date, opts: { level?: Level; correct?: boole
 }
 const types = (events: SkillEvent[]) => events.map((e) => e.type);
 
+/** A synthetic unassisted attempt record; only history is read by the accuracy signals. */
+const solve = (correct: boolean, i: number, level: Level = 3) => ({
+  ts: i,
+  problemId: `${LIN}:${level}:${i}`,
+  level,
+  correct,
+  help: 'none' as Help,
+  hintsUsed: 0,
+  firstOfDay: false,
+});
+
 describe('FSRS scheduling', () => {
   it('grades only by outcome and help', () => {
     expect(gradeFor(true, 'none')).toBe(Rating.Good);
@@ -70,6 +81,24 @@ describe('mastery state machine', () => {
   it('hinted or lower-level solves do not schedule it', () => {
     expect(attempt(emptyProgress(), day(10), { level: 4, help: 'hint' }).progress.skills[LIN].readyAt).toBeUndefined();
     expect(attempt(emptyProgress(), day(10), { level: 3 }).progress.skills[LIN].readyAt).toBeUndefined();
+  });
+
+  it('a level-3 solve starts the check when the recent solo record is strong (≥90% over 25)', () => {
+    const p = emptyProgress();
+    p.skills[LIN] = { ...emptySkill(), rating: 1.2, attempts: 25, history: Array.from({ length: 25 }, (_, i) => solve(true, i)) };
+    const { progress, events } = attempt(p, day(10), { level: 3 });
+    expect(progress.skills[LIN].readyAt).toBe('2026-10-10');
+    expect(progress.skills[LIN].readyLevel).toBe(3);
+    expect(types(events)).toContain('check-scheduled');
+  });
+
+  it('a level-3 solve with a weak recent record still waits for level 4', () => {
+    const p = emptyProgress();
+    const history = Array.from({ length: 25 }, (_, i) => solve(i >= 20, i)); // 80% solo
+    p.skills[LIN] = { ...emptySkill(), rating: 1.2, attempts: 25, history };
+    const { progress, events } = attempt(p, day(10), { level: 3 });
+    expect(progress.skills[LIN].readyAt).toBeUndefined();
+    expect(types(events)).not.toContain('check-scheduled');
   });
 
   it('passing the cold check masters the skill', () => {
@@ -141,6 +170,18 @@ describe('session building (batch A)', () => {
     p.skills[LIN].rating = 1.5;
     return p;
   }
+
+  it('serves a check earned at level 3 at level 3', () => {
+    const p = practicedProgress();
+    p.skills[LIN].readyLevel = 3; // earned from a strong solo record, not a level-4 solve
+    p.skills[LIN].rating = 1.2; // working level 3
+    const now = day(13);
+    const s = startSession(p, 10, { now, random: () => 0.5 });
+    const warm = nextProblem(s, p, now)!;
+    const check = nextProblem(warm.session, p, now)!;
+    expect(check.next.kind).toBe('retention');
+    expect(check.next.problem.level).toBe(3);
+  });
 
   it('puts a due retention check right after a warm-up on a different skill', () => {
     const p = practicedProgress();
