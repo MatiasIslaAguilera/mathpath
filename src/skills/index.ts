@@ -34,5 +34,11 @@ import { logarithmRules } from './math/logarithm-rules';
 import { growthDecay } from './math/growth-decay';
 import { functionsBasics } from './math/functions-basics';
 import { functionComposition } from './math/function-composition';
+import { linearInequalities } from './math/linear-inequalities';
+import { systemsOfEquations } from './math/systems-of-equations';
+import { quadraticsFactoring } from './math/quadratics-factoring';
+import { quadraticFormula } from './math/quadratic-formula';
+import { inverseFunctions } from './math/inverse-functions';
+import { functionTransformations } from './math/function-transformations';
 
-export const SKILLS: SkillDefinition[] = [linearEquations, derivativesPowerRule, supplyDemandEquilibrium, exponentRules, logarithmRules, expLogEquations, growthDecay, functionsBasics, functionComposition, greIntegers, greQuadraticsFunctions, greCoordinateGeometry, greLinesAnglesTriangles, greCirclesPolygons, greSolids, concavitySecondDerivative, optimization, costProfitMaximization, elasticity, limits, derivativesProductQuotient, derivativesChainRule, derivativesExpLog, greDescriptiveStats, greFractionsPercents, greRatiosRates, greExponentsRoots, greEquationsWordProblems, greInequalitiesAbsoluteValue, greCountingProbability, greDataInterpretation, greNormalDistribution];
+export const SKILLS: SkillDefinition[] = [inverseFunctions, functionTransformations, linearEquations, linearInequalities, systemsOfEquations, derivativesPowerRule, supplyDemandEquilibrium, exponentRules, logarithmRules, expLogEquations, growthDecay, functionsBasics, functionComposition, greIntegers, greQuadraticsFunctions, greCoordinateGeometry, greLinesAnglesTriangles, greCirclesPolygons, greSolids, concavitySecondDerivative, optimization, costProfitMaximization, elasticity, limits, derivativesProductQuotient, derivativesChainRule, derivativesExpLog, greDescriptiveStats, greFractionsPercents, greRatiosRates, greExponentsRoots, greEquationsWordProblems, greInequalitiesAbsoluteValue, greCountingProbability, greDataInterpretation, greNormalDistribution, quadraticsFactoring, quadraticFormula];

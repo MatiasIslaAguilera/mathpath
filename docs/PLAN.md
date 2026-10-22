@@ -3,7 +3,7 @@
 A personal "Duolingo for math and economics." Goal: go from pre-Algebra-2 to the math
 used in Mizzou's online MA in Economics, through a daily habit that survives a full-time job.
 
-Status (Oct 18, 2026): **35 skills built and verified, with sync and the GRE track.** Waiting on deployment (docs/SETUP.md). See §7 for what's next and §6 for how the plan changed from the original brief.
+Status (Oct 22, 2026): **38 skills built and verified (20 math, 3 econ, 15 GRE), with sync and the GRE track.** Deployed to GitHub Pages; every push to main runs the tests and redeploys. See §7 for what's next and §6 for how the plan changed from the original brief.
 
 ---
 
@@ -163,14 +163,14 @@ Responses:
 
 ## 3. Skill tree
 
-Arrows are prerequisites. ✅ = built (35 skills). The authoritative tree, including the
+Arrows are prerequisites. ✅ = built (38 skills). The authoritative tree, including the
 skills not built yet, is `src/skills/tree.ts`. Prerequisites resolve *through* unbuilt
 skills: the power rule needs limits, which needs functions, which needs linear equations.
 
 **MATH**
-1. ✅ Linear equations → linear inequalities → systems of 2 equations
-2. Quadratics: factoring → quadratic formula → vertex form
-3. Functions: ✅ evaluation & domain/range → ✅ composition → inverses → transformations
+1. ✅ Linear equations → ✅ linear inequalities → ✅ systems of 2 equations
+2. Quadratics: ✅ factoring → ✅ quadratic formula → vertex form
+3. Functions: ✅ evaluation & domain/range → ✅ composition → ✅ inverses → ✅ transformations
 4. ✅ Exponent rules → ✅ logarithm rules → ✅ exp/log equations → ✅ growth & decay
 5. Sequences & geometric series
 6. ✅ Limits & continuity
@@ -334,7 +334,9 @@ app/
 | Math + econ tracks | + GRE Quant track, one question per session | Your request. |
 | Trig on the main path | Optional | None of the core Mizzou courses really uses it. |
 | Matrices and statistics "later" | Core path | 7370 (linear algebra) and 7371/8473 (econometrics) require them. |
-| Sonnet writes the skills | Batch F written by Opus | Sonnet hit a usage limit. Same specs and checks. |
+| Sonnet writes the skills | Batches F and H written (or finished) by Opus | Sonnet hit a usage limit. Same specs and checks. |
+| Build the remaining algebra last | Batch H (inequalities, systems, quadratics, inverses, transformations) before multivariable calculus | Prerequisites resolve through unbuilt skills, so the app jumped from linear equations to functions and exponents and never practiced quadratics or inverses. The learner is at the start of the tree, where these are the next unlocks. |
+| Placement: at most 24 items | At most 30 | With batch H there are 23 placeable skills, 8 of them leaves; each leaf needs its own 2-item probe, and acing the test needed 30 items to reach every skill. Raise it again when a batch adds leaves. |
 | Unlock when prerequisites are "practiced" (level 3) | Unlock when solid at level 2; stretch items one level up | First real progress file (Oct 2026): 75 linear-equations problems, 89% at level 1, never shown level 3, nothing unlocked. One level-1 miss erased ~7 solves, so the rating sat on the level 1/2 line; a simulation gave 9% odds of unlocking in the next 100 problems. |
 
 ---
@@ -349,16 +351,18 @@ app/
 4. ✅ Event log + Supabase sync + account UI; GitHub Pages workflow
 5. ✅ **E** exponents, logs, functions (6) · ✅ **F** calculus core + first econ (8) ·
    ✅ **G** GRE Quant (15)
-6. ⏳ **Deploy:** waiting on your Supabase project + GitHub repo (`docs/SETUP.md`)
-7. **Next skills (H and beyond), in this order** (matches the first-semester courses):
+6. ✅ **Deploy:** GitHub Pages (`.github/workflows/deploy.yml`)
+7. ✅ **H** algebra foundation (6): linear inequalities, systems, quadratic factoring, quadratic
+   formula, inverse functions, transformations (`docs/skill-specs/batch-h.md`)
+8. **Next skills (I and beyond), in this order** (matches the first-semester courses):
    1. partial derivatives → total differential → multivariable optimization
    2. Cobb-Douglas → utility maximization → Lagrangian
    3. present value, growth rates
    4. matrices → Cramer's rule → comparative statics
    5. statistics → regression interpretation
    6. integrals → surplus/DWL
-   7. remaining algebra (quadratics, inverses, transformations, systems)
-8. **After a few days of real use:** analyze your answer history (`attempt_log` in Supabase
+   7. vertex form, sequences & geometric series
+9. **After a few days of real use:** analyze your answer history (`attempt_log` in Supabase
    or progress.json) and adjust generators, hints and Learn cards to your weak spots.
 
 **Also shipped:** a static **Past papers** deck with 200 GRE Quant questions imported from
