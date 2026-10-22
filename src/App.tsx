@@ -3,6 +3,7 @@ import { startSession, type Session } from './learning/session';
 import { problemsToday } from './learning/streak';
 import { msUntilReminder, showReminder } from './reminders/notify';
 import { useLearningStore } from './storage/useLearningStore';
+import { Challenge } from './ui/screens/Challenge';
 import { Home } from './ui/screens/Home';
 import { LearnCard } from './ui/screens/LearnCard';
 import { Placement } from './ui/screens/Placement';
@@ -19,7 +20,8 @@ type Screen =
   | { name: 'settings' }
   | { name: 'placement' }
   | { name: 'tree' }
-  | { name: 'stats' };
+  | { name: 'stats' }
+  | { name: 'challenge' };
 
 export default function App() {
   const { progress, status, storageOk, actions } = useLearningStore();
@@ -77,6 +79,7 @@ export default function App() {
           onPlacement={() => setScreen({ name: 'placement' })}
           onTree={() => setScreen({ name: 'tree' })}
           onStats={() => setScreen({ name: 'stats' })}
+          onChallenge={() => setScreen({ name: 'challenge' })}
         />
       )}
       {screen.name === 'session' && (
@@ -104,6 +107,7 @@ export default function App() {
       {screen.name === 'placement' && <Placement progress={progress} record={actions.record} onDone={home} />}
       {screen.name === 'tree' && <SkillTree progress={progress} onPractice={(id) => start(id)} onLearn={setLearnSkill} onBack={home} />}
       {screen.name === 'stats' && <Stats progress={progress} onPractice={(id) => start(id)} onBack={home} />}
+      {screen.name === 'challenge' && <Challenge onBack={home} />}
       {learnSkill && <LearnCard skillId={learnSkill} onClose={() => setLearnSkill(null)} />}
     </div>
   );

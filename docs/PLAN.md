@@ -360,3 +360,8 @@ app/
    7. remaining algebra (quadratics, inverses, transformations, systems)
 8. **After a few days of real use:** analyze your answer history (`attempt_log` in Supabase
    or progress.json) and adjust generators, hints and Learn cards to your weak spots.
+
+**Also shipped:** a static **Past papers** deck with 200 GRE Quant questions imported from
+`lbcty56/GRE-Quiz-App-Python-` (`docs/CONTENT-SOURCES.md`). It is separate from the mastery
+rating; `docs/skill-specs/bank-archetypes.md` lists the bank's question archetypes for the next
+batch of generators.

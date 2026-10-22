@@ -795,6 +795,45 @@ details[open] summary {
   grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
+.nav-row.three {
+  grid-template-columns: repeat(3, 1fr);
+}
+.nav-row.three .btn {
+  padding: 10px 8px;
+  font-size: 0.9rem;
+}
+
+/* ---------- challenge deck (static question banks) ---------- */
+.challenge-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+}
+.challenge-filters .seg {
+  flex-wrap: wrap;
+}
+.challenge-filters .seg-btn {
+  flex: 1 1 30%;
+  min-height: 40px;
+  padding: 6px 8px;
+  font-size: 0.85rem;
+}
+.challenge-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.challenge-prompt {
+  white-space: pre-wrap;
+  line-height: 1.55;
+}
+.challenge-explanation {
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
 .stat-note {
   color: var(--muted);
   font-size: 0.75rem;

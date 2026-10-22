@@ -27,6 +27,8 @@ dist-ssr
 verify/out/
 test-results/
 playwright-report/
+.tmp/
+.playwright/
 
 # learner data: never commit
 progress*.json

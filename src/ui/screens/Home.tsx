@@ -22,6 +22,7 @@ interface Props {
   onPlacement(): void;
   onTree(): void;
   onStats(): void;
+  onChallenge(): void;
 }
 
 const FRAGILE_HINT = 'You do well later in a session but not on your first try of the day. Spaced reviews will fix this.';
@@ -53,7 +54,7 @@ const DOT: Record<string, { cls: string; label: string }> = {
   'signed-out': { cls: 'hollow', label: 'Not signed in' },
 };
 
-export function Home({ progress, syncStatus, updateProfile, onStart, onPractice, onLearn, onSettings, onPlacement, onTree, onStats }: Props) {
+export function Home({ progress, syncStatus, updateProfile, onStart, onPractice, onLearn, onSettings, onPlacement, onTree, onStats, onChallenge }: Props) {
   const today = problemsToday(progress.days);
   const goal = progress.settings.dailyGoal;
   const report = streakReport(progress.days);
@@ -157,12 +158,15 @@ export function Home({ progress, syncStatus, updateProfile, onStart, onPractice,
         )}
       </section>
 
-      <nav className="nav-row" aria-label="More">
+      <nav className="nav-row three" aria-label="More">
         <button className="btn" onClick={onTree} data-testid="nav-tree">
           Skill tree
         </button>
         <button className="btn" onClick={onStats} data-testid="nav-stats">
           Stats
+        </button>
+        <button className="btn" onClick={onChallenge} data-testid="nav-challenge">
+          Past papers
         </button>
       </nav>
 

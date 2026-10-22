@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "import:gre-bank": "python tools/import_gre_bank.py",
     "verify:sympy": "tsx verify/export-samples.ts && python -I verify/sympy_check.py verify/out/samples.json",
     "typecheck": "tsc -b"
   },
