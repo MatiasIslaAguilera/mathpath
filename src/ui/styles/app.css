@@ -1291,3 +1291,137 @@ details[open] summary {
 .sync-email + .fine {
   margin-top: 0;
 }
+
+/* ---------- confirm (back gesture) ---------- */
+.confirm-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* ---------- working pad ---------- */
+/* Room for MathLive's docked keyboard (set from its geometrychange event). */
+.exercise {
+  padding-bottom: var(--keyboard-height, 0px);
+}
+.working {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+.working-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin-bottom: 8px;
+}
+.working-head h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+.working-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.working-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+.working-num {
+  flex: 0 0 1.5em;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: right;
+}
+.working-field {
+  flex: 1;
+  min-width: 0;
+}
+.working-field math-field {
+  display: block;
+  width: 100%;
+  font-size: 1.2rem;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  --caret-color: var(--accent);
+  --selection-background-color: var(--accent-soft);
+  --contains-highlight-background-color: transparent;
+}
+.working-field math-field:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* The keyboard toggle and menu inside each field: the keyboard opens on focus anyway. */
+.working-field math-field::part(menu-toggle),
+.working-field math-field::part(virtual-keyboard-toggle) {
+  display: none;
+}
+.icon-btn.small {
+  width: 36px;
+  height: 36px;
+  font-size: 1rem;
+  color: var(--muted);
+}
+.working-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.working-lines.readonly .working-row {
+  padding: 4px 8px;
+  border-radius: 10px;
+  min-height: 0;
+}
+.working-row.ok,
+.working-row.some {
+  background: var(--good-soft);
+}
+.working-row.wrong {
+  background: var(--bad-soft);
+}
+.working-mark {
+  margin-left: auto;
+  font-weight: 700;
+}
+.working-row.ok .working-mark,
+.working-row.some .working-mark {
+  color: var(--good);
+}
+.working-row.wrong .working-mark {
+  color: var(--bad);
+}
+.working-feedback {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+/* Actions pinned on top of the docked math keyboard. */
+.keyboard-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: var(--keyboard-height, 0px);
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 8px 12px;
+  background: var(--card);
+  border-top: 1px solid var(--line);
+  z-index: 30;
+}
+.keyboard-bar .btn.primary {
+  min-width: 96px;
+}

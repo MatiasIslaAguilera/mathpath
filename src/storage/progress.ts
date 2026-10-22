@@ -56,6 +56,9 @@ export interface MistakeEntry {
   misconception?: string;
   /** Step keys missed in guided mode (wrong attempt or "Show me"), or revealed by hints. */
   missedSteps: string[];
+  /** Lines of working (mathjs syntax) and the index of the first wrong one, if the working pad was used. */
+  working?: string[];
+  workingFirstWrong?: number;
 }
 
 export interface DayRecord {

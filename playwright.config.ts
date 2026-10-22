@@ -1,4 +1,4 @@
-import { defineConfig } from '@playwright/test';
+import { defineConfig, devices } from '@playwright/test';
 
 const PORT = 5199;
 
@@ -9,12 +9,9 @@ export default defineConfig({
   workers: 1,
   reporter: [['list']],
   use: {
+    // The learner's phone is Android: Pixel 7 (412×839 viewport, touch, Android Chrome user agent).
+    ...devices['Pixel 7'],
     baseURL: `http://localhost:${PORT}`,
-    // Phone-sized viewport (iPhone 13/14) on Chromium.
-    viewport: { width: 390, height: 844 },
-    isMobile: true,
-    hasTouch: true,
-    deviceScaleFactor: 2,
     trace: 'retain-on-failure',
   },
   webServer: {

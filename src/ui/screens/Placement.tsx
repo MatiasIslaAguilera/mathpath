@@ -23,6 +23,8 @@ interface Props {
   progress: Progress;
   record(events: LearningEvent[], next: Progress): void;
   onDone(): void;
+  /** Reports whether a test is in progress, so the back gesture can ask before discarding it. */
+  onInProgress?(busy: boolean): void;
 }
 
 type View =
@@ -39,8 +41,10 @@ const RESULT_TEXT: Record<PlacementResult, string> = {
   untested: 'Not tested',
 };
 
-export function Placement({ progress, record, onDone }: Props) {
+export function Placement({ progress, record, onDone, onInProgress }: Props) {
   const [view, setView] = useState<View>({ name: 'intro' });
+  const busy = view.name === 'question';
+  useEffect(() => onInProgress?.(busy), [busy, onInProgress]);
   const [input, setInput] = useState<Value>('');
   const [error, setError] = useState<string | null>(null);
   // Set after a graded answer: the state with that answer recorded, shown until "Next".

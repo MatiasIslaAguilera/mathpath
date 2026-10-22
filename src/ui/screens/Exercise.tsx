@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
-import { checkAnswer } from '../../engine/checker';
+import { useEffect, useMemo, useState } from 'react';
+import { checkAnswer, previewLatex } from '../../engine/checker';
+import { latexToMath } from '../../engine/latex';
 import { matchMisconception } from '../../engine/misconceptions';
+import { answerFromWorking, checkLine, firstLineLatex, workingSpec, type WorkingReport } from '../../engine/working';
 import { getSkill } from '../../engine/registry';
 import type { AnswerInput as Value, Problem } from '../../engine/types';
 import { prefilledSteps } from '../../learning/fading';
@@ -11,6 +13,7 @@ import { AnswerDisplay, FigureView } from '../components/AnswerDisplay';
 import { AnswerInput, initialValue } from '../components/AnswerInput';
 import { MathText, Tex } from '../components/MathText';
 import { StepCard, StepList } from '../components/StepCard';
+import { WorkingPad, type PadLine } from '../components/WorkingPad';
 import { shortDate } from '../shortDate';
 import { GuidedMode, type GuidedResult } from './GuidedMode';
 
@@ -36,9 +39,22 @@ interface Outcome {
   parts?: boolean[];
   xp: number;
   events: SkillEvent[];
+  /** Line-by-line verdicts on the working pad, if it was used. */
+  working?: WorkingReport;
 }
 
 const inputText = (v: Value) => (Array.isArray(v) ? v.join(', ') : v);
+const isEmpty = (v: Value) => (Array.isArray(v) ? v.every((x) => !x.trim()) : !v.trim());
+
+/** Keyboard LaTeX → mathjs ('' for a blank line, null when it can't be read). */
+function toMath(latex: string): string | null {
+  if (!latex.trim()) return '';
+  try {
+    return latexToMath(latex);
+  } catch {
+    return null;
+  }
+}
 
 export function Exercise({ problem, rating, kind, hideSkill, firstTime, onAttempt, onInterpretation, onNext, onOpenLearn }: Props) {
   const skill = getSkill(problem.skillId);
@@ -57,17 +73,64 @@ export function Exercise({ problem, rating, kind, hideSkill, firstTime, onAttemp
 
   const hintKeys = () => problem.steps.slice(0, hints).map((s) => s.key);
 
+  // Working pad (equation skills only: SkillDefinition.workingPad). The first line is the
+  // problem's own equation when the prompt has exactly one we can check.
+  const padSpec = useMemo(() => (skill.workingPad?.includes(problem.level) ? workingSpec(problem) : null), [skill, problem]);
+  const prefill = useMemo(() => {
+    const first = padSpec && firstLineLatex(problem);
+    const m = first ? toMath(first) : null;
+    const s = m && padSpec ? checkLine(m, padSpec) : null;
+    return s === 'ok' || s === 'some' ? first! : '';
+  }, [problem, padSpec]);
+  const [lines, setLines] = useState<PadLine[]>(() => [{ id: 0, latex: prefill }]);
+  const workingMath = useMemo(() => lines.map((l) => toMath(l.latex)), [lines]);
+  /** Only the untouched first line is not working. */
+  const usedPad = !!padSpec && lines.some((l) => l.latex.trim() && l.latex !== prefill);
+  const padAnswer = useMemo(
+    () => (padSpec && usedPad ? answerFromWorking(workingMath.map((m) => m ?? ''), padSpec, problem.answer) : null),
+    [padSpec, usedPad, workingMath, problem.answer],
+  );
+  const padAnswerLatex =
+    padAnswer && padSpec
+      ? Array.isArray(padAnswer)
+        ? padSpec.vars.length === padAnswer.length
+          ? padAnswer.map((v, i) => `${padSpec.vars[i]} = ${previewLatex(v, []) ?? v}`).join(',\\; ')
+          : `${padSpec.vars[0]} = ${padAnswer.map((v) => previewLatex(v, []) ?? v).join(',\\; ')}`
+        : `${padSpec.vars[0]} = ${previewLatex(padAnswer, []) ?? padAnswer}`
+      : null;
+  const padAnswerShown = padAnswer && inputText(padAnswer) !== inputText(input) ? padAnswerLatex : null;
+
+  const workingReport = (): WorkingReport | undefined => {
+    if (!padSpec || !usedPad) return undefined;
+    const status = workingMath.map((m) => (m === null ? 'unreadable' : checkLine(m, padSpec)));
+    const i = status.indexOf('wrong');
+    return { status, firstWrong: i < 0 ? null : i };
+  };
+
   const check = () => {
-    const r = skill.check ? skill.check(problem, input) : checkAnswer(problem.answer, input);
+    // An empty answer box takes the answer the working arrives at.
+    const value = isEmpty(input) && padAnswer ? padAnswer : input;
+    if (value !== input) setInput(value);
+    const r = skill.check ? skill.check(problem, value) : checkAnswer(problem.answer, value);
     if ('error' in r && r.error) {
       setError(r.error);
       return;
     }
     setError(null);
     const help: Help = hints === 0 ? 'none' : hints >= problem.steps.length ? 'reveal' : 'hint';
-    const misconception = r.correct ? undefined : matchMisconception(problem, input);
-    const { xp, events } = onAttempt({ problem, correct: r.correct, help, hintsUsed: hints, input: inputText(input), misconception, missedSteps: hintKeys() });
-    setOutcome({ correct: r.correct, help, misconception, parts: 'parts' in r ? r.parts : undefined, xp, events });
+    const misconception = r.correct ? undefined : matchMisconception(problem, value);
+    const working = workingReport();
+    const { xp, events } = onAttempt({
+      problem,
+      correct: r.correct,
+      help,
+      hintsUsed: hints,
+      input: inputText(value),
+      misconception,
+      missedSteps: hintKeys(),
+      working: working && { lines: workingMath.map((m) => m ?? '?'), firstWrong: working.firstWrong },
+    });
+    setOutcome({ correct: r.correct, help, misconception, parts: 'parts' in r ? r.parts : undefined, xp, events, working });
     setPhase('feedback');
   };
 
@@ -137,7 +200,9 @@ export function Exercise({ problem, rating, kind, hideSkill, firstTime, onAttemp
               ))}
             </div>
           )}
-          <AnswerInput spec={problem.answer} value={input} onChange={setInput} onEnter={check} autoFocus />
+          {padSpec && <WorkingPad lines={lines} setLines={setLines} answerHint={padAnswerShown} onUseAnswer={() => padAnswer && setInput(padAnswer)} onCheck={check} />}
+          {/* With a working pad, don't focus the answer box: on a phone that would open the system keyboard. */}
+          <AnswerInput spec={problem.answer} value={input} onChange={setInput} onEnter={check} autoFocus={!padSpec} />
           {error && <p className="input-error" role="alert">{error}</p>}
           <div className="btn-row three">
             <button className="btn primary" onClick={check}>
@@ -194,7 +259,30 @@ export function Exercise({ problem, rating, kind, hideSkill, firstTime, onAttemp
               <MathText text={skill.misconceptions[outcome.misconception].explanation} />
             </div>
           )}
-          {!outcome.correct && problem.verify.type === 'solve' && (
+          {outcome.working && (
+            <div className="working-feedback" data-testid="working-feedback">
+              {outcome.working.firstWrong !== null ? (
+                <div className={`callout ${outcome.correct ? 'info' : 'warn'}`} data-testid="working-first-wrong">
+                  <strong>
+                    {outcome.correct ? 'Right answer, but ' : ''}Your working goes wrong on line {outcome.working.firstWrong + 1}.
+                  </strong>{' '}
+                  {outcome.working.firstWrong > 0 &&
+                  outcome.working.status.slice(0, outcome.working.firstWrong).every((s) => s === 'ok' || s === 'some' || s === 'empty')
+                    ? 'Everything before it checks out. '
+                    : ''}
+                  That line isn't true for the correct answer, so the slip happened going from the line before to this one.
+                </div>
+              ) : (
+                <div className={`callout ${outcome.correct ? 'good' : 'info'}`} data-testid="working-all-right">
+                  {outcome.correct
+                    ? 'Every line of your working checks out.'
+                    : 'Every line of your working checks out, so the slip is in the final answer: compare it with your last line.'}
+                </div>
+              )}
+              <WorkingPad disabled lines={lines} setLines={() => {}} status={outcome.working.status} onUseAnswer={() => {}} />
+            </div>
+          )}
+          {!outcome.correct && problem.verify.type === 'solve' && !outcome.working && (
             <p className="fine" data-testid="substitute-nudge">
               Quick check: put your answer back into the original equation. Both sides should give the same number.
             </p>

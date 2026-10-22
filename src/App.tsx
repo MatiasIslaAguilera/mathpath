@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { startSession, type Session } from './learning/session';
 import { problemsToday } from './learning/streak';
 import { msUntilReminder, showReminder } from './reminders/notify';
 import { useLearningStore } from './storage/useLearningStore';
+import { ConfirmDialog } from './ui/components/ConfirmDialog';
 import { Challenge } from './ui/screens/Challenge';
 import { Home } from './ui/screens/Home';
 import { LearnCard } from './ui/screens/LearnCard';
@@ -59,6 +60,55 @@ export default function App() {
   };
   const home = () => setScreen({ name: 'home' });
 
+  // Android back gesture / browser back. Every screen above Home is guarded by ONE history entry:
+  // a back press consumes it and goes back one layer (Learn card, then the screen; a session or
+  // placement asks first), and the entry is pushed again while we are still above Home. Back on
+  // Home leaves the app, as Android users expect.
+  const atRoot = screen.name === 'home' && !learnSkill;
+  const [backPress, setBackPress] = useState(0);
+  const [leavePlacement, setLeavePlacement] = useState(false);
+  const [placementBusy, setPlacementBusy] = useState(false);
+  const [guardTick, setGuardTick] = useState(0);
+  const nav = useRef({ guard: false, skip: 0 });
+  const onBack = useRef(() => {});
+  onBack.current = () => {
+    if (learnSkill) setLearnSkill(null);
+    else if (screen.name === 'session') setBackPress((n) => n + 1);
+    else if (screen.name === 'placement' && placementBusy) setLeavePlacement((open) => !open);
+    else home();
+  };
+  useEffect(() => {
+    const n = nav.current;
+    if (!atRoot && !n.guard) {
+      history.pushState({ mathpath: 'guard' }, '');
+      n.guard = true;
+    } else if (atRoot && n.guard) {
+      // Left by an in-app button: drop the unused entry so the next back exits the app.
+      n.guard = false;
+      n.skip++;
+      history.back();
+    }
+  }, [atRoot, guardTick]);
+  useEffect(() => {
+    const onPop = () => {
+      const n = nav.current;
+      if (n.skip > 0) {
+        n.skip--;
+        return;
+      }
+      n.guard = false;
+      onBack.current();
+      setGuardTick((t) => t + 1); // re-guard if this back press kept us above Home
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+  const leaveScreen = (to: Screen) => {
+    setLeavePlacement(false);
+    setPlacementBusy(false);
+    setScreen(to);
+  };
+
   return (
     <div className="app">
       {!online && (
@@ -89,6 +139,7 @@ export default function App() {
           record={actions.record}
           onFinish={(session) => setScreen({ name: 'summary', session })}
           onQuit={(session) => setScreen(session.answered > 0 ? { name: 'summary', session } : { name: 'home' })}
+          backPress={backPress}
         />
       )}
       {screen.name === 'summary' && <Summary session={screen.session} progress={progress} onHome={home} />}
@@ -104,7 +155,17 @@ export default function App() {
           onBack={home}
         />
       )}
-      {screen.name === 'placement' && <Placement progress={progress} record={actions.record} onDone={home} />}
+      {screen.name === 'placement' && <Placement progress={progress} record={actions.record} onDone={() => leaveScreen({ name: 'home' })} onInProgress={setPlacementBusy} />}
+      {screen.name === 'placement' && leavePlacement && (
+        <ConfirmDialog
+          title="Leave the placement test?"
+          body="Your answers so far won't be saved. You can take it again from Settings."
+          stay="Keep going"
+          leave="Leave"
+          onStay={() => setLeavePlacement(false)}
+          onLeave={() => leaveScreen({ name: 'home' })}
+        />
+      )}
       {screen.name === 'tree' && <SkillTree progress={progress} onPractice={(id) => start(id)} onLearn={setLearnSkill} onBack={home} />}
       {screen.name === 'stats' && <Stats progress={progress} onPractice={(id) => start(id)} onBack={home} />}
       {screen.name === 'challenge' && <Challenge onBack={home} />}

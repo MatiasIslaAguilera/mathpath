@@ -367,6 +367,7 @@ export const quadraticFormula: SkillDefinition = {
   description: 'Use the discriminant and the quadratic formula to solve any quadratic, including break-even problems.',
   prerequisites: ['quadratics-factoring'],
   maxDenominator: 6,
+  workingPad: [2, 3, 4, 5],
   irrationalAnswers: true,
   levels: {
     1: { description: 'The discriminant b² − 4ac', ranges: { form: [0, 2], a: [1, 5], b: [-12, 12], c: [-12, 12] } },
@@ -426,6 +427,9 @@ export const quadraticFormula: SkillDefinition = {
     ],
   },
   generate(rng, level) {
-    return [level1, level2, level3, level4, level5][level - 1](rng);
+    const body = [level1, level2, level3, level4, level5][level - 1](rng);
+    // Both roots, so the working pad can check lines (engine/working.ts). Level 5 is written in q.
+    if (body.answer.kind === 'tuple') body.working = { solutions: body.answer.values.map((v) => ({ [level === 5 ? 'q' : 'x']: v })) };
+    return body;
   },
 };

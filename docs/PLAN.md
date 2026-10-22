@@ -346,6 +346,7 @@ app/
 | Sonnet writes the skills | Batches F and H written (or finished) by Opus | Sonnet hit a usage limit. Same specs and checks. |
 | Build the remaining algebra last | Batch H (inequalities, systems, quadratics, inverses, transformations) before multivariable calculus | Prerequisites resolve through unbuilt skills, so the app jumped from linear equations to functions and exponents and never practiced quadratics or inverses. The learner is at the start of the tree, where these are the next unlocks. |
 | Placement: at most 24 items | At most 30 | With batch H there are 23 placeable skills, 8 of them leaves; each leaf needs its own 2-item probe, and acing the test needed 30 items to reach every skill. Raise it again when a batch adds leaves. |
+| A math keypad for the answer box | Typed lines of working, each line checked | VanLehn (2011): step-level tutoring is about twice as effective as answer-only checking (d ≈ 0.76 vs 0.31). Substituting the solution into each line pinpoints the first wrong one exactly. On Android phones a sketch pad can't be checked, and paper isn't at hand. |
 | Unlock when prerequisites are "practiced" (level 3) | Unlock when solid at level 2; stretch items one level up | First real progress file (Oct 2026): 75 linear-equations problems, 89% at level 1, never shown level 3, nothing unlocked. One level-1 miss erased ~7 solves, so the rating sat on the level 1/2 line; a simulation gave 9% odds of unlocking in the next 100 problems. |
 
 ---
@@ -371,6 +372,12 @@ app/
    5. statistics → regression interpretation
    6. integrals → surplus/DWL
    7. vertex form, sequences & geometric series
+   Also built (Oct 22): Android back gesture (back = one layer back; sessions and placement ask
+   first) and the **working pad**: lines of working typed with a math keyboard (MathLive),
+   each line checked by substituting the solution, and the first wrong line pinpointed after
+   Check. It is on for equation skills (linear, systems, quadratics, exp/log equations, inverse
+   L1). Next: name the mistake from the jump between lines, "check my working" as a hint,
+   expression working (derivatives).
 9. **After a few days of real use:** analyze your answer history (`attempt_log` in Supabase
    or progress.json) and adjust generators, hints and Learn cards to your weak spots.
 

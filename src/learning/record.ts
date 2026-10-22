@@ -21,6 +21,8 @@ export interface AttemptResult {
   misconception?: string;
   /** Step keys the learner missed, asked "Show me" on, or revealed with hints. */
   missedSteps: string[];
+  /** Lines of working from the working pad (mathjs syntax), and the first line that went wrong. */
+  working?: { lines: string[]; firstWrong: number | null };
   /** This problem was a scheduled cold retention check. */
   retentionCheck?: boolean;
 }
@@ -49,6 +51,9 @@ export function attemptEvent(r: AttemptResult, now = new Date()): AttemptEvent {
     misconception: r.misconception,
     missedSteps: r.missedSteps,
     retentionCheck: r.retentionCheck || undefined,
+    workingLines: r.working?.lines.length || undefined,
+    working: r.correct ? undefined : r.working?.lines,
+    workingFirstWrong: r.correct ? undefined : (r.working?.firstWrong ?? undefined),
   };
 }
 
@@ -126,6 +131,8 @@ export function applyAttemptEvent(p: Progress, e: AttemptEvent): { xp: number; e
       input: e.correct ? undefined : e.input,
       misconception: e.misconception,
       missedSteps: e.missedSteps,
+      working: e.working,
+      workingFirstWrong: e.workingFirstWrong,
     });
     if (p.mistakes.length > MISTAKE_CAP) p.mistakes.splice(0, p.mistakes.length - MISTAKE_CAP);
   }

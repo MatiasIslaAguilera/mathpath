@@ -31,6 +31,7 @@ export const expLogEquations: SkillDefinition = {
   description: 'Solve equations with the unknown in an exponent or inside a logarithm.',
   prerequisites: ['logarithm-rules'],
   maxDenominator: 6,
+  workingPad: [1, 2, 3, 4, 5],
   irrationalAnswers: true,
   levels: {
     1: { description: 'Match exponents: b^(x+c) = b^k', ranges: { b: [2, 5], k: [2, 5], c: [-3, 3] } },

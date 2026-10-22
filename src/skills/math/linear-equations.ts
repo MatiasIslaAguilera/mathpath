@@ -153,6 +153,7 @@ export const linearEquations: SkillDefinition = {
   description: 'Solve equations like 3(x − 2) = x + 4 by keeping both sides balanced.',
   prerequisites: [],
   maxDenominator: 6,
+  workingPad: [1, 2, 3, 4, 5],
   levels: {
     1: {
       description: 'Two-step: ax + b = c',

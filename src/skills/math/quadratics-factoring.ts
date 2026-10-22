@@ -394,6 +394,7 @@ export const quadraticsFactoring: SkillDefinition = {
   description: 'Solve quadratic equations by factoring and the zero-product rule.',
   prerequisites: ['linear-equations'],
   maxDenominator: 5,
+  workingPad: [1, 2, 3, 4, 5],
   levels: {
     1: { description: 'Monic: x² + bx + c = 0 with integer roots', ranges: { r1: [-9, 9], r2: [-9, 9] } },
     2: { description: 'Difference of squares, or a common factor of x', ranges: { form: [0, 1], k: [0, 12], b: [-12, 12] } },
@@ -465,6 +466,8 @@ export const quadraticsFactoring: SkillDefinition = {
       misconceptions,
       interpretation,
       verify: built.verify,
+      // Both roots, so the working pad can check lines written in x (engine/working.ts).
+      working: { solutions: [{ x: built.r1.toExpr() }, { x: built.r2.toExpr() }] },
     };
   },
 };

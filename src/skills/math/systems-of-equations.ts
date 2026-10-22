@@ -460,6 +460,7 @@ export const systemsOfEquations: SkillDefinition = {
   description: 'Solve two equations in two unknowns by setting equal, substituting, or eliminating.',
   prerequisites: ['linear-equations'],
   maxDenominator: 4,
+  workingPad: [1, 2, 3, 4, 5],
   levels: {
     1: {
       description: 'Two cost plans: set the expressions equal',

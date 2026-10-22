@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { recordAttempt, recordInterpretation, type AttemptResult } from '../../learning/record';
 import { afterProblem, nextProblem, type NextUp, type Session } from '../../learning/session';
 import type { LearningEvent } from '../../storage/events';
 import { emptySkill, type Progress } from '../../storage/progress';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Exercise } from './Exercise';
 import { LearnCard } from './LearnCard';
 
@@ -12,6 +13,8 @@ interface Props {
   record(events: LearningEvent[], next: Progress): void;
   onFinish(s: Session): void;
   onQuit(s: Session): void;
+  /** Increments on each back gesture (App.tsx): close the Learn card, else ask before quitting. */
+  backPress?: number;
 }
 
 interface State {
@@ -25,12 +28,20 @@ interface State {
 
 const isFirstTime = (p: Progress, n: NextUp) => !n.hideSkill && (p.skills[n.problem.skillId] ?? emptySkill()).attempts === 0;
 
-export function SessionScreen({ initial, progress, record, onFinish, onQuit }: Props) {
+export function SessionScreen({ initial, progress, record, onFinish, onQuit, backPress = 0 }: Props) {
   const [state, setState] = useState<State>(() => {
     const first = nextProblem(initial, progress)!; // a new session always has ≥ 3 slots
     return { session: first.session, current: first.next, firstTime: isFirstTime(progress, first.next), serial: 0 };
   });
   const [learnOpen, setLearnOpen] = useState(false);
+  const [confirmQuit, setConfirmQuit] = useState(false);
+  const seenBack = useRef(backPress);
+  useEffect(() => {
+    if (backPress === seenBack.current) return;
+    seenBack.current = backPress;
+    if (learnOpen) setLearnOpen(false);
+    else setConfirmQuit((open) => !open);
+  }, [backPress, learnOpen]);
   const { session, current, firstTime, serial } = state;
   const { problem } = current;
   const rating = (progress.skills[problem.skillId] ?? emptySkill()).rating;
@@ -82,6 +93,16 @@ export function SessionScreen({ initial, progress, record, onFinish, onQuit }: P
         onOpenLearn={() => setLearnOpen(true)}
       />
       {learnOpen && <LearnCard skillId={problem.skillId} onClose={() => setLearnOpen(false)} />}
+      {confirmQuit && (
+        <ConfirmDialog
+          title="End this session?"
+          body={session.answered > 0 ? 'Your answers so far are saved.' : "You haven't answered anything yet."}
+          stay="Keep going"
+          leave="End session"
+          onStay={() => setConfirmQuit(false)}
+          onLeave={() => onQuit(session)}
+        />
+      )}
     </div>
   );
 }

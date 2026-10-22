@@ -504,6 +504,7 @@ export const inverseFunctions: SkillDefinition = {
   description: 'Undo a function: find f^{-1}(k), the inverse of a line or demand curve, and handle restricted domains.',
   prerequisites: ['function-composition'],
   maxDenominator: 9,
+  workingPad: [1],
   levels: {
     1: { description: 'f^{-1}(k) for a linear function', ranges: { m: [-6, 6], b: [-12, 12], k: [-72, 72] } },
     2: { description: 'Write the inverse of a line as a line', ranges: { m: [-6, 6], b: [-12, 12] } },

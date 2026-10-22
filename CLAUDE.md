@@ -11,7 +11,7 @@ and design rationale: [docs/PLAN.md](docs/PLAN.md).
 | `npm run dev` | Dev server |
 | `npm test` | Unit tests: generator harness (1,000 seeds × 5 levels per skill), checker property tests, learning logic. `SEEDS=100 npm test` for a quick run |
 | `npm run verify:sympy` | Independent cross-check: exports ~200 problems/level/skill and re-solves them with SymPy |
-| `npm run test:e2e` | Playwright at a phone viewport (390×844): session, hints, guided mode, misconceptions, export/import |
+| `npm run test:e2e` | Playwright on an Android phone profile (Pixel 7, 412×839): session, hints, guided mode, misconceptions, back gesture, export/import |
 | `npm run import:gre-bank` | Re-import the 200-question GRE challenge bank (`python tools/import_gre_bank.py`) |
 | `npm run typecheck` / `npm run build` | `tsc -b` / production build |
 
@@ -28,6 +28,8 @@ src/engine/      problem contracts and pure machinery (no React)
   checker.ts       answer equivalence via mathjs (fractions/decimals, expressions by sampling)
   misconceptions.ts  match a wrong answer to a predicted misconception
   answers.ts format.ts richtext.ts registry.ts
+  working.ts       the working pad: check each typed line by substituting the solution
+  latex.ts         math-keyboard LaTeX → mathjs syntax (the subset MathLive produces)
 src/skills/      ONE FILE PER SKILL, registered in skills/index.ts
   tree.ts          the full planned skill tree (ids, tracks, order, prerequisites), incl. unbuilt skills
 src/content/     static challenge decks imported from question banks (not SkillDefinitions)
@@ -36,7 +38,9 @@ src/content/     static challenge decks imported from question banks (not SkillD
 src/learning/    mastery (Elo rating), fading, scoring, session builder, streak, record
 src/storage/     versioned Progress in localStorage (try/catch), export/import
 src/reminders/   ics.ts (daily recurring calendar event), notify.ts (best-effort in-app notification)
-src/ui/          components/ (MathText, AnswerInput, StepCard), screens/, styles/app.css
+src/ui/          components/ (MathText, AnswerInput, StepCard, WorkingPad, ConfirmDialog), screens/, styles/app.css
+                   WorkingPad lazy-loads MathLive (pinned) with a custom algebra keyboard;
+                   App.tsx maps the Android back gesture to "back one layer" (one history entry)
 public/          PWA icons; vite.config.ts configures vite-plugin-pwa (precache, manifest)
 docs/skill-specs/  per-batch specs handed to skill-writing subagents
 tests/           generators.test.ts (shared harness), verify-check.ts (independent verifier),
@@ -113,6 +117,11 @@ Checklist:
      harness checks that the file exists.
    - Irrational answers (ln 5 / 2, e^{rt}): set `irrationalAnswers: true` and keep the value
      exact (`log(5)/2`). The learner types a decimal rounded to ≥ 2 places.
+   - Working pad (optional): for equation solving, set `workingPad: [levels]`. Each typed line
+     is checked by substituting the solution, read from a `solve` verify. When the verify's
+     unknowns aren't what the learner writes (quadratics use `r1, r2`, the learner writes `x`),
+     also set `Problem.working.solutions`. `tests/working.test.ts` fails if an opted-in level
+     has nothing to check.
 6. **Text conventions:**
    - RichText uses `$inline$` and `$$display$$` math, `*emphasis*`, and `\$` for a dollar sign.
    - `value` strings must parse in mathjs **and** SymPy: explicit `*`, `^` for powers,

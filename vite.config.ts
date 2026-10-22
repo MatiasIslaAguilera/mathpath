@@ -6,6 +6,8 @@ import { VitePWA } from 'vite-plugin-pwa'
 export default defineConfig({
   // GitHub Pages serves a project site under /<repo>/; the deploy workflow sets BASE_PATH.
   base: process.env.BASE_PATH ?? '/',
+  // MathLive is imported lazily (the working pad); pre-bundle it so dev doesn't reload mid-session.
+  optimizeDeps: { include: ['mathlive'] },
   plugins: [
     react(),
     // Installable and fully offline once visited. The service worker is registered by hand in

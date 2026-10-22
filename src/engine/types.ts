@@ -142,6 +142,12 @@ export interface Problem {
   misconceptions: MisconceptionInstance[];
   interpretation?: InterpretationQuestion[];
   verify: VerifySpec;
+  /**
+   * For the working pad (engine/working.ts): every correct solution, as values of the variables
+   * the learner writes in their working (e.g. both roots `{ x: '-9' }`, `{ x: '4' }`). Only needed
+   * when it can't be read off a `solve` verify (whose unknowns may be `r1`, `r2`).
+   */
+  working?: { solutions: Record<string, string>[] };
 }
 
 // ---------------------------------------------------------------------------
@@ -188,6 +194,11 @@ export interface SkillDefinition {
    * expressions ("log(5)/2"); learners can type a decimal rounded to ≥ 2 places.
    */
   irrationalAnswers?: boolean;
+  /**
+   * Levels that offer the working pad: lines of working checked by substituting the solution
+   * (engine/working.ts). Only for equation solving in the variables the learner writes.
+   */
+  workingPad?: Level[];
   misconceptions: Record<string, MisconceptionDef>;
   /** Readable name for every Step.key this skill uses (stats page, progress analysis). */
   stepLabels: Record<string, string>;
