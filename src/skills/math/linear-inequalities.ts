@@ -221,6 +221,11 @@ export const linearInequalities: SkillDefinition = {
       explanation:
         'Only a negative divisor flips the sign. Look at the coefficient you actually divide by after collecting terms, not at the coefficients you started with: if $-3x > -9$ becomes $3x < 9$ (after moving terms), you divide by $+3$ and the sign stays.',
     },
+    'read-backwards': {
+      name: 'Read the answer backwards (6 > x as x > 6)',
+      explanation:
+        'In a word problem it is natural to write the limit first: $41 > 4x + 17$. Solving that ends with $6 > x$, which says *$x$ is less than 6*, so $x < 6$. Before you pick an option, turn the result around so $x$ is on the left. Then sense-check one value in the story: 0 miles costs \\$17, which is under \\$41, so small $x$ must be in the set.',
+    },
     'sign-constant': {
       name: 'Moved a number without changing its sign',
       explanation:
@@ -238,7 +243,8 @@ export const linearInequalities: SkillDefinition = {
     flip: 'Decide whether the sign flips',
     divide: 'Divide by the coefficient of x',
     answer: 'State the solution set',
-    setup: 'Set up: write the situation as an expression',
+    check: 'Check one value in the situation',
+    setup:'Set up: write the situation as an expression',
     'setup-right': 'Set up the other side',
     'subtract-all': 'Subtract from all three parts',
     'divide-all': 'Divide all three parts',
@@ -257,6 +263,7 @@ export const linearInequalities: SkillDefinition = {
     tips: [
       'Check your answer: pick a number inside the solution set and plug it into the original inequality. It should be true. Then try a number outside; it should be false.',
       'The sign flips only when you divide by a negative number. Adding or subtracting never flips it.',
+      'In a word problem, finish with $x$ on the left before you choose: $6 > x$ means $x < 6$. Then try one easy value (often $x = 0$) in the story to confirm the direction.',
       'A strict sign ($<$, $>$) leaves the boundary out; $\\le$ and $\\ge$ include it. Dividing by a negative flips $<$ to $>$ and $\\le$ to $\\ge$ but never changes strictness.',
     ],
   },
@@ -269,7 +276,7 @@ export const linearInequalities: SkillDefinition = {
     levels: [1, 2, 3],
     generate(rng, level) {
       const story = pickStory(rng, level);
-      const body = solveBuilt(rng, story.built, level, false);
+      const body = solveBuilt(rng, story.built, level, false, true);
       return { ...body, prompt: story.prompt, steps: [...story.setup, ...body.steps] };
     },
   },
@@ -278,7 +285,7 @@ export const linearInequalities: SkillDefinition = {
 // ---------- levels 1-4 ----------
 
 /** Steps, choices and misconceptions for a picked inequality (shared by plain and story problems). */
-function solveBuilt(rng: Rng, b: Built, level: Level, withInterpretation: boolean) {
+function solveBuilt(rng: Rng, b: Built, level: Level, withInterpretation: boolean, story = false) {
   const { rel, A, B, C, D } = b;
   const k = q(A - C);
   const r = q(D - B);
@@ -358,8 +365,10 @@ function solveBuilt(rng: Rng, b: Built, level: Level, withInterpretation: boolea
   const correct = single(relOut, t);
   const wrongDir = single(flipRel(relOut), t);
   const signConst = single(relOut, r.add(2 * B).div(k));
+  // In stories the reversed set is almost always the limit written first and read backwards
+  // (41 > 4x + 17 → 6 > x read as x > 6): both directions of error showed up there, never in plain items.
   const named = [
-    { id: flips ? 'no-flip' : 'flip-positive', opt: wrongDir },
+    { id: story ? 'read-backwards' : flips ? 'no-flip' : 'flip-positive', opt: wrongDir },
     { id: 'sign-constant', opt: signConst },
   ];
   const fillers = [
@@ -372,6 +381,34 @@ function solveBuilt(rng: Rng, b: Built, level: Level, withInterpretation: boolea
     single(relOut, t.neg()),
   ];
   const { answer, mis } = buildChoice(rng, correct, named, fillers);
+
+  if (story) {
+    // A sense check in the situation, at a whole number next to the boundary (deterministic: no rng,
+    // so option order for existing seeds is unchanged).
+    const tv = t.valueOf();
+    const v = Number.isInteger(tv) ? (tv % 2 === 0 ? tv + 1 : Math.max(0, tv - 1)) : Math.max(0, Math.round(tv));
+    const lv = A * v + B;
+    const rv = C * v + D;
+    const ok = holds(rel, q(lv), q(rv));
+    const sides = `${lv} ${REL[rel]} ${rv}`;
+    steps.push({
+      key: 'check',
+      instruction: `Check one value in the situation: at $x = ${v}$ the two sides are $${lv}$ and $${rv}$, and $${sides}$ is ${ok ? 'true' : 'false'}, so $x = ${v}$ is ${ok ? 'in' : 'not in'} the solution set.`,
+      math: `x = ${v}:\\quad ${sides}\\;\\text{is ${ok ? 'true' : 'false'}}`,
+      why: 'Testing one concrete value catches a set read backwards: the right set must contain the values that work in the story.',
+      ask: {
+        prompt: `Check the direction with one value. At $x = ${v}$, is $${ineq}$ true?`,
+        answer: {
+          kind: 'choice',
+          options: [
+            { id: 'yes', label: 'Yes, it holds' },
+            { id: 'no', label: "No, it doesn't" },
+          ],
+          correct: ok ? 'yes' : 'no',
+        },
+      },
+    });
+  }
 
   steps.push({
     key: 'answer',

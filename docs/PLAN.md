@@ -441,6 +441,18 @@ of runway.
 | 7 | **Working pad: identity working** | 6 skills had the pad before Oct 23, 15 now. Still off: exponent rules, log rules, all derivative skills, inverse L2–3, because their working is identities in free letters ($(xy)^3/(x^7y^5) = x^{-4}y^{-2}$, $f'(x) = 6x + 2$), which substitution can't judge. Also off, with reasons in the skill files: concavity L5 (its method lists the rejected critical point), inverse L4 and GRE word problems L2 (only some variants are equations). | In `engine/working.ts`: a line whose free letters aren't unknowns is checked as an identity by sampling, like `checker.ts` does for expression answers (both sides equal at random points). Derivative lines: `f'(x) = …` compared with the problem's derivative via the step's `diff` verify. Then opt in exponent rules, log rules, derivatives. Run the worked-solution guard on each. | `tests/working.test.ts` worked-solution guard green for the new skills; share of practice items offering the pad (from the event log) rises; no rise in `wrong` lines on correct final answers. | open |
 | 8 | **Home: the rest of the design review** | The adversarial review (Oct 23) left these: Home has ~80 buttons, mostly the 38-row skill list that repeats the skill tree (PLAN: "Home shows one button"); the cat stands beside the garden, not in it (no watering pose); no radius scale (3–999 px, 9 values); XP is still a volume reward on Home. | Move the skill list to the skill tree screen (a dozen e2e specs click `skill-*` rows on Home: move them to the tree first); put the cat on a tile with a pose per mood; 3 radius tokens; XP to the Stats page. | Playwright: buttons on Home ≤ 6; `npm run test:e2e` green; review PNGs approved. | open |
 
+### Done in review 5 (Oct 23, for context)
+
+Inequality stories: level-1 story items were 22% solo (n 9) against 96% plain (n 23), and every
+story miss at levels 1–2 was the reversed set: the right set at L1 flipped, the unflipped set at L2.
+One error explains both: the limit written first ($41 > 4x + 17$), solved to $6 > x$, read as
+$x > 6$. Stories now tag that option `read-backwards` (not `flip-positive`/`no-flip`) and add a
+`check` step (is a value next to the boundary in the set?) before the answer; a Learn tip says to
+finish with $x$ on the left. Check: `measure` §6, the inequality story-vs-plain gap at L1 shrinks.
+Also seen, one-offs left alone: a hotel story answered with $x + 4$ (total ÷ nights, fee not removed),
+two $f(-x)$ sign slips. The rating model now beats the constant once settled (0.1193 vs 0.1244);
+runway 3.1 weeks.
+
 ### Done on Oct 23 (for context)
 
 Home redesign and its adversarial review (§7 item 10); the working pad widened to 10 more skills

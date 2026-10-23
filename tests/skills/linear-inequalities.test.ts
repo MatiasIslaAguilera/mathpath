@@ -99,6 +99,16 @@ describe('linear-inequalities', () => {
         for (const o of opts) for (const bd of o.bounds) [bd, bd - 0.001, bd + 0.001].forEach((v) => xs.add(v));
         const matching = opts.filter((o) => [...xs].every((x) => o.holds(x) === original(x))).map((o) => o.id);
         expect(matching, p.id).toEqual([p.answer.correct]);
+
+        // The sense-check step: its value is in the story's set exactly when the step says "yes",
+        // and the reversed set is tagged read-backwards (never flip-positive / no-flip in a story).
+        const check = p.steps.find((s) => s.key === 'check');
+        if (!check?.ask || check.ask.answer.kind !== 'choice') throw new Error(`${p.id}: missing check step`);
+        const v = Number(check.ask.prompt.match(/At \$x = (\d+)\$/)![1]);
+        expect(check.ask.answer.correct, `${p.id} check at ${v}`).toBe(original(v) ? 'yes' : 'no');
+        const ids = p.misconceptions.map((x) => x.id);
+        expect(ids, p.id).not.toContain('flip-positive');
+        expect(ids, p.id).not.toContain('no-flip');
       }
     });
   }

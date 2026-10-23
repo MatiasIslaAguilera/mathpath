@@ -206,6 +206,8 @@ describe.each(SKILLS.filter((_, i) => i % SHARDS === shard).map((s) => [s.id, s]
   it('every misconception is reachable at some level', () => {
     const hit = new Set<string>();
     for (const level of LEVELS) for (let seed = 1; seed <= 200; seed++) makeProblem(skill, level, seed).misconceptions.forEach((m) => hit.add(m.id));
+    for (const level of skill.story?.levels ?? [])
+      for (let seed = 1; seed <= 200; seed++) makeProblem(skill, level, seed, 'story').misconceptions.forEach((m) => hit.add(m.id));
     expect([...Object.keys(skill.misconceptions)].filter((id) => !hit.has(id))).toEqual([]);
   });
 });
