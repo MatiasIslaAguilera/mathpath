@@ -3,11 +3,15 @@ import { masteryFraction, nextLevel } from '../../learning/mastery';
 import { todaysAgenda } from '../../learning/session';
 import { lockedBy } from '../../learning/unlock';
 import { fragileReport, skillState, type SkillState } from '../../learning/states';
-import { overallProgress } from '../../learning/stats';
+import { catMood, catSays, gardenPlots, gardenSummary, weekDots } from '../../learning/garden';
+import { dailyActivity, overallProgress, weeklyAccuracy } from '../../learning/stats';
 import { comebackStatus, problemsToday, streakReport } from '../../learning/streak';
 import type { Profile } from '../../storage/events';
 import { syncConfigured, type SyncStatus } from '../../sync/sync';
 import { dateKey, emptySkill, type Progress, type SkillProgress } from '../../storage/progress';
+import { Cat } from '../components/Cat';
+import { AccuracyChart, ActivityChart } from '../components/Charts';
+import { Garden } from '../components/Garden';
 import { shortDate } from '../shortDate';
 
 interface Props {
@@ -72,6 +76,12 @@ export function Home({ progress, syncStatus, updateProfile, onStart, onPractice,
   const comeback = comebackStatus(progress.days);
   const showWelcome = comeback.kind !== 'none' && progress.welcomeShownOn !== todayKey && !onboarding;
   const dismissWelcome = () => updateProfile({ welcomeShownOn: todayKey });
+  const plots = gardenPlots(progress);
+  const garden = gardenSummary(plots);
+  const mood = catMood(progress, onboarding);
+  const says = catSays(progress, onboarding);
+  const week = weekDots(progress);
+  const gardenLabel = `Your garden: ${garden.bloom} in bloom, ${garden.growing} growing, ${garden.thirsty} need review, ${garden.unplanted} not planted yet. Open the skill tree.`;
 
   return (
     <div className="screen home">
@@ -125,15 +135,25 @@ export function Home({ progress, syncStatus, updateProfile, onStart, onPractice,
         </section>
       )}
 
-      <section className="today card">
-        <div className="ring" style={{ ['--p' as string]: ring }} aria-label={`${today} of ${goal} problems today`}>
-          <span>
-            {today}
-            <small>/{goal}</small>
-          </span>
+      <button className={`garden-hero mood-${mood}`} onClick={onTree} data-testid="garden" aria-label={gardenLabel}>
+        <Garden plots={plots} />
+        <div className="cat-spot">
+          <p className="bubble" data-testid="cat-says">
+            {says}
+          </p>
+          <Cat mood={mood} />
         </div>
+      </button>
+      <p className="garden-legend fine" aria-hidden="true">
+        <span><i className="dot bloom" />{garden.bloom} in bloom</span>
+        <span><i className="dot growing" />{garden.growing} growing</span>
+        {garden.thirsty > 0 && <span><i className="dot thirsty" />{garden.thirsty} thirsty</span>}
+        <span><i className="dot unplanted" />{garden.unplanted} to plant</span>
+      </p>
+
+      <section className="today">
         {onboarding ? (
-          <div className="onboarding" data-testid="onboarding">
+          <div className="onboarding card" data-testid="onboarding">
             <h2>Welcome! Let's find your starting point</h2>
             <p className="fine">A short placement test skips what you already know, so practice starts at the right level.</p>
             <button className="btn primary big" onClick={onPlacement} data-testid="start-placement">
@@ -148,15 +168,74 @@ export function Home({ progress, syncStatus, updateProfile, onStart, onPractice,
             <button className="btn primary big" onClick={() => onStart()} data-testid="start-session">
               {today === 0 ? "Start today's session" : today >= goal ? 'Bonus session' : "Continue today's session"}
             </button>
-            {agendaParts.length > 0 && (
-              <p className="fine" data-testid="agenda">
-                {agendaParts.join(' · ')}
-              </p>
-            )}
-            <p className="fine">{today >= 3 ? "Today counts. Anything more is a bonus." : `${Math.max(0, 3 - today)} problem${3 - today === 1 ? '' : 's'} keeps your streak going.`}</p>
+            <div className="goal-line">
+              <div className="bar thin" role="progressbar" aria-valuenow={today} aria-valuemax={goal} aria-label={`${today} of ${goal} problems today`}>
+                <div className="bar-fill" style={{ width: `${ring * 100}%` }} />
+              </div>
+              <span className="fine">
+                {today}/{goal} today
+                {agendaParts.length > 0 && <span data-testid="agenda"> · {agendaParts.join(' · ')}</span>}
+              </span>
+            </div>
           </>
         )}
       </section>
+
+      <section className="card streak-card">
+        <div className="streak-top">
+          <div className="streak-num">
+            <strong>{report.current}</strong>
+            <span>day streak</span>
+            {report.freezes > 0 && (
+              <span className="stat-note" data-testid="freezes">
+                ❄ {plural(report.freezes, 'freeze')}
+              </span>
+            )}
+          </div>
+          <ol className="week" aria-label={`${report.lastSevenDays} of the last 7 days practiced`}>
+            {week.map((d) => (
+              <li key={d.date} className={d.state}>
+                <span className="week-day">{d.weekday}</span>
+                <span className="week-dot">{d.state === 'done' ? '✓' : d.state === 'frozen' ? '❄' : ''}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+        <dl className="stats-row">
+          <div className="stat">
+            <dt>days practiced</dt>
+            <dd>
+              <strong>{report.totalDays}</strong>
+              <span className="stat-note" data-testid="this-week">
+                {report.lastSevenDays}/7 this week
+              </span>
+            </dd>
+          </div>
+          <div className="stat">
+            <dt>mastered</dt>
+            <dd>
+              <strong>
+                {overall.mastered}
+                <small>/{overall.total}</small>
+              </strong>
+              <span className="stat-note">{overall.practiced} practiced</span>
+            </dd>
+          </div>
+          <div className="stat">
+            <dt>XP</dt>
+            <dd>
+              <strong>{progress.xp}</strong>
+            </dd>
+          </div>
+        </dl>
+      </section>
+
+      {!onboarding && (
+        <section className="card charts">
+          <ActivityChart days={dailyActivity(progress)} goal={goal} />
+          <AccuracyChart weeks={weeklyAccuracy(progress)} />
+        </section>
+      )}
 
       <nav className="nav-row three" aria-label="More">
         <button className="btn" onClick={onTree} data-testid="nav-tree">
@@ -170,37 +249,10 @@ export function Home({ progress, syncStatus, updateProfile, onStart, onPractice,
         </button>
       </nav>
 
-      <section className="stats-row">
-        <div className="stat card">
-          <strong>{report.current}</strong>
-          <span>day streak</span>
-          {report.freezes > 0 && (
-            <span className="stat-note" data-testid="freezes">
-              ❄ {plural(report.freezes, 'freeze')}
-            </span>
-          )}
-        </div>
-        <div className="stat card">
-          <strong>{report.totalDays}</strong>
-          <span>days practiced</span>
-          <span className="stat-note" data-testid="this-week">
-            {report.lastSevenDays}/7 this week
-          </span>
-        </div>
-        <div className="stat card">
-          <strong>{progress.xp}</strong>
-          <span>XP</span>
-        </div>
-      </section>
-
       <section className="card">
         <h2>
-          Skills <small className="fine">{overall.mastered} of {overall.total} master's skills mastered</small>
+          Skills <small className="fine">{overall.built} of {overall.total} available so far</small>
         </h2>
-        <div className="bar thin" role="progressbar" aria-valuenow={overall.mastered} aria-valuemax={overall.total} aria-label="Master's skills mastered">
-          <div className="bar-fill" style={{ width: `${(overall.mastered / overall.total) * 100}%` }} />
-        </div>
-        <p className="fine">{overall.built} available so far</p>
         <ul className="skill-list">
           {SKILLS.map((s) => {
             const sp = progress.skills[s.id] ?? emptySkill();

@@ -144,3 +144,43 @@ export function overallProgress(p: Progress) {
     practiced: states.filter((s) => s === 'practiced' || s === 'check-pending' || s === 'mastered' || s === 'rusty').length,
   };
 }
+
+export interface DayActivity {
+  date: string;
+  problems: number;
+}
+
+/** Problems answered per day, oldest first, for Home's activity chart. */
+export function dailyActivity(p: Progress, days = 14, today = new Date()): DayActivity[] {
+  return Array.from({ length: days }, (_, i) => {
+    const date = dateKey(new Date(today.getFullYear(), today.getMonth(), today.getDate() - (days - 1) + i));
+    return { date, problems: p.days[date]?.problems ?? 0 };
+  });
+}
+
+export interface WeekAccuracy {
+  /** Monday of the week, YYYY-MM-DD. */
+  weekOf: string;
+  attempts: number;
+  /** Share solved with no help, or undefined for a week with no attempts. */
+  accuracy?: number;
+}
+
+/**
+ * Unassisted accuracy per calendar week (Monday start), oldest first. Reads the per-skill
+ * history, which is capped (HISTORY_CAP), so it describes recent practice, not all of it.
+ */
+export function weeklyAccuracy(p: Progress, weeks = 8, today = new Date()): WeekAccuracy[] {
+  const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - ((today.getDay() + 6) % 7));
+  const starts = Array.from({ length: weeks }, (_, i) => new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() - 7 * (weeks - 1 - i)));
+  const tally = starts.map(() => ({ n: 0, ok: 0 }));
+  for (const sp of Object.values(p.skills))
+    for (const a of sp.history) {
+      let i = starts.length - 1;
+      while (i >= 0 && a.ts < starts[i].getTime()) i--;
+      if (i < 0) continue;
+      tally[i].n++;
+      if (a.correct && a.help === 'none') tally[i].ok++;
+    }
+  return starts.map((s, i) => ({ weekOf: dateKey(s), attempts: tally[i].n, accuracy: tally[i].n ? tally[i].ok / tally[i].n : undefined }));
+}

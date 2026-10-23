@@ -1,12 +1,12 @@
 :root {
-  --bg: #f6f7fb;
+  --bg: #f4f6f5;
   --card: #ffffff;
-  --text: #1d2433;
-  --muted: #5d6779;
-  --line: #e2e6ef;
-  --accent: #3b5bdb;
+  --text: #1f2a24;
+  --muted: #5d6a63;
+  --line: #e1e6e3;
+  --accent: #21805a;
   --accent-ink: #ffffff;
-  --accent-soft: #e8edff;
+  --accent-soft: #e1f1e8;
   --good: #2f9e44;
   --good-soft: #e6f6e9;
   --bad: #c92a2a;
@@ -14,20 +14,44 @@
   --warn: #b35c00;
   --warn-soft: #fff4e5;
   --info-soft: #eef3fb;
-  --radius: 14px;
-  --shadow: 0 1px 2px rgba(20, 30, 60, 0.06), 0 4px 16px rgba(20, 30, 60, 0.05);
+  --radius: 18px;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  /* Body: built for legibility (distinct 0/O, 1/l/I) · display: a soft serif for headings and big numbers. */
+  --font-body: 'Atkinson Hyperlegible Next Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Fraunces Variable', Georgia, serif;
+  --shadow: 0 1px 2px rgba(30, 50, 40, 0.05), 0 6px 20px rgba(30, 50, 40, 0.05);
+  /* the garden by day */
+  --sky: #dcf1e5;
+  --g-top: #8fd18a;
+  --g-tile: #a3dc93;
+  --g-tile-alt: #96d589;
+  --g-soil: #c9a27a;
+  --g-side-l: #b0855c;
+  --g-side-r: #93694a;
+  --g-leaf-0: #3fa35b;
+  --g-leaf-1: #2e8c62;
+  --g-leaf-2: #5cb85c;
+  --g-shine: rgba(255, 255, 255, 0.28);
+  --g-trunk: #8a5a3b;
+  --g-faded: #c8c27a;
+  --g-drop: #3b9ce6;
+  --g-shadow: rgba(30, 70, 50, 0.14);
+  --bubble: #ffffff;
+  /* chart series (validated: dataviz validate_palette, light/dark) */
+  --chart: #21805a;
+  --chart-grid: #e3e5dc;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #12151c;
-    --card: #1b2029;
-    --text: #e7eaf0;
-    --muted: #9aa3b5;
-    --line: #2c3340;
-    --accent: #7b93ff;
-    --accent-ink: #0d1020;
-    --accent-soft: #252c47;
+    --bg: #0f1513;
+    --card: #18201d;
+    --text: #e6ece8;
+    --muted: #9aa8a0;
+    --line: #27322d;
+    --accent: #5fd39e;
+    --accent-ink: #07130e;
+    --accent-soft: #1b3128;
     --good: #69db7c;
     --good-soft: #1d3324;
     --bad: #ff8787;
@@ -36,6 +60,25 @@
     --warn-soft: #3a2c19;
     --info-soft: #1f2838;
     --shadow: none;
+    /* the garden at night */
+    --sky: #172a33;
+    --g-top: #3f7a4c;
+    --g-tile: #4a8a55;
+    --g-tile-alt: #43804f;
+    --g-soil: #6e5640;
+    --g-side-l: #5a4330;
+    --g-side-r: #463424;
+    --g-leaf-0: #2f8a4c;
+    --g-leaf-1: #237356;
+    --g-leaf-2: #46a050;
+    --g-shine: rgba(255, 255, 255, 0.14);
+    --g-trunk: #6b4630;
+    --g-faded: #8e8a55;
+    --g-drop: #6cb8ff;
+    --g-shadow: rgba(0, 0, 0, 0.35);
+    --bubble: #223029;
+    --chart: #2f9e6e;
+    --chart-grid: #2c3833;
     color-scheme: dark;
   }
 }
@@ -48,17 +91,27 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font: 16px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font: 16px/1.5 var(--font-body);
   -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  /* No pull-to-refresh in the middle of a session. */
+  overscroll-behavior-y: none;
 }
 h1,
 h2,
 h3 {
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 100;
+  font-weight: 650;
   line-height: 1.25;
   margin: 0 0 0.5rem;
 }
 h1 {
   font-size: 1.5rem;
+}
+h2 small {
+  font-family: var(--font-body);
+  font-weight: 400;
 }
 h2 {
   font-size: 1.15rem;
@@ -107,8 +160,22 @@ h3 {
   cursor: pointer;
   touch-action: manipulation;
 }
-.btn:hover:not(:disabled) {
-  border-color: var(--accent);
+/* Hover only where there is a real pointer: on a phone a tap would leave it stuck. */
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover:not(:disabled) {
+    border-color: var(--accent);
+  }
+}
+/* Press feedback the moment a finger lands. */
+.btn,
+.garden-hero {
+  transition: transform 160ms var(--ease-out);
+}
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.garden-hero:active {
+  transform: scale(0.99);
 }
 .btn:disabled {
   opacity: 0.5;
@@ -184,51 +251,500 @@ h3 {
 .today {
   display: flex;
   flex-direction: column;
+  gap: 10px;
+}
+.goal-line {
+  display: flex;
   align-items: center;
-  gap: 12px;
-  text-align: center;
+  gap: 10px;
 }
-.ring {
-  --p: 0;
-  width: 112px;
-  height: 112px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: conic-gradient(var(--accent) calc(var(--p) * 360deg), var(--accent-soft) 0);
+.goal-line .bar.thin {
+  flex: 1;
+  margin-top: 0;
 }
-.ring span {
-  width: 88px;
-  height: 88px;
+.today p {
+  margin: 0;
+}
+
+/* garden + cat */
+.garden-hero {
+  appearance: none;
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 10px 8px 6px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--sky);
+  cursor: pointer;
+  font: inherit;
+  color: var(--text);
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+.garden-hero:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+.garden-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.cat-spot {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  width: 25%;
+  max-width: 140px;
+}
+.cat {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.bubble {
+  position: absolute;
+  left: 4px;
+  bottom: calc(100% + 4px);
+  width: max-content;
+  max-width: min(210px, 56vw);
+  margin: 0;
+  padding: 8px 12px;
+  background: var(--bubble);
+  border-radius: 16px;
+  box-shadow: 0 2px 10px rgba(20, 40, 30, 0.12);
+  font-size: 0.875rem;
+  line-height: 1.35;
+  text-align: left;
+}
+.bubble::after {
+  content: "";
+  position: absolute;
+  left: 30px;
+  bottom: -7px;
+  border: 8px solid transparent;
+  border-top-color: var(--bubble);
+  border-bottom: 0;
+}
+.bubble {
+  transform-origin: 30px 100%;
+  transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out);
+}
+@starting-style {
+  .bubble {
+    opacity: 0;
+    transform: scale(0.97) translateY(4px);
+  }
+}
+.mood-sleeping .bubble {
+  bottom: calc(70% + 4px);
+}
+.g-top {
+  fill: var(--g-top);
+}
+.g-tile {
+  fill: var(--g-tile);
+}
+.g-tile.alt {
+  fill: var(--g-tile-alt);
+}
+.g-tile.soil {
+  fill: var(--g-soil);
+}
+.g-side-l {
+  fill: var(--g-side-l);
+}
+.g-side-r {
+  fill: var(--g-side-r);
+}
+.g-shadow,
+.cat-shadow {
+  fill: var(--g-shadow);
+}
+.g-mound {
+  fill: var(--g-soil);
+}
+.g-seed {
+  fill: var(--g-trunk);
+}
+.g-stem {
+  stroke: var(--g-leaf-0);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+.g-trunk {
+  stroke: var(--g-trunk);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+.g-trunk.thick {
+  stroke-width: 3;
+}
+.g-leaf-0 {
+  fill: var(--g-leaf-0);
+}
+.g-leaf-1 {
+  fill: var(--g-leaf-1);
+}
+.g-leaf-2 {
+  fill: var(--g-leaf-2);
+}
+.g-shine {
+  fill: var(--g-shine);
+}
+.g-faded {
+  fill: var(--g-faded);
+}
+.g-flower-0 {
+  fill: #ff8fab;
+}
+.g-flower-1 {
+  fill: #fff4f0;
+}
+.g-flower-2 {
+  fill: #ffd166;
+}
+.g-flower-3 {
+  fill: #ffad7a;
+}
+.g-bud {
+  opacity: 0.85;
+}
+.g-drop {
+  fill: var(--g-drop);
+  animation: bob 2.4s ease-in-out infinite;
+}
+.g-sway {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: sway 5s ease-in-out infinite;
+}
+@keyframes sway {
+  0%,
+  100% {
+    transform: rotate(-1.5deg);
+  }
+  50% {
+    transform: rotate(1.5deg);
+  }
+}
+@keyframes bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+.cat-fur {
+  fill: #f4a85e;
+}
+.cat-belly {
+  fill: #fff3e2;
+}
+.cat-inner,
+.cat-blush {
+  fill: #ffb3b8;
+}
+.cat-blush {
+  opacity: 0.7;
+}
+.cat-nose {
+  fill: #e8737f;
+}
+.cat-ink {
+  fill: #3a2a20;
+}
+.cat-white {
+  fill: #fff;
+}
+.cat-line,
+.cat-stripe,
+.cat-whisker,
+.cat-tail {
+  fill: none;
+  stroke-linecap: round;
+}
+.cat-line {
+  stroke: #3a2a20;
+  stroke-width: 2.4;
+}
+.cat-line.thin {
+  stroke-width: 1.6;
+}
+.cat-stripe {
+  stroke: #d9803a;
+  stroke-width: 2.6;
+}
+.cat-whisker {
+  stroke: #3a2a20;
+  stroke-width: 1;
+  opacity: 0.45;
+}
+.cat-tail {
+  stroke: #f4a85e;
+  stroke-width: 8;
+}
+.cat-tail.swish {
+  transform-box: fill-box;
+  transform-origin: 0% 100%;
+  animation: sway 3.5s ease-in-out infinite;
+}
+.cat-heart {
+  fill: #ff6b8a;
+  animation: bob 2s ease-in-out infinite;
+}
+.cat-z {
+  fill: var(--text);
+  opacity: 0.55;
+  font: 700 12px system-ui, sans-serif;
+}
+.cat-z.big {
+  font-size: 16px;
+}
+.cat-zzz {
+  animation: bob 3s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bubble {
+    transition: none;
+  }
+  .g-sway,
+  .g-drop,
+  .cat-heart,
+  .cat-zzz,
+  .cat-tail.swish {
+    animation: none;
+  }
+}
+.garden-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 14px;
+  margin: -4px 0 0;
+}
+.garden-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.garden-legend .dot {
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
-  background: var(--card);
-  display: grid;
-  place-items: center;
-  font-size: 1.6rem;
+  display: inline-block;
+}
+.dot.bloom {
+  background: #ff8fab;
+}
+.dot.growing {
+  background: var(--g-leaf-2);
+}
+.dot.thirsty {
+  background: var(--g-drop);
+}
+.dot.unplanted {
+  background: var(--g-soil);
+}
+
+/* charts */
+.chart {
+  margin: 0;
+}
+.chart + .chart {
+  margin-top: 18px;
+}
+.chart figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  margin-bottom: 4px;
+}
+.chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  -webkit-tap-highlight-color: transparent;
+}
+.chart-axis {
+  stroke: var(--chart-grid);
+  stroke-width: 1;
+}
+.chart-ref {
+  stroke: var(--muted);
+  stroke-width: 1;
+  opacity: 0.5;
+}
+.chart-label {
+  fill: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.chart-label.strong {
+  fill: var(--text);
+  font-weight: 700;
+  font-size: 11px;
+}
+.chart-hit {
+  fill: transparent;
+  cursor: pointer;
+}
+.chart-bar {
+  fill: var(--chart);
+}
+.chart-bar.hot,
+.chart-bar.now {
+  fill: var(--chart);
+  stroke: var(--card);
+  stroke-width: 0;
+}
+.chart-bar.hot {
+  opacity: 0.8;
+}
+.chart-band {
+  fill: var(--chart);
+  opacity: 0.1;
+}
+.chart-line {
+  fill: none;
+  stroke: var(--chart);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.chart-dot {
+  fill: var(--chart);
+  stroke: var(--card);
+  stroke-width: 2;
+}
+.chart-tip rect {
+  fill: var(--text);
+}
+.chart-tip text {
+  fill: var(--bg);
+  font-size: 11px;
+  font-weight: 600;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* streak + week */
+.streak-top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.streak-num {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 72px;
+}
+.streak-num strong,
+.stat strong {
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 100;
   font-weight: 700;
 }
-.ring small {
-  font-size: 0.9rem;
+.streak-num strong {
+  font-size: 2.2rem;
+  line-height: 1;
+  color: var(--accent);
+}
+.streak-num > span {
   color: var(--muted);
-  font-weight: 500;
+  font-size: 0.8rem;
+}
+.week {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.week li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.week-day {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.week-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--accent-soft);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.week .done .week-dot {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.week .frozen .week-dot {
+  background: var(--info-soft);
+}
+.week .today .week-dot {
+  box-shadow: inset 0 0 0 2px var(--accent);
+  background: transparent;
 }
 .stats-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
 }
 .stat {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: 12px 8px;
+  align-items: flex-start;
+}
+/* number, then its label, then the note */
+.stat dd {
+  display: contents;
 }
 .stat strong {
-  font-size: 1.4rem;
+  order: 1;
 }
-.stat span {
+.stat dt {
+  order: 2;
   color: var(--muted);
   font-size: 0.8rem;
+}
+.stat .stat-note {
+  order: 3;
+  text-align: left;
+}
+.stat strong {
+  font-size: 1.25rem;
+  line-height: 1.2;
+}
+.stat strong small {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-weight: 500;
 }
 .skill-list {
   list-style: none;
