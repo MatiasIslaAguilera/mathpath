@@ -1,5 +1,7 @@
 // The garden on Home: an isometric island with one plot per master's skill (learning/garden.ts).
 // Pure inline SVG, colored by CSS classes so it follows light/dark mode and works offline.
+// Nothing loops: a plant that grew since the last visit plays one grow animation, then the
+// garden is still (Home is opened many times a day).
 
 import type { Plot } from '../../learning/garden';
 
@@ -7,6 +9,8 @@ const COLS = 9;
 const TW = 40; // tile width
 const TH = 20; // tile height
 const DEPTH = 14; // island thickness
+/** Plants are drawn larger than their tile, like Forest's trees. */
+const PLANT_SCALE = 1.3;
 
 const tileCenter = (c: number, r: number) => ({ x: (c - r) * (TW / 2), y: (c + r) * (TH / 2) });
 
@@ -35,7 +39,7 @@ function PlantShape({ plot, x, y }: { plot: Plot; x: number; y: number }) {
       );
     case 'sprout':
       return (
-        <g className="g-sway">
+        <g>
           <path d={`M${x} ${y} V${y - 9}`} className="g-stem" />
           <ellipse cx={x - 3.5} cy={y - 9} rx={3.6} ry={2} transform={`rotate(-25 ${x - 3.5} ${y - 9})`} className={leaf} />
           <ellipse cx={x + 3.5} cy={y - 10} rx={3.6} ry={2} transform={`rotate(25 ${x + 3.5} ${y - 10})`} className={leaf} />
@@ -43,7 +47,7 @@ function PlantShape({ plot, x, y }: { plot: Plot; x: number; y: number }) {
       );
     case 'sapling':
       return (
-        <g className="g-sway">
+        <g>
           <path d={`M${x} ${y} V${y - 8}`} className="g-trunk" />
           <circle cx={x} cy={y - 12} r={7} className={leaf} />
           <circle cx={x - 2.5} cy={y - 14} r={2.4} className="g-shine" />
@@ -51,7 +55,7 @@ function PlantShape({ plot, x, y }: { plot: Plot; x: number; y: number }) {
       );
     case 'bud':
       return (
-        <g className="g-sway">
+        <g>
           <path d={`M${x} ${y} V${y - 10}`} className="g-trunk" />
           <circle cx={x} cy={y - 16} r={9} className={leaf} />
           <circle cx={x - 3} cy={y - 19} r={3} className="g-shine" />
@@ -62,11 +66,12 @@ function PlantShape({ plot, x, y }: { plot: Plot; x: number; y: number }) {
       );
     case 'bloom':
       return (
-        <g className="g-sway">
+        <g>
           <path d={`M${x} ${y} V${y - 12}`} className="g-trunk thick" />
           <circle cx={x - 5} cy={y - 18} r={7.5} className={plot.faded ? 'g-faded' : leaf} />
           <circle cx={x + 5} cy={y - 18} r={7.5} className={plot.faded ? 'g-faded' : leaf} />
           <circle cx={x} cy={y - 25} r={9} className={plot.faded ? 'g-faded' : leaf} />
+          {plot.faded && <path d={`M${x - 11} ${y - 16} Q${x - 13} ${y - 10} ${x - 10} ${y - 7} M${x + 11} ${y - 16} Q${x + 13} ${y - 10} ${x + 10} ${y - 7}`} className="g-droop" />}
           <circle cx={x - 3} cy={y - 28} r={3} className="g-shine" />
           {!plot.faded &&
             [
@@ -87,7 +92,7 @@ function Droplet({ x, y }: { x: number; y: number }) {
 
 const plantTop: Record<Plot['stage'], number> = { soil: 0, grass: 0, seed: 4, sprout: 13, sapling: 20, bud: 26, bloom: 35 };
 
-export function Garden({ plots }: { plots: Plot[] }) {
+export function Garden({ plots, grew = new Set<string>() }: { plots: Plot[]; grew?: Set<string> }) {
   const rows = Math.ceil(plots.length / COLS);
   const cells: { c: number; r: number }[] = [];
   for (let r = 0; r < rows; r++) for (let c = 0; c < COLS; c++) cells.push({ c, r });
@@ -109,7 +114,7 @@ export function Garden({ plots }: { plots: Plot[] }) {
   // Room on the left for the cat (positioned over it by Home's CSS).
   const minX = L.x - 96;
   const maxX = R.x + 8;
-  const minY = T.y - 36;
+  const minY = T.y - 48;
   const maxY = B.y + DEPTH + 10;
 
   return (
@@ -124,8 +129,12 @@ export function Garden({ plots }: { plots: Plot[] }) {
           <g key={plot.id} data-plot={plot.id} data-stage={plot.stage}>
             <title>{plot.title}</title>
             <polygon points={diamond(x, y, TW - 3, TH - 1.5)} className={plot.stage === 'soil' ? 'g-tile soil' : (c + r) % 2 ? 'g-tile' : 'g-tile alt'} />
-            <PlantShape plot={plot} x={x} y={y + 2} />
-            {plot.thirsty && <Droplet x={x + 8} y={y - plantTop[plot.stage] - 2} />}
+            <g transform={`translate(${x} ${y + 2}) scale(${PLANT_SCALE}) translate(${-x} ${-(y + 2)})`}>
+              <g className={grew.has(plot.id) ? 'g-grow' : undefined} style={grew.has(plot.id) ? { animationDelay: `${(order.findIndex((o) => o.plot.id === plot.id) % 12) * 40}ms` } : undefined}>
+                <PlantShape plot={plot} x={x} y={y + 2} />
+              </g>
+            </g>
+            {plot.thirsty && <Droplet x={x + 10} y={y - plantTop[plot.stage] * PLANT_SCALE - 2} />}
           </g>
         );
       })}

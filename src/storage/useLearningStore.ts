@@ -22,7 +22,7 @@ export interface LearningActions {
 const SYNC_EVERY_MS = 2 * 60 * 1000;
 const SYNC_AFTER_ANSWER_MS = 2000;
 
-export function useLearningStore(): { progress: Progress; status: SyncStatus; storageOk: boolean; actions: LearningActions } {
+export function useLearningStore(): { progress: Progress; events: LearningEvent[]; status: SyncStatus; storageOk: boolean; actions: LearningActions } {
   const [state, setState] = useState(() => {
     const store = loadStore();
     return { store, progress: progressOf(store) };
@@ -103,5 +103,5 @@ export function useLearningStore(): { progress: Progress; status: SyncStatus; st
     syncNow: () => void runSync(),
   };
 
-  return { progress: state.progress, status, storageOk, actions };
+  return { progress: state.progress, events: state.store.events, status, storageOk, actions };
 }

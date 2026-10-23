@@ -4,6 +4,8 @@ import { getSkill, hasSkill, SKILLS } from '../engine/registry';
 import { TREE, type TreeNode } from '../skills/tree';
 import { dateKey, emptySkill, type Progress } from '../storage/progress';
 import { fragileReport, skillState, type SkillState } from './states';
+import type { LearningEvent } from '../storage/events';
+import type { Help } from './mastery';
 import { MIN_SESSION, streakReport } from './streak';
 import { lockedBy } from './unlock';
 
@@ -161,26 +163,48 @@ export function dailyActivity(p: Progress, days = 14, today = new Date()): DayAc
 export interface WeekAccuracy {
   /** Monday of the week, YYYY-MM-DD. */
   weekOf: string;
+  /** Unassisted attempts that week. */
   attempts: number;
-  /** Share solved with no help, or undefined for a week with no attempts. */
+  /** Share of unassisted attempts solved, or undefined for a week with none. */
   accuracy?: number;
 }
 
+/** One answered problem, from the event log (or from a pre-event-log baseline's history). */
+export interface LoggedAttempt {
+  ts: number;
+  correct: boolean;
+  help: Help;
+}
+
 /**
- * Unassisted accuracy per calendar week (Monday start), oldest first. Reads the per-skill
- * history, which is capped (HISTORY_CAP), so it describes recent practice, not all of it.
+ * Every attempt in the log. Attempt events are complete; a baseline (progress from before the
+ * event log) only carries each skill's capped recent history, which is all that survives of it.
  */
-export function weeklyAccuracy(p: Progress, weeks = 8, today = new Date()): WeekAccuracy[] {
+export function attemptLog(events: LearningEvent[]): LoggedAttempt[] {
+  const out: LoggedAttempt[] = [];
+  for (const e of events) {
+    if (e.type === 'attempt') out.push({ ts: e.ts, correct: e.correct, help: e.help });
+    else if (e.type === 'baseline') for (const sp of Object.values(e.progress.skills ?? {})) for (const a of sp.history ?? []) out.push({ ts: a.ts, correct: a.correct, help: a.help });
+  }
+  return out;
+}
+
+/**
+ * Solo accuracy per calendar week (Monday start), oldest first: of the problems answered without
+ * any help, the share solved. Helped attempts are left out entirely (not counted as misses), so
+ * taking a hint never lowers the line.
+ */
+export function weeklyAccuracy(attempts: LoggedAttempt[], weeks = 8, today = new Date()): WeekAccuracy[] {
   const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - ((today.getDay() + 6) % 7));
   const starts = Array.from({ length: weeks }, (_, i) => new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() - 7 * (weeks - 1 - i)));
   const tally = starts.map(() => ({ n: 0, ok: 0 }));
-  for (const sp of Object.values(p.skills))
-    for (const a of sp.history) {
-      let i = starts.length - 1;
-      while (i >= 0 && a.ts < starts[i].getTime()) i--;
-      if (i < 0) continue;
-      tally[i].n++;
-      if (a.correct && a.help === 'none') tally[i].ok++;
-    }
+  for (const a of attempts) {
+    if (a.help !== 'none') continue;
+    let i = starts.length - 1;
+    while (i >= 0 && a.ts < starts[i].getTime()) i--;
+    if (i < 0) continue;
+    tally[i].n++;
+    if (a.correct) tally[i].ok++;
+  }
   return starts.map((s, i) => ({ weekOf: dateKey(s), attempts: tally[i].n, accuracy: tally[i].n ? tally[i].ok / tally[i].n : undefined }));
 }

@@ -1,3 +1,28 @@
+/* Digits only (U+0030-0039), cut from IBM Plex Sans (OFL, renamed per its Reserved Font Name):
+   Atkinson Hyperlegible Next draws 0 with a slash, which reads as the empty set in a math app.
+   Plex keeps a plain 0 and a based 1, so 1/l/I stay distinct. */
+@font-face {
+  font-family: 'MathPath Digits';
+  src: url('../fonts/plex-digits-400.woff2') format('woff2');
+  font-weight: 100 500;
+  unicode-range: U+0030-0039;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'MathPath Digits';
+  src: url('../fonts/plex-digits-600.woff2') format('woff2');
+  font-weight: 501 650;
+  unicode-range: U+0030-0039;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'MathPath Digits';
+  src: url('../fonts/plex-digits-700.woff2') format('woff2');
+  font-weight: 651 900;
+  unicode-range: U+0030-0039;
+  font-display: swap;
+}
+
 :root {
   --bg: #f4f6f5;
   --card: #ffffff;
@@ -17,9 +42,10 @@
   --radius: 18px;
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   /* Body: built for legibility (distinct 0/O, 1/l/I) · display: a soft serif for headings and big numbers. */
-  --font-body: 'Atkinson Hyperlegible Next Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-body: 'MathPath Digits', 'Atkinson Hyperlegible Next Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-display: 'Fraunces Variable', Georgia, serif;
-  --shadow: 0 1px 2px rgba(30, 50, 40, 0.05), 0 6px 20px rgba(30, 50, 40, 0.05);
+  /* Cards carry a hairline border; no shadow on top of it. */
+  --shadow: none;
   /* the garden by day */
   --sky: #dcf1e5;
   --g-top: #8fd18a;
@@ -33,12 +59,13 @@
   --g-leaf-2: #5cb85c;
   --g-shine: rgba(255, 255, 255, 0.28);
   --g-trunk: #8a5a3b;
-  --g-faded: #c8c27a;
+  --g-faded: #9a8f45;
   --g-drop: #3b9ce6;
   --g-shadow: rgba(30, 70, 50, 0.14);
   --bubble: #ffffff;
   /* chart series (validated: dataviz validate_palette, light/dark) */
   --chart: #21805a;
+  --chart-light: #9fd1b9;
   --chart-grid: #e3e5dc;
   color-scheme: light;
 }
@@ -49,8 +76,8 @@
     --text: #e6ece8;
     --muted: #9aa8a0;
     --line: #27322d;
-    --accent: #5fd39e;
-    --accent-ink: #07130e;
+    --accent: #3fae7f;
+    --accent-ink: #06120c;
     --accent-soft: #1b3128;
     --good: #69db7c;
     --good-soft: #1d3324;
@@ -61,23 +88,24 @@
     --info-soft: #1f2838;
     --shadow: none;
     /* the garden at night */
-    --sky: #172a33;
-    --g-top: #3f7a4c;
-    --g-tile: #4a8a55;
-    --g-tile-alt: #43804f;
+    --sky: #15231c;
+    --g-top: #2b5135;
+    --g-tile: #2f5a3b;
+    --g-tile-alt: #2a5236;
     --g-soil: #6e5640;
     --g-side-l: #5a4330;
     --g-side-r: #463424;
-    --g-leaf-0: #2f8a4c;
-    --g-leaf-1: #237356;
-    --g-leaf-2: #46a050;
+    --g-leaf-0: #57b46c;
+    --g-leaf-1: #4aa98a;
+    --g-leaf-2: #79c46f;
     --g-shine: rgba(255, 255, 255, 0.14);
     --g-trunk: #6b4630;
-    --g-faded: #8e8a55;
+    --g-faded: #c2b46a;
     --g-drop: #6cb8ff;
     --g-shadow: rgba(0, 0, 0, 0.35);
     --bubble: #223029;
     --chart: #2f9e6e;
+    --chart-light: #2c5a47;
     --chart-grid: #2c3833;
     color-scheme: dark;
   }
@@ -168,13 +196,13 @@ h3 {
 }
 /* Press feedback the moment a finger lands. */
 .btn,
-.garden-hero {
+.garden-btn {
   transition: transform 160ms var(--ease-out);
 }
 .btn:active:not(:disabled) {
   transform: scale(0.97);
 }
-.garden-hero:active {
+.garden-btn:active {
   transform: scale(0.99);
 }
 .btn:disabled {
@@ -227,6 +255,12 @@ h3 {
   height: 44px;
   border-radius: 10px;
   cursor: pointer;
+  display: inline-grid;
+  place-items: center;
+  transition: transform 160ms var(--ease-out);
+}
+.icon-btn:active {
+  transform: scale(0.94);
 }
 .link {
   appearance: none;
@@ -266,23 +300,36 @@ h3 {
   margin: 0;
 }
 
-/* garden + cat */
+/* garden + cat
+   The garden button and the cat column share one grid cell, so the hero grows with its content
+   (large text never clips the bubble) and the cat stays outside the button (its words are read). */
 .garden-hero {
-  appearance: none;
-  position: relative;
-  display: block;
-  width: 100%;
-  padding: 10px 8px 6px;
+  display: grid;
   border: 1px solid var(--line);
   border-radius: 24px;
   background: var(--sky);
-  cursor: pointer;
-  font: inherit;
-  color: var(--text);
-  overflow: hidden;
-  -webkit-tap-highlight-color: transparent;
 }
-.garden-hero:focus-visible {
+.garden-hero > * {
+  grid-area: 1 / 1;
+}
+.garden-btn {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  width: 100%;
+  padding: 10px 8px 6px;
+  border: 0;
+  border-radius: 24px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.garden-btn:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
@@ -291,44 +338,41 @@ h3 {
   width: 100%;
   height: auto;
 }
-.cat-spot {
-  position: absolute;
-  left: 8px;
-  bottom: 8px;
-  width: 25%;
-  max-width: 140px;
+.hero-link {
+  align-self: flex-end;
+  margin: -18px 6px 0 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.cat-col {
+  /* Taps pass through to the garden button. */
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 10px 0 8px 8px;
 }
 .cat {
   display: block;
-  width: 100%;
+  width: 25%;
+  max-width: 140px;
   height: auto;
   overflow: visible;
 }
 .bubble {
-  position: absolute;
-  left: 4px;
-  bottom: calc(100% + 4px);
-  width: max-content;
-  max-width: min(210px, 56vw);
+  position: relative;
+  max-width: min(210px, 58%);
   margin: 0;
   padding: 8px 12px;
   background: var(--bubble);
+  color: var(--text);
   border-radius: 16px;
   box-shadow: 0 2px 10px rgba(20, 40, 30, 0.12);
   font-size: 0.875rem;
   line-height: 1.35;
-  text-align: left;
-}
-.bubble::after {
-  content: "";
-  position: absolute;
-  left: 30px;
-  bottom: -7px;
-  border: 8px solid transparent;
-  border-top-color: var(--bubble);
-  border-bottom: 0;
-}
-.bubble {
   transform-origin: 30px 100%;
   transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out);
 }
@@ -338,8 +382,14 @@ h3 {
     transform: scale(0.97) translateY(4px);
   }
 }
-.mood-sleeping .bubble {
-  bottom: calc(70% + 4px);
+.bubble::after {
+  content: "";
+  position: absolute;
+  left: 30px;
+  bottom: -7px;
+  border: 8px solid transparent;
+  border-top-color: var(--bubble);
+  border-bottom: 0;
 }
 .g-top {
   fill: var(--g-top);
@@ -394,8 +444,17 @@ h3 {
 .g-shine {
   fill: var(--g-shine);
 }
+/* A slipped bloom changes shape, not just colour: no flowers, an outline, drooping sides. */
 .g-faded {
   fill: var(--g-faded);
+  stroke: var(--g-trunk);
+  stroke-width: 0.8;
+}
+.g-droop {
+  fill: none;
+  stroke: var(--g-faded);
+  stroke-width: 2;
+  stroke-linecap: round;
 }
 .g-flower-0 {
   fill: #ff8fab;
@@ -412,31 +471,23 @@ h3 {
 .g-bud {
   opacity: 0.85;
 }
+/* The water drop wears a surface ring so it reads on any tile or canopy. */
 .g-drop {
   fill: var(--g-drop);
-  animation: bob 2.4s ease-in-out infinite;
+  stroke: var(--bubble);
+  stroke-width: 1.5;
+  paint-order: stroke;
 }
-.g-sway {
+/* One grow, only for plants that grew since the last visit; then the garden is still. */
+.g-grow {
   transform-box: fill-box;
   transform-origin: 50% 100%;
-  animation: sway 5s ease-in-out infinite;
+  animation: grow 600ms var(--ease-out) backwards;
 }
-@keyframes sway {
-  0%,
-  100% {
-    transform: rotate(-1.5deg);
-  }
-  50% {
-    transform: rotate(1.5deg);
-  }
-}
-@keyframes bob {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-2px);
+@keyframes grow {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
   }
 }
 .cat-fur {
@@ -488,14 +539,8 @@ h3 {
   stroke: #f4a85e;
   stroke-width: 8;
 }
-.cat-tail.swish {
-  transform-box: fill-box;
-  transform-origin: 0% 100%;
-  animation: sway 3.5s ease-in-out infinite;
-}
 .cat-heart {
   fill: #ff6b8a;
-  animation: bob 2s ease-in-out infinite;
 }
 .cat-z {
   fill: var(--text);
@@ -505,50 +550,17 @@ h3 {
 .cat-z.big {
   font-size: 16px;
 }
-.cat-zzz {
-  animation: bob 3s ease-in-out infinite;
-}
 @media (prefers-reduced-motion: reduce) {
   .bubble {
     transition: none;
   }
-  .g-sway,
-  .g-drop,
-  .cat-heart,
-  .cat-zzz,
-  .cat-tail.swish {
+  .g-grow {
     animation: none;
   }
 }
 .garden-legend {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 4px 14px;
-  margin: -4px 0 0;
-}
-.garden-legend span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.garden-legend .dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  display: inline-block;
-}
-.dot.bloom {
-  background: #ff8fab;
-}
-.dot.growing {
-  background: var(--g-leaf-2);
-}
-.dot.thirsty {
-  background: var(--g-drop);
-}
-.dot.unplanted {
-  background: var(--g-soil);
+  margin: -6px 0 0;
+  text-align: center;
 }
 
 /* charts */
@@ -556,21 +568,27 @@ h3 {
   margin: 0;
 }
 .chart + .chart {
-  margin-top: 18px;
+  margin-top: 20px;
 }
 .chart figcaption {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 2px 8px;
   margin-bottom: 4px;
+}
+.chart-title {
+  font-size: 1rem;
+  margin: 0;
 }
 .chart svg {
   display: block;
   width: 100%;
   height: auto;
   overflow: visible;
+  border-radius: 8px;
+  touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+}
+.chart svg:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
 }
 .chart-axis {
   stroke: var(--chart-grid);
@@ -579,7 +597,6 @@ h3 {
 .chart-ref {
   stroke: var(--muted);
   stroke-width: 1;
-  opacity: 0.5;
 }
 .chart-label {
   fill: var(--muted);
@@ -591,25 +608,24 @@ h3 {
   font-weight: 700;
   font-size: 11px;
 }
-.chart-hit {
-  fill: transparent;
-  cursor: pointer;
-}
 .chart-bar {
   fill: var(--chart);
 }
-.chart-bar.hot,
-.chart-bar.now {
-  fill: var(--chart);
-  stroke: var(--card);
-  stroke-width: 0;
+/* 1–2 problems: practice, but the day didn't count yet. */
+.chart-bar.light {
+  fill: var(--chart-light);
 }
 .chart-bar.hot {
   opacity: 0.8;
 }
 .chart-band {
   fill: var(--chart);
-  opacity: 0.1;
+  opacity: 0.12;
+}
+.chart-band-edge {
+  stroke: var(--chart);
+  stroke-width: 1;
+  opacity: 0.6;
 }
 .chart-line {
   fill: none;
@@ -622,6 +638,10 @@ h3 {
   fill: var(--chart);
   stroke: var(--card);
   stroke-width: 2;
+}
+.chart-dot.small {
+  fill: var(--card);
+  stroke: var(--chart);
 }
 .chart-tip rect {
   fill: var(--text);
@@ -640,40 +660,40 @@ h3 {
   white-space: nowrap;
 }
 
-/* streak + week */
-.streak-top {
-  display: flex;
-  align-items: center;
-  gap: 16px;
+/* streak + week: streak and total days weigh the same */
+.hero-figures {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
 }
-.streak-num {
+.hero-figure {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  min-width: 72px;
+  align-items: flex-start;
+  min-width: 0;
 }
-.streak-num strong,
-.stat strong {
+.hero-figure strong {
   font-family: var(--font-display);
-  font-variation-settings: 'SOFT' 100;
+  font-variation-settings: 'SOFT' 50;
+  font-variant-numeric: lining-nums;
   font-weight: 700;
-}
-.streak-num strong {
   font-size: 2.2rem;
   line-height: 1;
   color: var(--accent);
 }
-.streak-num > span {
+.hero-figure > span {
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 0.85rem;
+}
+.hero-figure .stat-note {
+  text-align: left;
 }
 .week {
   list-style: none;
-  margin: 0;
+  margin: 14px 0 0;
   padding: 0;
-  flex: 1;
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 4px;
 }
 .week li {
@@ -681,19 +701,22 @@ h3 {
   flex-direction: column;
   align-items: center;
   gap: 4px;
+  min-width: 0;
 }
 .week-day {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--muted);
 }
 .week-dot {
-  width: 28px;
-  height: 28px;
+  width: min(32px, 100%);
+  aspect-ratio: 1;
   border-radius: 50%;
   display: grid;
   place-items: center;
   background: var(--accent-soft);
+  /* Invisible normally; keeps the dot visible in forced-colors mode. */
+  border: 1px solid transparent;
   font-size: 0.8rem;
   font-weight: 700;
 }
@@ -708,43 +731,13 @@ h3 {
   box-shadow: inset 0 0 0 2px var(--accent);
   background: transparent;
 }
-.stats-row {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin: 14px 0 0;
-  padding-top: 12px;
+.streak-foot {
+  margin: 12px 0 0;
+  padding-top: 10px;
   border-top: 1px solid var(--line);
 }
-.stat {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-}
-/* number, then its label, then the note */
-.stat dd {
-  display: contents;
-}
-.stat strong {
-  order: 1;
-}
-.stat dt {
-  order: 2;
-  color: var(--muted);
-  font-size: 0.8rem;
-}
-.stat .stat-note {
-  order: 3;
-  text-align: left;
-}
-.stat strong {
-  font-size: 1.25rem;
-  line-height: 1.2;
-}
-.stat strong small {
-  font-size: 0.8rem;
-  color: var(--muted);
-  font-weight: 500;
+.streak-foot .stat strong {
+  color: var(--text);
 }
 .skill-list {
   list-style: none;
@@ -798,7 +791,7 @@ h3 {
   transition: width 0.3s ease;
 }
 .skill-item.practiced .bar-fill {
-  background: var(--good);
+  background: var(--accent);
 }
 
 /* ---------- session ---------- */
@@ -1205,7 +1198,7 @@ details[open] summary {
   cursor: help;
 }
 .skill-item.mastered .bar-fill {
-  background: var(--good);
+  background: var(--accent);
 }
 
 /* ---------- first-encounter intro, event callouts ---------- */

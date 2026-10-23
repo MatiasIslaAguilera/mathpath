@@ -25,7 +25,7 @@ type Screen =
   | { name: 'challenge' };
 
 export default function App() {
-  const { progress, status, storageOk, actions } = useLearningStore();
+  const { progress, events, status, storageOk, actions } = useLearningStore();
   const [screen, setScreen] = useState<Screen>({ name: 'home' });
   const [learnSkill, setLearnSkill] = useState<string | null>(null);
 
@@ -120,6 +120,7 @@ export default function App() {
       {screen.name === 'home' && (
         <Home
           progress={progress}
+          events={events}
           syncStatus={status}
           updateProfile={actions.updateProfile}
           onStart={(goal) => start(undefined, goal)}

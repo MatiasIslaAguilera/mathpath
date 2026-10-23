@@ -109,6 +109,15 @@ export interface Agenda {
   retentionChecks: string[];
 }
 
+/**
+ * Back after a long break: today's session is all review one level easier, and retention checks
+ * wait for a normal day. Home's garden and cat use this too, so they never promise a check the
+ * session won't serve.
+ */
+export function isGentleDay(p: Progress, now = new Date()): boolean {
+  return (daysAway(p.days, now) ?? 0) > GENTLE_AFTER_DAYS && coreSkills(p).some((id) => skillOf(p, id).attempts > 0);
+}
+
 /** What's waiting today: shown on Home and used to build the session. */
 export function todaysAgenda(p: Progress, now = new Date()): Agenda {
   const today = dateKey(now);
@@ -148,7 +157,7 @@ export function startSession(p: Progress, goal: number, options: { only?: string
   // After a long break: an all-review session one level easier, so coming back starts with wins.
   // Retention checks wait for a normal day (they'd be measuring the break, not the learning).
   const practiced = available.filter((id) => skillOf(p, id).attempts > 0);
-  if ((daysAway(p.days, now) ?? 0) > GENTLE_AFTER_DAYS && practiced.length) {
+  if (isGentleDay(p, now)) {
     const queue = [...practiced].sort((a, b) => recall(skillOf(p, a).fsrs, now) - recall(skillOf(p, b).fsrs, now));
     const reviews: Slot[] = Array.from({ length: Math.max(0, n - 2 - greSlots.length) }, () => ({ kind: 'review' as const }));
     const slots: Slot[] = [{ kind: 'warmup' }, ...reviews.slice(0, 1), ...greSlots, ...reviews.slice(1), { kind: 'finisher' }];

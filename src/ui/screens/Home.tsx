@@ -1,12 +1,13 @@
+import { useEffect, useMemo, useState } from 'react';
 import { getSkill, SKILLS } from '../../engine/registry';
 import { masteryFraction, nextLevel } from '../../learning/mastery';
 import { todaysAgenda } from '../../learning/session';
 import { lockedBy } from '../../learning/unlock';
 import { fragileReport, skillState, type SkillState } from '../../learning/states';
-import { catMood, catSays, gardenPlots, gardenSummary, weekDots } from '../../learning/garden';
-import { dailyActivity, overallProgress, weeklyAccuracy } from '../../learning/stats';
+import { catMood, catSays, gardenPlots, gardenSummary, ratchet, weekDots, type Stage } from '../../learning/garden';
+import { attemptLog, dailyActivity, overallProgress, weeklyAccuracy } from '../../learning/stats';
 import { comebackStatus, problemsToday, streakReport } from '../../learning/streak';
-import type { Profile } from '../../storage/events';
+import type { LearningEvent, Profile } from '../../storage/events';
 import { syncConfigured, type SyncStatus } from '../../sync/sync';
 import { dateKey, emptySkill, type Progress, type SkillProgress } from '../../storage/progress';
 import { Cat } from '../components/Cat';
@@ -16,6 +17,8 @@ import { shortDate } from '../shortDate';
 
 interface Props {
   progress: Progress;
+  /** The full event log: the accuracy chart reads it (per-skill history is capped). */
+  events: LearningEvent[];
   syncStatus: SyncStatus;
   updateProfile(patch: Partial<Omit<Profile, 'updatedAt'>>): void;
   /** Starts the daily session; a goal overrides the daily goal (the welcome-back restart). */
@@ -50,6 +53,25 @@ function stateLabel(state: SkillState, sp: SkillProgress, todayKey: string): str
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
+/** The highest stage each plot has shown on this device: plants never shrink (learning/garden.ts `ratchet`). */
+const SEEN_KEY = 'mathpath.garden.v1';
+function loadSeen(): Record<string, Stage> {
+  try {
+    return JSON.parse(localStorage.getItem(SEEN_KEY) ?? '{}') as Record<string, Stage>;
+  } catch {
+    return {};
+  }
+}
+
+function GearIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
 const DOT: Record<string, { cls: string; label: string }> = {
   synced: { cls: 'good', label: 'Synced' },
   syncing: { cls: 'accent', label: 'Syncing' },
@@ -58,7 +80,7 @@ const DOT: Record<string, { cls: string; label: string }> = {
   'signed-out': { cls: 'hollow', label: 'Not signed in' },
 };
 
-export function Home({ progress, syncStatus, updateProfile, onStart, onPractice, onLearn, onSettings, onPlacement, onTree, onStats, onChallenge }: Props) {
+export function Home({ progress, events, syncStatus, updateProfile, onStart, onPractice, onLearn, onSettings, onPlacement, onTree, onStats, onChallenge }: Props) {
   const today = problemsToday(progress.days);
   const goal = progress.settings.dailyGoal;
   const report = streakReport(progress.days);
@@ -76,12 +98,22 @@ export function Home({ progress, syncStatus, updateProfile, onStart, onPractice,
   const comeback = comebackStatus(progress.days);
   const showWelcome = comeback.kind !== 'none' && progress.welcomeShownOn !== todayKey && !onboarding;
   const dismissWelcome = () => updateProfile({ welcomeShownOn: todayKey });
-  const plots = gardenPlots(progress);
+  // Plants never shrink; the ones that grew since the last visit animate once.
+  const [seenBefore] = useState(loadSeen);
+  const { plots, grew, seen } = useMemo(() => ratchet(gardenPlots(progress), seenBefore), [progress, seenBefore]);
+  useEffect(() => {
+    try {
+      localStorage.setItem(SEEN_KEY, JSON.stringify(seen));
+    } catch {
+      /* private mode: the garden just won't remember its tallest plants */
+    }
+  }, [seen]);
   const garden = gardenSummary(plots);
+  const weeks = useMemo(() => weeklyAccuracy(attemptLog(events)), [events]);
   const mood = catMood(progress, onboarding);
   const says = catSays(progress, onboarding);
   const week = weekDots(progress);
-  const gardenLabel = `Your garden: ${garden.bloom} in bloom, ${garden.growing} growing, ${garden.thirsty} need review, ${garden.unplanted} not planted yet. Open the skill tree.`;
+  const gardenLabel = `Your garden: ${garden.bloom} in bloom, ${garden.growing} growing, ${garden.thirsty} need water, ${garden.toPlant} ready to plant. Open the skill tree.`;
 
   return (
     <div className="screen home">
@@ -94,7 +126,7 @@ export function Home({ progress, syncStatus, updateProfile, onStart, onPractice,
             </button>
           )}
           <button className="icon-btn" onClick={onSettings} aria-label="Settings">
-            ⚙
+            <GearIcon />
           </button>
         </div>
       </header>
@@ -135,20 +167,23 @@ export function Home({ progress, syncStatus, updateProfile, onStart, onPractice,
         </section>
       )}
 
-      <button className={`garden-hero mood-${mood}`} onClick={onTree} data-testid="garden" aria-label={gardenLabel}>
-        <Garden plots={plots} />
-        <div className="cat-spot">
+      {/* The garden button and the cat share one grid cell; the cat sits outside the button so its words are read aloud. */}
+      <section className={`garden-hero mood-${mood}`}>
+        <button className="garden-btn" onClick={onTree} data-testid="garden" aria-label={gardenLabel}>
+          <Garden plots={plots} grew={grew} />
+          <span className="hero-link" aria-hidden="true">
+            Skill tree ›
+          </span>
+        </button>
+        <div className="cat-col">
           <p className="bubble" data-testid="cat-says">
             {says}
           </p>
           <Cat mood={mood} />
         </div>
-      </button>
+      </section>
       <p className="garden-legend fine" aria-hidden="true">
-        <span><i className="dot bloom" />{garden.bloom} in bloom</span>
-        <span><i className="dot growing" />{garden.growing} growing</span>
-        {garden.thirsty > 0 && <span><i className="dot thirsty" />{garden.thirsty} thirsty</span>}
-        <span><i className="dot unplanted" />{garden.unplanted} to plant</span>
+        {[`${garden.bloom} in bloom`, `${garden.growing} growing`, garden.thirsty ? `${garden.thirsty} need water` : '', `${garden.toPlant} ready to plant`].filter(Boolean).join(' · ')}
       </p>
 
       <section className="today">
@@ -165,7 +200,8 @@ export function Home({ progress, syncStatus, updateProfile, onStart, onPractice,
           </div>
         ) : (
           <>
-            <button className="btn primary big" onClick={() => onStart()} data-testid="start-session">
+            {/* Once the goal is met, more is a bonus, not the main ask. */}
+            <button className={`btn big${today >= goal ? '' : ' primary'}`} onClick={() => onStart()} data-testid="start-session">
               {today === 0 ? "Start today's session" : today >= goal ? 'Bonus session' : "Continue today's session"}
             </button>
             <div className="goal-line">
@@ -181,9 +217,10 @@ export function Home({ progress, syncStatus, updateProfile, onStart, onPractice,
         )}
       </section>
 
+      {/* Streak, total days and this week weigh the same (PLAN §2.2): a break never erases visible progress. */}
       <section className="card streak-card">
-        <div className="streak-top">
-          <div className="streak-num">
+        <div className="hero-figures">
+          <div className="hero-figure">
             <strong>{report.current}</strong>
             <span>day streak</span>
             {report.freezes > 0 && (
@@ -192,48 +229,38 @@ export function Home({ progress, syncStatus, updateProfile, onStart, onPractice,
               </span>
             )}
           </div>
-          <ol className="week" aria-label={`${report.lastSevenDays} of the last 7 days practiced`}>
-            {week.map((d) => (
-              <li key={d.date} className={d.state}>
-                <span className="week-day">{d.weekday}</span>
-                <span className="week-dot">{d.state === 'done' ? '✓' : d.state === 'frozen' ? '❄' : ''}</span>
-              </li>
-            ))}
-          </ol>
+          <div className="hero-figure">
+            <strong>{report.totalDays}</strong>
+            <span>days practiced</span>
+            <span className="stat-note" data-testid="this-week">
+              {report.lastSevenDays}/7 this week
+            </span>
+          </div>
         </div>
-        <dl className="stats-row">
-          <div className="stat">
-            <dt>days practiced</dt>
-            <dd>
-              <strong>{report.totalDays}</strong>
-              <span className="stat-note" data-testid="this-week">
-                {report.lastSevenDays}/7 this week
+        <ol className="week" aria-label="The last 7 days">
+          {week.map((d) => (
+            <li key={d.date} className={d.state} aria-label={d.label}>
+              <span className="week-day" aria-hidden="true">
+                {d.weekday}
               </span>
-            </dd>
-          </div>
-          <div className="stat">
-            <dt>mastered</dt>
-            <dd>
-              <strong>
-                {overall.mastered}
-                <small>/{overall.total}</small>
-              </strong>
-              <span className="stat-note">{overall.practiced} practiced</span>
-            </dd>
-          </div>
-          <div className="stat">
-            <dt>XP</dt>
-            <dd>
-              <strong>{progress.xp}</strong>
-            </dd>
-          </div>
-        </dl>
+              <span className="week-dot" aria-hidden="true">
+                {d.state === 'done' ? '✓' : d.state === 'frozen' ? '❄' : ''}
+              </span>
+            </li>
+          ))}
+        </ol>
+        <p className="fine streak-foot">
+          {overall.mastered} of {overall.built} available skills mastered ·{' '}
+          <span className="stat">
+            <strong>{progress.xp.toLocaleString('en-US')}</strong> XP
+          </span>
+        </p>
       </section>
 
       {!onboarding && (
         <section className="card charts">
           <ActivityChart days={dailyActivity(progress)} goal={goal} />
-          <AccuracyChart weeks={weeklyAccuracy(progress)} />
+          <AccuracyChart weeks={weeks} />
         </section>
       )}
 
