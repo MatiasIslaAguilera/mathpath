@@ -238,6 +238,8 @@ export const linearInequalities: SkillDefinition = {
     flip: 'Decide whether the sign flips',
     divide: 'Divide by the coefficient of x',
     answer: 'State the solution set',
+    setup: 'Set up: write the situation as an expression',
+    'setup-right': 'Set up the other side',
     'subtract-all': 'Subtract from all three parts',
     'divide-all': 'Divide all three parts',
   },
@@ -260,14 +262,23 @@ export const linearInequalities: SkillDefinition = {
   },
 
   generate(rng, level) {
-    return level === 5 ? level5(rng) : levels1to4(rng, level);
+    return level === 5 ? level5(rng) : solveBuilt(rng, pick(rng, level), level, true);
+  },
+
+  story: {
+    levels: [1, 2, 3],
+    generate(rng, level) {
+      const story = pickStory(rng, level);
+      const body = solveBuilt(rng, story.built, level, false);
+      return { ...body, prompt: story.prompt, steps: [...story.setup, ...body.steps] };
+    },
   },
 };
 
 // ---------- levels 1-4 ----------
 
-function levels1to4(rng: Rng, level: Level) {
-  const b = pick(rng, level);
+/** Steps, choices and misconceptions for a picked inequality (shared by plain and story problems). */
+function solveBuilt(rng: Rng, b: Built, level: Level, withInterpretation: boolean) {
   const { rel, A, B, C, D } = b;
   const k = q(A - C);
   const r = q(D - B);
@@ -372,7 +383,7 @@ function levels1to4(rng: Rng, level: Level) {
 
   // Interpretation draws come last.
   let interpretation: InterpretationQuestion[] | undefined;
-  if ((level === 1 || level === 4) && rng.chance(0.5)) {
+  if (withInterpretation && (level === 1 || level === 4) && rng.chance(0.5)) {
     const iq = profitQuestion(rng, b, solutionLatex, t.valueOf());
     if (iq) interpretation = [iq];
   }
@@ -386,6 +397,199 @@ function levels1to4(rng: Rng, level: Level) {
     interpretation,
     verify: { type: 'choice' as const, note: 'tests/skills/linear-inequalities.test.ts checks each option against the inequality on a grid' },
   };
+}
+
+// ---------- story variants: the same inequalities as situations ----------
+
+const usd = (v: number) => `\\$${v}`;
+
+/** A setup step: write one side of the situation as an expression in x (checked by equivalence). */
+function setupStep(key: 'setup' | 'setup-right', prompt: string, latex: string, expr: string, why: string): Step {
+  return {
+    key,
+    instruction: prompt,
+    math: latex,
+    why,
+    ask: {
+      prompt,
+      answer: { kind: 'expression', value: expr, variables: ['x'], display: latex },
+      verify: { type: 'equivalent', expr, variables: ['x'] },
+    },
+  };
+}
+
+interface Story {
+  built: Built;
+  prompt: string;
+  setup: Step[];
+}
+
+/** Relation words (index = relation code 0 '<', 1 '>', 2 '≤', 3 '≥'). */
+const LIMIT = ['fewer than', 'more than', 'at most', 'at least'];
+const COMPARE = ['cheaper than', 'more expensive than', 'no more expensive than', 'at least as expensive as'];
+
+/** Story params stay inside the level's ranges (positive prices, counts and totals). */
+function pickStory(rng: Rng, level: Level): Story {
+  const rel = rng.int(0, 3);
+
+  if (level === 1) {
+    // a·x + b ⊏ c with a fee or head start b > 0: a limit on spending (< or ≤) or a target to reach (> or ≥).
+    const a = rng.int(2, 9);
+    const t = rng.int(1, 10);
+    const b = rng.int(1, 20);
+    const c = a * t + b;
+    const built: Built = {
+      params: { a, b, c, t, rel },
+      rel,
+      leftLatex: linLatex(a, b),
+      leftExpr: `${a}*x + (${b})`,
+      rightLatex: `${c}`,
+      rightExpr: `(${c})`,
+      A: a, B: b, C: 0, D: c, expand: false,
+    };
+    const ctx = rng.int(0, 2);
+    const setup = (prompt: string, why: string) => [setupStep('setup', prompt, built.leftLatex, built.leftExpr, why)];
+    if (rel === 0 || rel === 2) {
+      const limit = `${rel === 2 ? 'at most' : 'less than'} ${usd(c)}`;
+      const k = [
+        { intro: `A taxi charges a ${usd(b)} pickup fee plus ${usd(a)} per mile.`, unit: 'miles', total: 'cost of the ride' },
+        { intro: `A print shop charges a ${usd(b)} setup fee plus ${usd(a)} per poster.`, unit: 'posters', total: 'bill' },
+        { intro: `A bakery charges a ${usd(b)} delivery fee plus ${usd(a)} per box of pastries.`, unit: 'boxes', total: 'bill' },
+      ][ctx];
+      return {
+        built,
+        prompt: `${k.intro} You want the total ${k.total} to be ${limit}. Let $x$ be the number of ${k.unit}. Which of the following is the solution set for $x$?`,
+        setup: setup(
+          `Let $x$ be the number of ${k.unit}. Write the total ${k.total}, in dollars, in terms of $x$.`,
+          'The fee is paid once and the price is paid per unit, so the total is the fee plus the price times $x$. The limit ("at most", "less than") goes on the other side of the sign.',
+        ),
+      };
+    }
+    const target = rel === 3 ? 'at least' : 'more than';
+    const k = [
+      {
+        prompt: `You already have ${usd(b)} saved and add ${usd(a)} each week. You want to have ${target} ${usd(c)} for a trip. Let $x$ be the number of weeks. Which of the following is the solution set for $x$?`,
+        ask: 'Let $x$ be the number of weeks. Write the total saved, in dollars, in terms of $x$.',
+        why: 'You start with the amount already saved and add the weekly amount $x$ times.',
+      },
+      {
+        prompt: `A quiz gives ${b} bonus points for handed-in homework plus ${a} points for each correct answer. To earn a badge you need ${target} ${c} points. Let $x$ be the number of correct answers. Which of the following is the solution set for $x$?`,
+        ask: 'Let $x$ be the number of correct answers. Write the total points in terms of $x$.',
+        why: 'The bonus is a fixed amount and each correct answer adds its points, so the total is the bonus plus the points per answer times $x$.',
+      },
+      {
+        prompt: `A gym member has already logged ${b} workout minutes and adds ${a} minutes per session. A challenge needs ${target} ${c} minutes in total. Let $x$ be the number of sessions. Which of the following is the solution set for $x$?`,
+        ask: 'Let $x$ be the number of sessions. Write the total minutes logged in terms of $x$.',
+        why: 'Minutes already logged are fixed; each session adds the same amount, so add the per-session minutes times $x$.',
+      },
+    ][ctx];
+    return { built, prompt: k.prompt, setup: setup(k.ask, k.why) };
+  }
+
+  if (level === 2) {
+    // a·x + b ⊏ c with a < 0: something that starts at b and falls by |a| per unit, so dividing flips the sign.
+    for (;;) {
+      const a = -rng.int(2, 9);
+      const b = rng.int(10, 20);
+      const tMax = Math.floor((b - 1) / -a);
+      if (tMax < 1) continue;
+      const t = rng.int(1, tMax);
+      const c = a * t + b;
+      const built: Built = {
+        params: { a, b, c, t, rel },
+        rel,
+        leftLatex: linLatex(a, b),
+        leftExpr: `${a}*x + (${b})`,
+        rightLatex: `${c}`,
+        rightExpr: `(${c})`,
+        A: a, B: b, C: 0, D: c, expand: false,
+      };
+      const m = -a;
+      const limit = LIMIT[rel];
+      const k = [
+        {
+          intro: `A water tank holds ${b} liters and drains ${m} liters every minute.`,
+          unit: 'minutes of draining',
+          left: 'liters in the tank',
+          ask: `For which values of $x$ does the tank hold ${limit} ${c} liters?`,
+          why: `The tank starts at ${b} liters and loses ${m} liters each minute, so subtract ${m} times $x$.`,
+        },
+        {
+          intro: `A tablet has ${b} GB of free space, and each video you record uses ${m} GB.`,
+          unit: 'videos recorded',
+          left: 'free space, in GB',
+          ask: `For which values of $x$ does the tablet have ${limit} ${c} GB free?`,
+          why: `The free space starts at ${b} GB and each video takes ${m} GB away, so subtract ${m} times $x$.`,
+        },
+        {
+          intro: `A shop starts the week with ${b} crates of fruit and sells ${m} crates every day.`,
+          unit: 'days of selling',
+          left: 'crates left',
+          ask: `For which values of $x$ are there ${limit} ${c} crates left?`,
+          why: `The stock starts at ${b} crates and falls by ${m} each day, so subtract ${m} times $x$.`,
+        },
+      ][rng.int(0, 2)];
+      return {
+        built,
+        prompt: `${k.intro} Let $x$ be the number of ${k.unit}. ${k.ask} Which of the following is the solution set?`,
+        setup: [setupStep('setup', `Let $x$ be the number of ${k.unit}. Write the ${k.left} in terms of $x$.`, built.leftLatex, built.leftExpr, k.why)],
+      };
+    }
+  }
+
+  // Level 3: A (a·x + b) against B (c·x + d), all prices positive. One number in the story doesn't
+  // matter: ignoring it is part of the skill.
+  for (;;) {
+    const a = rng.int(1, 9);
+    const c = rng.int(1, 9);
+    if (a === c) continue;
+    const t = rng.int(1, 10);
+    const b = rng.int(1, 20);
+    const d = b + (a - c) * t;
+    if (d < 1) continue;
+    const built: Built = {
+      params: { a, b, c, d, t, rel },
+      rel,
+      leftLatex: linLatex(a, b),
+      leftExpr: `${a}*x + (${b})`,
+      rightLatex: linLatex(c, d),
+      rightExpr: `${c}*x + (${d})`,
+      A: a, B: b, C: c, D: d, expand: false,
+    };
+    const extra = rng.int(3, 14);
+    const k = [
+      {
+        intro: `Gym A charges a ${usd(b)} joining fee plus ${usd(a)} per visit. Gym B charges a ${usd(d)} joining fee plus ${usd(c)} per visit. Both gyms are open ${extra} hours a day.`,
+        ask: `Let $x$ be the number of visits. For which values of $x$ is gym A ${COMPARE[rel]} gym B?`,
+        unit: 'visits',
+        name: 'gym',
+        ignored: `The ${extra} opening hours don't enter the cost.`,
+      },
+      {
+        intro: `Print shop A charges a ${usd(b)} setup fee plus ${usd(a)} per poster. Print shop B charges a ${usd(d)} setup fee plus ${usd(c)} per poster. Both can deliver in ${extra} days.`,
+        ask: `Let $x$ be the number of posters. For which values of $x$ is shop A ${COMPARE[rel]} shop B?`,
+        unit: 'posters',
+        name: 'print shop',
+        ignored: `The ${extra}-day delivery time doesn't enter the cost.`,
+      },
+      {
+        intro: `Phone plan A costs ${usd(b)} to activate plus ${usd(a)} per month. Plan B costs ${usd(d)} to activate plus ${usd(c)} per month. Your current contract ends in ${extra} months.`,
+        ask: `Let $x$ be the number of months you keep the plan. For which values of $x$ is plan A ${COMPARE[rel]} plan B?`,
+        unit: 'months',
+        name: 'plan',
+        ignored: `The ${extra} months left on your current contract don't enter the cost.`,
+      },
+    ][rng.int(0, 2)];
+    const why = `Each total is the one-time fee plus the price times $x$. ${k.ignored}`;
+    return {
+      built,
+      prompt: `${k.intro} ${k.ask} Which of the following is the solution set?`,
+      setup: [
+        setupStep('setup', `Let $x$ be the number of ${k.unit}. Write the total cost of ${k.name} A, in dollars, in terms of $x$.`, built.leftLatex, built.leftExpr, why),
+        setupStep('setup-right', `Write the total cost of ${k.name} B in terms of $x$.`, built.rightLatex, built.rightExpr, why),
+      ],
+    };
+  }
 }
 
 // ---------- level 5: c1 ⊏ ax + b ⊏ c2 ----------

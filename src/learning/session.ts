@@ -11,7 +11,7 @@
 // After a wrong answer or any help, a same-skill follow-up comes next. Problems are generated
 // lazily so difficulty adapts within the session.
 
-import { getSkill, makeProblem, SKILLS } from '../engine/registry';
+import { getSkill, makeProblem, SKILLS, storyVariant } from '../engine/registry';
 import { randomSeed } from '../engine/rng';
 import type { Level, Problem } from '../engine/types';
 import { dateKey, emptySkill, type Progress, type SkillProgress } from '../storage/progress';
@@ -216,7 +216,11 @@ export interface NextUp {
 export function nextProblem(s: Session, p: Progress, now = new Date()): { session: Session; next: NextUp } | null {
   if (sessionDone(s)) return null;
   const seed = randomSeed();
-  const make = (id: string, level: Level) => makeProblem(SKILLS.find((k) => k.id === id)!, level, seed);
+  /** Practice items may be stories (about half, where the skill has them); `plain` for warm-ups, finishers, checks. */
+  const make = (id: string, level: Level, plain = false) => {
+    const skill = SKILLS.find((k) => k.id === id)!;
+    return makeProblem(skill, level, seed, plain ? undefined : storyVariant(skill, level, seed));
+  };
   const today = dateKey(now);
 
   if (s.pendingFollowUp) {
@@ -237,7 +241,7 @@ export function nextProblem(s: Session, p: Progress, now = new Date()): { sessio
     case 'warmup':
     case 'finisher': {
       const { id, level } = easiest(p, practiced.length ? practiced : [s.only ?? s.currentSkill ?? pool[0]]);
-      return { session: advanced, next: { problem: make(id, level), kind: slot.kind, hideSkill: false } };
+      return { session: advanced, next: { problem: make(id, level, true), kind: slot.kind, hideSkill: false } };
     }
     case 'retention': {
       const id = slot.skillId!;
@@ -249,7 +253,7 @@ export function nextProblem(s: Session, p: Progress, now = new Date()): { sessio
       // Serve the check at the level that earned it (3 or 4), or the working level if higher now.
       const earned = sp.readyLevel ?? MASTERY_LEVEL;
       const level = (Math.max(earned, nextLevel(sp.rating)) as Level);
-      return { session: advanced, next: { problem: make(id, level), kind: 'retention', hideSkill: s.interleaved } };
+      return { session: advanced, next: { problem: make(id, level, true), kind: 'retention', hideSkill: s.interleaved } };
     }
     case 'current': {
       const id = s.currentSkill ?? s.reviewQueue[0];

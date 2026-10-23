@@ -179,6 +179,24 @@ describe.each(SKILLS.filter((_, i) => i % SHARDS === shard).map((s) => [s.id, s]
     expect(seen.size, 'distinct prompts').toBeGreaterThan(Math.min(N, 100) * 0.3);
   });
 
+  // Story variants get every check the plain problems get, plus: the first step sets the problem
+  // up (an expression checked by equivalence), and the math is the skill's own.
+  const storyLevels = skill.story?.levels ?? [];
+  if (storyLevels.length)
+    it.each(storyLevels)(`story level %i: ${N} seeds`, (level) => {
+      const seen = new Set<string>();
+      for (let seed = 1; seed <= N; seed++) {
+        const p = makeProblem(skill, level, seed, 'story');
+        expect(p.id).toBe(`${skill.id}:${level}:${seed}:s`);
+        checkProblem(skill, p, seed);
+        const setup = p.steps[0];
+        expect(setup.key, `${p.id} first step`).toMatch(/^setup/);
+        expect(setup.ask?.verify?.type, `${p.id} setup verify`).toBe('equivalent');
+        seen.add(p.prompt);
+      }
+      expect(seen.size, 'distinct story prompts').toBeGreaterThan(Math.min(N, 100) * 0.3);
+    });
+
   it('is deterministic for a given seed', () => {
     for (const level of LEVELS) {
       expect(makeProblem(skill, level, 42)).toEqual(makeProblem(skill, level, 42));

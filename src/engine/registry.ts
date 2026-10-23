@@ -22,15 +22,26 @@ export function activePrerequisites(skill: SkillDefinition): string[] {
   return resolvePrerequisites(skill.id, hasSkill);
 }
 
-/** Deterministic: the same (skill, level, seed) always yields the same problem. */
-export function makeProblem(skill: SkillDefinition, level: Level, seed: number): Problem {
+/** Deterministic: the same (skill, level, seed, variant) always yields the same problem. */
+export function makeProblem(skill: SkillDefinition, level: Level, seed: number, variant?: 'story'): Problem {
+  if (variant === 'story') {
+    if (!hasStory(skill, level)) throw new Error(`${skill.id} has no story variant at level ${level}`);
+    const body = skill.story!.generate(createRng(seed), level);
+    return { id: `${skill.id}:${level}:${seed}:s`, skillId: skill.id, level, seed, variant, ...body };
+  }
   const body = skill.generate(createRng(seed), level);
   return { id: `${skill.id}:${level}:${seed}`, skillId: skill.id, level, seed, ...body };
 }
 
 export function problemFromId(id: string): Problem {
-  const [skillId, level, seed] = id.split(':');
-  return makeProblem(getSkill(skillId), Number(level) as Level, Number(seed));
+  const [skillId, level, seed, variant] = id.split(':');
+  return makeProblem(getSkill(skillId), Number(level) as Level, Number(seed), variant === 's' ? 'story' : undefined);
 }
+
+export const hasStory = (skill: SkillDefinition, level: Level) => !!skill.story?.levels.includes(level);
+
+/** Story or plain for this seed: about half of the eligible items are stories (even seeds). */
+export const storyVariant = (skill: SkillDefinition, level: Level, seed: number): 'story' | undefined =>
+  hasStory(skill, level) && seed % 2 === 0 ? 'story' : undefined;
 
 export { SKILLS };

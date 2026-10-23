@@ -35,11 +35,15 @@ for (const skill of selected) {
   for (const level of LEVELS) {
     for (let i = 0; i < perLevel; i++) {
       const seed = 100_000 + i * 7919; // different seeds from the unit tests
-      const p = makeProblem(skill, level, seed);
-      if (p.verify.type !== 'choice' && p.verify.type !== 'qc') checks.push({ where: p.id, verify: p.verify, values: values(p.answer) });
-      p.steps.forEach((s, k) => {
-        if (s.ask?.verify) checks.push({ where: `${p.id} step ${k}`, verify: s.ask.verify, values: values(s.ask.answer) });
-      });
+      // Plain problems, plus story variants (word problems with a setup step) where the skill has them.
+      const variants = skill.story?.levels.includes(level) ? [undefined, 'story' as const] : [undefined];
+      for (const variant of variants) {
+        const p = makeProblem(skill, level, seed, variant);
+        if (p.verify.type !== 'choice' && p.verify.type !== 'qc') checks.push({ where: p.id, verify: p.verify, values: values(p.answer) });
+        p.steps.forEach((s, k) => {
+          if (s.ask?.verify) checks.push({ where: `${p.id} step ${k}`, verify: s.ask.verify, values: values(s.ask.answer) });
+        });
+      }
     }
   }
 }

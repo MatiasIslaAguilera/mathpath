@@ -36,3 +36,6 @@ progress*.json
 # local secrets
 .env.local
 .env.*.local
+
+# Personal reference books: never commit (copyrighted; mined for problem shapes only)
+.books/

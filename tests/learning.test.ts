@@ -226,3 +226,28 @@ describe('working level hysteresis', () => {
     expect(sp.held).toBe(2);
   });
 });
+
+describe('story variants in sessions', () => {
+  it('serves stories for about half of practice items, never for warm-ups or finishers', () => {
+    const p = emptyProgress();
+    p.skills['linear-equations'] = { ...emptySkill(), rating: 0.5, attempts: 30, lastPracticed: '2026-01-01' }; // working level 2
+    const byKind: Record<string, { story: number; plain: number }> = {};
+    for (let i = 0; i < 30; i++) {
+      let s = startSession(p, 10, { only: 'linear-equations' });
+      while (!sessionDone(s)) {
+        const r = nextProblem(s, p)!;
+        const k = (byKind[r.next.kind] ??= { story: 0, plain: 0 });
+        if (r.next.problem.variant === 'story') {
+          k.story++;
+          expect(r.next.problem.id.endsWith(':s')).toBe(true);
+        } else k.plain++;
+        s = afterProblem(r.session, r.next.problem, true, false, 10);
+      }
+    }
+    expect(byKind.warmup.story + byKind.finisher.story).toBe(0);
+    const practice = byKind.current;
+    const share = practice.story / (practice.story + practice.plain);
+    expect(share).toBeGreaterThan(0.3);
+    expect(share).toBeLessThan(0.7);
+  });
+});

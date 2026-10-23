@@ -54,6 +54,11 @@ function evaluateQuadratic(rng: Rng): Generated {
     if (a === 0 && b === 0) continue;
     break;
   }
+  return buildQuadratic(a, b, c, x0);
+}
+
+/** Steps, answer and misconceptions for f(x0) = a x0^2 + b x0 + c (shared by plain and story problems). */
+function buildQuadratic(a: number, b: number, c: number, x0: number): Generated {
   const value = a * x0 * x0 + b * x0 + c;
   const fLatex = quadLatex(a, b, c);
   const expr = `${a}*${par(x0)}^2 + ${b}*${par(x0)} + ${c}`;
@@ -115,108 +120,199 @@ function evaluateQuadratic(rng: Rng): Generated {
 
 function evaluateCareful(rng: Rng): Generated {
   const form = rng.int(0, 1); // 0: -a x^2 + b x at a negative input; 1: piecewise
-  let a = 0;
-  let b = 0;
-  let p = 0;
-  let qq = 0;
-  let k = 0;
-  let x0 = 0;
-  let value = 0;
-  let prompt = '';
-  let expr = '';
-  const steps: Step[] = [];
-  const candidates: (MisconceptionInstance | null)[] = [];
-
-  if (form === 0) {
-    a = rng.int(1, 3);
-    b = rng.nonzero(-6, 6);
-    x0 = rng.int(-5, -1);
-    value = -a * x0 * x0 + b * x0;
-    prompt = `Let $$f(x) = ${quadLatex(-a, b, 0)}$$ Find $f(${x0})$.`;
-    expr = `-${a}*${par(x0)}^2 + ${b}*${par(x0)}`;
-    steps.push(
-      {
-        key: 'substitute',
-        instruction: `Replace $x$ with $${x0}$ in parentheses.`,
-        math: `f(${x0}) = ${timesInput(-a, `(${x0})`)}^{2} ${b < 0 ? '-' : '+'} ${Math.abs(b) === 1 ? '' : Math.abs(b)}(${x0})`,
-        why: 'The input goes in parentheses so its sign travels with it.',
-        ask: {
-          prompt: `$(${x0})^{2} = \\;?$`,
-          answer: numberAnswer(x0 * x0),
-          verify: { type: 'evaluate', expr: `${par(x0)}^2` },
-        },
-      },
-      {
-        key: 'order-of-operations',
-        instruction: 'Square first, then apply the minus sign and the coefficient.',
-        math: `f(${x0}) = -${a}\\cdot ${x0 * x0} ${b * x0 < 0 ? '-' : '+'} ${Math.abs(b * x0)} = ${value}`,
-        why: 'The power binds tighter than the minus sign: $-x^2 = -(x^2)$. So at $x = -2$, $-x^2 = -4$, not $+4$.',
-        ask: { prompt: `$f(${x0}) = \\;?$`, answer: numberAnswer(value), verify: { type: 'evaluate', expr } },
-      },
-    );
-    candidates.push({ id: 'negative-squared', wrong: numberAnswer(value + 2 * a * x0 * x0) });
-  } else {
-    p = rng.nonzero(-4, 4);
-    qq = rng.int(-9, 9);
-    a = rng.int(1, 3);
-    b = rng.int(-9, 9);
-    k = rng.int(-3, 3);
-    x0 = k + rng.int(-2, 2);
-    const right = x0 >= k;
-    const leftVal = p * x0 + qq;
-    const rightVal = a * x0 * x0 + b;
-    value = right ? rightVal : leftVal;
-    const leftL = linLatex(p, qq);
-    const rightL = b === 0 ? `${coefLatex(q(a))}x^{2}` : `${coefLatex(q(a))}x^{2} ${b < 0 ? '-' : '+'} ${Math.abs(b)}`;
-    prompt = `Let $$f(x) = \\begin{cases} ${leftL} & x < ${k} \\\\ ${rightL} & x \\ge ${k} \\end{cases}$$ Find $f(${x0})$.`;
-    expr = right ? `${a}*${par(x0)}^2 + ${par(b)}` : `${p}*${par(x0)} + ${par(qq)}`;
-    steps.push(
-      {
-        key: 'pick-piece',
-        instruction: `Compare the input $${x0}$ with the cut-off $${k}$ to choose the rule.`,
-        math: `${x0} ${right ? '\\ge' : '<'} ${k} \\;\\Rightarrow\\; \\text{use the ${right ? 'second' : 'first'} rule}`,
-        why: 'A piecewise function has one rule per region. At the cut-off itself, the piece with $\\ge$ (or $\\le$) is the one that applies.',
-        ask: {
-          prompt: `Which rule applies at $x = ${x0}$?`,
-          answer: choiceAnswer(
-            fixed([
-              { id: 'left', label: `The first rule ($x < ${k}$)` },
-              { id: 'right', label: `The second rule ($x \\ge ${k}$)` },
-            ]),
-            right ? 'right' : 'left',
-          ),
-        },
-      },
-      {
-        key: 'substitute',
-        instruction: `Substitute $x = ${x0}$ into the ${right ? 'second' : 'first'} rule.`,
-        math: right ? `f(${x0}) = ${timesInput(a, `(${x0})`)}^{2} ${b < 0 ? '-' : '+'} ${Math.abs(b)}` : `f(${x0}) = ${timesInput(p, `(${x0})`)} ${qq < 0 ? '-' : '+'} ${Math.abs(qq)}`,
-        why: 'Only the chosen rule is used; the other rule is ignored.',
-        ask: right
-          ? { prompt: `$(${x0})^{2} = \\;?$`, answer: numberAnswer(x0 * x0), verify: { type: 'evaluate', expr: `${par(x0)}^2` } }
-          : { prompt: `$${p}\\cdot(${x0}) = \\;?$`, answer: numberAnswer(p * x0), verify: { type: 'evaluate', expr: `${p}*${par(x0)}` } },
-      },
-      {
-        key: 'order-of-operations',
-        instruction: 'Finish the arithmetic: powers, then multiplication, then adding.',
-        math: right ? `f(${x0}) = ${a * x0 * x0} ${b < 0 ? '-' : '+'} ${Math.abs(b)} = ${value}` : `f(${x0}) = ${p * x0} ${qq < 0 ? '-' : '+'} ${Math.abs(qq)} = ${value}`,
-        why: 'Powers first, then products, then sums.',
-        ask: { prompt: `$f(${x0}) = \\;?$`, answer: numberAnswer(value), verify: { type: 'evaluate', expr } },
-      },
-    );
-    candidates.push({ id: 'wrong-piece', wrong: numberAnswer(right ? leftVal : rightVal) });
-    if (right && x0 < 0) candidates.push({ id: 'negative-squared', wrong: numberAnswer(value - 2 * a * x0 * x0) });
+  if (form === 1) {
+    const p = rng.nonzero(-4, 4);
+    const qq = rng.int(-9, 9);
+    const a = rng.int(1, 3);
+    const b = rng.int(-9, 9);
+    const k = rng.int(-3, 3);
+    const x0 = k + rng.int(-2, 2);
+    return buildPiecewise(a, b, p, qq, k, x0);
   }
-
+  const a = rng.int(1, 3);
+  const b = rng.nonzero(-6, 6);
+  const x0 = rng.int(-5, -1);
+  const value = -a * x0 * x0 + b * x0;
+  const expr = `-${a}*${par(x0)}^2 + ${b}*${par(x0)}`;
+  const steps: Step[] = [
+    {
+      key: 'substitute',
+      instruction: `Replace $x$ with $${x0}$ in parentheses.`,
+      math: `f(${x0}) = ${timesInput(-a, `(${x0})`)}^{2} ${b < 0 ? '-' : '+'} ${Math.abs(b) === 1 ? '' : Math.abs(b)}(${x0})`,
+      why: 'The input goes in parentheses so its sign travels with it.',
+      ask: {
+        prompt: `$(${x0})^{2} = \\;?$`,
+        answer: numberAnswer(x0 * x0),
+        verify: { type: 'evaluate', expr: `${par(x0)}^2` },
+      },
+    },
+    {
+      key: 'order-of-operations',
+      instruction: 'Square first, then apply the minus sign and the coefficient.',
+      math: `f(${x0}) = -${a}\\cdot ${x0 * x0} ${b * x0 < 0 ? '-' : '+'} ${Math.abs(b * x0)} = ${value}`,
+      why: 'The power binds tighter than the minus sign: $-x^2 = -(x^2)$. So at $x = -2$, $-x^2 = -4$, not $+4$.',
+      ask: { prompt: `$f(${x0}) = \\;?$`, answer: numberAnswer(value), verify: { type: 'evaluate', expr } },
+    },
+  ];
   const answer = numberAnswer(value);
   return {
     // Unused entries are 0 so every level-2 problem reports the same parameter set.
-    params: { form, a, b, p, q: qq, k, x0 },
-    prompt,
+    params: { form, a, b, p: 0, q: 0, k: 0, x0 },
+    prompt: `Let $$f(x) = ${quadLatex(-a, b, 0)}$$ Find $f(${x0})$.`,
+    answer,
+    steps,
+    misconceptions: distinctMisconceptions(answer, [{ id: 'negative-squared', wrong: numberAnswer(value + 2 * a * x0 * x0) }]),
+    verify: { type: 'evaluate', expr },
+  };
+}
+
+/** f(x) = p x + q for x < k, a x^2 + b for x >= k, evaluated at x0 (shared by plain and story problems). */
+function buildPiecewise(a: number, b: number, p: number, qq: number, k: number, x0: number): Generated {
+  const right = x0 >= k;
+  const leftVal = p * x0 + qq;
+  const rightVal = a * x0 * x0 + b;
+  const value = right ? rightVal : leftVal;
+  const leftL = linLatex(p, qq);
+  const rightL = b === 0 ? `${coefLatex(q(a))}x^{2}` : `${coefLatex(q(a))}x^{2} ${b < 0 ? '-' : '+'} ${Math.abs(b)}`;
+  const expr = right ? `${a}*${par(x0)}^2 + ${par(b)}` : `${p}*${par(x0)} + ${par(qq)}`;
+  const steps: Step[] = [
+    {
+      key: 'pick-piece',
+      instruction: `Compare the input $${x0}$ with the cut-off $${k}$ to choose the rule.`,
+      math: `${x0} ${right ? '\\ge' : '<'} ${k} \\;\\Rightarrow\\; \\text{use the ${right ? 'second' : 'first'} rule}`,
+      why: 'A piecewise function has one rule per region. At the cut-off itself, the piece with $\\ge$ (or $\\le$) is the one that applies.',
+      ask: {
+        prompt: `Which rule applies at $x = ${x0}$?`,
+        answer: choiceAnswer(
+          fixed([
+            { id: 'left', label: `The first rule ($x < ${k}$)` },
+            { id: 'right', label: `The second rule ($x \\ge ${k}$)` },
+          ]),
+          right ? 'right' : 'left',
+        ),
+      },
+    },
+    {
+      key: 'substitute',
+      instruction: `Substitute $x = ${x0}$ into the ${right ? 'second' : 'first'} rule.`,
+      math: right ? `f(${x0}) = ${timesInput(a, `(${x0})`)}^{2} ${b < 0 ? '-' : '+'} ${Math.abs(b)}` : `f(${x0}) = ${timesInput(p, `(${x0})`)} ${qq < 0 ? '-' : '+'} ${Math.abs(qq)}`,
+      why: 'Only the chosen rule is used; the other rule is ignored.',
+      ask: right
+        ? { prompt: `$(${x0})^{2} = \\;?$`, answer: numberAnswer(x0 * x0), verify: { type: 'evaluate', expr: `${par(x0)}^2` } }
+        : { prompt: `$${p}\\cdot(${x0}) = \\;?$`, answer: numberAnswer(p * x0), verify: { type: 'evaluate', expr: `${p}*${par(x0)}` } },
+    },
+    {
+      key: 'order-of-operations',
+      instruction: 'Finish the arithmetic: powers, then multiplication, then adding.',
+      math: right ? `f(${x0}) = ${a * x0 * x0} ${b < 0 ? '-' : '+'} ${Math.abs(b)} = ${value}` : `f(${x0}) = ${p * x0} ${qq < 0 ? '-' : '+'} ${Math.abs(qq)} = ${value}`,
+      why: 'Powers first, then products, then sums.',
+      ask: { prompt: `$f(${x0}) = \\;?$`, answer: numberAnswer(value), verify: { type: 'evaluate', expr } },
+    },
+  ];
+  const candidates: (MisconceptionInstance | null)[] = [{ id: 'wrong-piece', wrong: numberAnswer(right ? leftVal : rightVal) }];
+  if (right && x0 < 0) candidates.push({ id: 'negative-squared', wrong: numberAnswer(value - 2 * a * x0 * x0) });
+  const answer = numberAnswer(value);
+  return {
+    params: { form: 1, a, b, p, q: qq, k, x0 },
+    prompt: `Let $$f(x) = \\begin{cases} ${leftL} & x < ${k} \\\\ ${rightL} & x \\ge ${k} \\end{cases}$$ Find $f(${x0})$.`,
     answer,
     steps,
     misconceptions: distinctMisconceptions(answer, candidates),
     verify: { type: 'evaluate', expr },
+  };
+}
+
+// ---------- story variants (levels 1-2): the same evaluations as situations ----------
+
+/** A setup step: write the situation as an expression in x (checked by equivalence). */
+function setupStep(prompt: string, expr: string, display: string, why: string): Step {
+  return {
+    key: 'setup',
+    instruction: prompt,
+    math: display,
+    why,
+    ask: {
+      prompt,
+      answer: { kind: 'expression', value: expr, variables: ['x'], display },
+      verify: { type: 'equivalent', expr, variables: ['x'] },
+    },
+  };
+}
+
+function storyProfit(rng: Rng): Generated {
+  // Profit = revenue - cost, in thousands of dollars, x in hundreds of units.
+  let a = 0;
+  let b = 0;
+  let c = 0;
+  let x0 = 0;
+  for (;;) {
+    a = -rng.int(1, 3);
+    b = rng.int(1, 6);
+    c = -rng.int(1, 9);
+    x0 = rng.int(1, 4);
+    if (a * x0 * x0 + b * x0 + c > 0) break; // a profit, not a loss
+  }
+  const years = rng.int(2, 9);
+  const [maker, thing] = rng.pick([
+    ['workshop', 'bracelets'],
+    ['bakery', 'loaves'],
+    ['print shop', 'posters'],
+  ]);
+  const body = buildQuadratic(a, b, c, x0);
+  const cost = quadLatex(-a, 0, -c);
+  const profit = quadLatex(a, b, c);
+  const expr = `${a}*x^2 + ${b}*x + ${c}`;
+  return {
+    ...body,
+    prompt: `A ${maker} has been open for ${years} years. If it makes and sells $x$ hundred ${thing} a month, the sales bring in $${b === 1 ? '' : b}x$ thousand dollars and the cost of producing them is $${cost}$ thousand dollars, including a fixed amount that is paid whatever is made. Let $f(x)$ be the monthly profit in thousands of dollars. Find $f(${x0})$, the profit on ${x0} hundred ${thing}.`,
+    steps: [
+      setupStep(
+        'Write the profit $f(x)$, in thousands of dollars, as an expression in $x$.',
+        expr,
+        `f(x) = ${profit}`,
+        `Profit is revenue minus cost, so subtract the whole cost expression, fixed amount included. The ${years} years open doesn't enter the formula.`,
+      ),
+      ...body.steps,
+    ],
+  };
+}
+
+function storySchedule(rng: Rng): Generated {
+  // Usage charge: p x + q below the cut-off k, a x^2 + b from k on (a surcharge that grows with use).
+  let p = 0;
+  let qq = 0;
+  let a = 0;
+  let b = 0;
+  let k = 0;
+  let x0 = 0;
+  for (;;) {
+    p = rng.int(1, 4);
+    qq = rng.int(1, 9);
+    a = rng.int(1, 3);
+    b = rng.int(0, 9);
+    k = rng.int(1, 3);
+    x0 = k + rng.int(-2, 2);
+    // A surcharge never lowers the bill: at the cut-off the upper rule costs at least the lower one.
+    if (x0 >= 1 && a * k * k + b >= p * k + qq) break;
+  }
+  const day = rng.int(3, 28);
+  const right = x0 >= k;
+  const body = buildPiecewise(a, b, p, qq, k, x0);
+  const rightL = b === 0 ? `${coefLatex(q(a))}x^{2}` : `${coefLatex(q(a))}x^{2} + ${b}`;
+  const rightExpr = `${a}*x^2 + ${b}`;
+  const leftExpr = `${p}*x + ${qq}`;
+  return {
+    ...body,
+    prompt: `A city bills water by the unit of use, $x$. Below ${k} unit${k === 1 ? '' : 's'}, the bill is $${linLatex(p, qq)}$ dollars. From ${k} unit${k === 1 ? '' : 's'} up, a conservation surcharge applies and the bill is $${rightL}$ dollars. Your meter was read on day ${day} of the month and showed ${x0} unit${x0 === 1 ? '' : 's'}. Let $f(x)$ be the bill in dollars. Find $f(${x0})$.`,
+    steps: [
+      setupStep(
+        `Which billing rule applies at ${x0} unit${x0 === 1 ? '' : 's'}? Write it as an expression in $x$.`,
+        right ? rightExpr : leftExpr,
+        right ? `f(x) = ${rightL}` : `f(x) = ${linLatex(p, qq)}`,
+        `${x0} is ${right ? 'at or above' : 'below'} the cut-off of ${k}, so the ${right ? 'surcharge' : 'lower'} rule applies. Compare the use with the cut-off first, then write only that rule. The reading date (day ${day}) doesn't matter.`,
+      ),
+      ...body.steps,
+    ],
   };
 }
 
@@ -536,6 +632,7 @@ export const functionsBasics: SkillDefinition = {
     vertex: 'Find the vertex value',
     direction: 'Opens up or down?',
     'combine-conditions': 'Combine the conditions',
+    setup: 'Set up: write the situation as an expression',
     'solve-condition': 'Solve the condition for x',
     'state-range': 'State the range',
   },
@@ -565,6 +662,13 @@ export const functionsBasics: SkillDefinition = {
       case 5:
         return domainCombined(rng);
     }
+  },
+
+  story: {
+    levels: [1, 2],
+    generate(rng, level) {
+      return level === 1 ? storyProfit(rng) : storySchedule(rng);
+    },
   },
 };
 

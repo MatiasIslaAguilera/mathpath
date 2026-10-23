@@ -127,8 +127,10 @@ export type Figure =
   | { kind: 'table'; caption: string; headers: string[]; rows: string[][] };
 
 export interface Problem {
-  /** `${skillId}:${level}:${seed}` — enough to regenerate the exact problem. */
+  /** `${skillId}:${level}:${seed}`, plus `:s` for a story variant — enough to regenerate it. */
   id: string;
+  /** 'story' when built by `SkillDefinition.story` (a word problem with a setup step). */
+  variant?: 'story';
   skillId: string;
   level: Level;
   seed: number;
@@ -205,6 +207,16 @@ export interface SkillDefinition {
   learn: LearnCard;
   /** Pure: every random choice comes from `rng`. */
   generate(rng: import('./rng').Rng, level: Level): Omit<Problem, 'id' | 'skillId' | 'level' | 'seed'>;
+  /**
+   * Story (word-problem) variants: the same math told as a situation, with a first step that asks
+   * the learner to set it up (write the expression or equation). Built from the same param names
+   * and level ranges, so every harness and SymPy check applies; served for about half of the
+   * non-warm-up items at these levels (session.ts). Problem id: `skill:level:seed:s`.
+   */
+  story?: {
+    levels: Level[];
+    generate(rng: import('./rng').Rng, level: Level): Omit<Problem, 'id' | 'skillId' | 'level' | 'seed'>;
+  };
   /**
    * Optional custom checker. Default: engine/checker.ts by AnswerSpec kind.
    * Use it only when the default is too strict or too loose for this skill (a required form,

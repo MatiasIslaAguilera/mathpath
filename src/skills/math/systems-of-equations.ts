@@ -4,7 +4,7 @@
 // and the wrong answers from adding vs subtracting and from multiplying only the left side.
 
 import { numberAnswer, tupleAnswer } from '../../engine/answers';
-import { coefLatex, joinTerms, linLatex, parenIfNeg } from '../../engine/format';
+import { coefLatex, joinTerms, linExpr, linLatex, parenIfNeg } from '../../engine/format';
 import { distinctMisconceptions } from '../../engine/misconceptions';
 import { Q, q } from '../../engine/rational';
 import type { Rng } from '../../engine/rng';
@@ -259,7 +259,18 @@ function level1(rng: Rng): Body {
 // Level 2: substitution
 // ---------------------------------------------------------------------------
 
-function level2(rng: Rng): Body {
+interface L2Params {
+  m: number;
+  k: number;
+  a: number;
+  b: number;
+  c: number;
+  x: number;
+  y: number;
+}
+
+/** Plain params for substitution: y = mx + k and ax + by = c. Same rng order as ever. */
+function pickLevel2(rng: Rng): L2Params {
   for (;;) {
     const m = rng.nonzero(-5, 5);
     const a = rng.nonzero(-7, 7);
@@ -268,14 +279,25 @@ function level2(rng: Rng): Body {
     const y = rng.int(-10, 10);
     const k = y - m * x;
     const c = a * x + b * y;
+    if (a + b * m === 0) continue;
+    return { m, k, a, b, c, x, y };
+  }
+}
+
+function level2(rng: Rng): Body {
+  const P = pickLevel2(rng);
+  return level2Body(P, `Solve the system: $$\\begin{cases} y = ${linLatex(P.m, P.k)} \\\\ ${eqLatex([P.a, P.b], q(P.c), exactFmt)} \\end{cases}$$ Give the pair $(x, y)$.`);
+}
+
+/** Steps, answer and misconceptions for y = mx + k, ax + by = c (shared by plain and story problems). */
+function level2Body(P: L2Params, prompt: string): Body {
+  {
+    const { m, k, a, b, c, x, y } = P;
     const K = a + b * m;
-    if (K === 0) continue;
     const answer = tupleAnswer(['x', 'y'], [x, y], ['x', 'y']);
     const eq1 = `y = ${n(m)}*x + ${n(k)}`;
     const eq2 = `${n(a)}*x + ${n(b)}*y = ${n(c)}`;
     const verify: VerifySpec = { type: 'solve', equations: [eq1, eq2], unknowns: ['x', 'y'] };
-    const line1 = `y = ${linLatex(m, k)}`;
-    const line2 = eqLatex([a, b], q(c), exactFmt);
     const subbed = `${joinTerms([`${coefLatex(q(a))}x`, (b === 1 ? `(${linLatex(m, k)})` : b === -1 ? `-(${linLatex(m, k)})` : `${b}(${linLatex(m, k)})`)])} = ${c}`;
     const steps: Step[] = [
       {
@@ -326,7 +348,7 @@ function level2(rng: Rng): Body {
     cand.push({ id: 'substitute-distribute', wrong: tupleAnswer(['x', 'y'], [xw, xw.mul(m).add(k)], ['x', 'y']) });
     return {
       params: { m, k, a, b, c, x, y },
-      prompt: `Solve the system: $$\\begin{cases} ${line1} \\\\ ${line2} \\end{cases}$$ Give the pair $(x, y)$.`,
+      prompt,
       answer,
       steps,
       misconceptions: distinctMisconceptions(answer, cand),
@@ -506,6 +528,7 @@ export const systemsOfEquations: SkillDefinition = {
     },
   },
   stepLabels: {
+    setup: 'Set up: write the supply price as an expression',
     'set-equal': 'Set the two expressions equal',
     substitute: 'Substitute into the other equation',
     'solve-x': 'Solve for x',
@@ -545,5 +568,39 @@ export const systemsOfEquations: SkillDefinition = {
       case 5:
         return level5(rng);
     }
+  },
+  story: {
+    levels: [2],
+    generate(rng) {
+      // Supply p = k + m·q slopes up; demand a·q + b·p = c slopes down; x = quantity, y = price.
+      for (;;) {
+        const m = rng.int(1, 4);
+        const a = rng.int(1, 7);
+        const b = rng.int(1, 7);
+        const x = rng.int(1, 6); // quantity, thousands of units
+        const k = rng.int(1, 9); // base price, dollars
+        const y = k + m * x; // equilibrium price
+        if (y > 10) continue;
+        const c = a * x + b * y;
+        const days = rng.int(2, 9);
+        const P: L2Params = { m, k, a, b, c, x, y };
+        const supply = { latex: linLatex(m, k), expr: linExpr(m, k) };
+        const demandEq = eqLatex([a, b], q(c), exactFmt);
+        const prompt = `In a local market, let $x$ be the quantity traded in thousands of units and $y$ the price per unit in dollars. Sellers set their price at \\$${k} plus \\$${m} for every thousand units supplied. Buyers' demand satisfies $$${demandEq}$$ New stock takes ${days} days to arrive, which does not affect the equilibrium. Find the equilibrium pair $(x, y)$: quantity first, then price.`;
+        const body = level2Body(P, prompt);
+        const setup: Step = {
+          key: 'setup',
+          instruction: 'Write the supply price $y$, in dollars, as an expression in the quantity $x$ (in thousands of units).',
+          math: `y = ${supply.latex}`,
+          why: `A base price plus a charge per thousand units is a line: $y = ${supply.latex}$. The ${days} days for new stock is a distraction and does not enter the equations.`,
+          ask: {
+            prompt: 'Write the supply price $y$, in dollars, as an expression in the quantity $x$ (in thousands of units).',
+            answer: { kind: 'expression', value: supply.expr, variables: ['x'], display: supply.latex },
+            verify: { type: 'equivalent', expr: supply.expr, variables: ['x'] },
+          },
+        };
+        return { ...body, steps: [setup, ...body.steps] };
+      }
+    },
   },
 };

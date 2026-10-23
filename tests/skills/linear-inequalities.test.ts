@@ -83,6 +83,26 @@ describe('linear-inequalities', () => {
     });
   }
 
+  for (const level of [1, 2, 3] as const) {
+    it(`story level ${level}: exactly the correct option matches the inequality built from the params`, () => {
+      for (let seed = 1; seed <= 300; seed++) {
+        const p = makeProblem(skill, level, seed, 'story');
+        if (p.answer.kind !== 'choice') throw new Error('expected a choice answer');
+        const { a, b, c, d, rel } = p.params;
+        const L = (x: number) => a * x + b;
+        const R = level === 3 ? (x: number) => c * x + d : () => c;
+        const cmp = ['<', '>', '<=', '>='][rel];
+        const original = (x: number) => CMP[cmp](L(x), R(x));
+        const opts = p.answer.options.map((o) => ({ id: o.id, ...parseOption(o.label) }));
+        const xs = new Set<number>();
+        for (let i = -360; i <= 360; i++) xs.add(i / 12);
+        for (const o of opts) for (const bd of o.bounds) [bd, bd - 0.001, bd + 0.001].forEach((v) => xs.add(v));
+        const matching = opts.filter((o) => [...xs].every((x) => o.holds(x) === original(x))).map((o) => o.id);
+        expect(matching, p.id).toEqual([p.answer.correct]);
+      }
+    });
+  }
+
   it('flip misconceptions: no-flip only when the divisor is negative, flip-positive only when positive', () => {
     for (const level of [1, 2, 3, 4] as const) {
       for (let seed = 1; seed <= 200; seed++) {

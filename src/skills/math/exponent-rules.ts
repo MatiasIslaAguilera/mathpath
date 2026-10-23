@@ -130,6 +130,8 @@ export const exponentRules: SkillDefinition = {
     root: 'Take the root (denominator)',
     raise: 'Raise to the power (numerator)',
     combine: 'Combine and state the answer',
+    'setup-product': 'Write the growth factor as a product of powers',
+    'setup-quotient': 'Write the growth factor as a quotient of powers',
   },
   learn: {
     whyItMatters:
@@ -164,13 +166,18 @@ export const exponentRules: SkillDefinition = {
         return level5(rng);
     }
   },
+
+  story: {
+    levels: [1],
+    generate: (rng) => level1Story(rng),
+  },
 };
 
 type Body = ReturnType<SkillDefinition['generate']>;
 
 // ---------- Level 1: same base ----------
 
-function level1(rng: Rng): Body {
+function level1Params(rng: Rng): { form: number; a: number; b: number } {
   const form = rng.int(0, 1);
   let a: number;
   let b: number;
@@ -181,6 +188,16 @@ function level1(rng: Rng): Body {
     a = rng.int(3, 9);
     b = rng.int(2, a - 1);
   }
+  return { form, a, b };
+}
+
+function level1(rng: Rng): Body {
+  const { form, a, b } = level1Params(rng);
+  return solveLevel1(rng, form, a, b);
+}
+
+/** Steps, answer and misconceptions for a level-1 draw (shared by plain and story problems). */
+function solveLevel1(rng: Rng, form: number, a: number, b: number): Body {
   const ans = form === 0 ? a + b : a - b;
   const answer = numberAnswer(ans);
   const expr = form === 0 ? `(${a})+(${b})` : `(${a})-(${b})`;
@@ -225,6 +242,51 @@ function level1(rng: Rng): Body {
     misconceptions: distinctMisconceptions(answer, mis),
     verify: { type: 'evaluate', expr },
   };
+}
+
+// ---------- Story variant of level 1: growth factors ----------
+
+function level1Story(rng: Rng): Body {
+  const { form, a, b } = level1Params(rng);
+  const body = solveLevel1(rng, form, a, b);
+  const [subject, unit, noise] = rng.pick([
+    ['A bacteria colony', 'hour', 'The lab opened in 1998'],
+    ['A savings balance', 'year', 'The account was opened on a Tuesday'],
+    ['A rumour online', 'day', 'The post has 40 comments'],
+    ["A start-up's user base", 'month', 'The company has 12 employees'],
+  ]);
+  const growth = `${subject} is multiplied by the same factor $x$ every ${unit}.`;
+  const pl = (n: number) => `${n} ${unit}${n === 1 ? '' : 's'}`;
+  let prompt: string;
+  let setup: Step;
+  if (form === 0) {
+    prompt = `${growth} Over one stretch of ${pl(a)} it grows by a factor of $x^{${a}}$; over the next ${pl(b)} it grows by $x^{${b}}$. ${noise}. Over both stretches together, the total growth factor is $x^{?}$. Fill in the exponent.`;
+    setup = {
+      key: 'setup-product',
+      instruction: 'Write the total growth factor over both stretches as an expression in $x$.',
+      math: `x^{${a}}\\cdot x^{${b}}`,
+      why: `Growth over one stretch followed by growth over the next multiplies, so the factors multiply: $x^{${a}}\\cdot x^{${b}}$. The number in the story that is not a growth factor does not enter the calculation.`,
+      ask: {
+        prompt: 'Write the total growth factor over both stretches in terms of $x$.',
+        answer: { kind: 'expression', value: `x^${a} * x^${b}`, variables: ['x'], display: `x^{${a}}\\cdot x^{${b}}` },
+        verify: { type: 'equivalent', expr: `x^${a} * x^${b}`, variables: ['x'] },
+      },
+    };
+  } else {
+    prompt = `${growth} Over ${pl(a)} it grew by a total factor of $x^{${a}}$. The first ${pl(b)} of that accounted for a factor of $x^{${b}}$. ${noise}. Over the rest of the period after that, the growth was a factor of $x^{?}$. Fill in the exponent.`;
+    setup = {
+      key: 'setup-quotient',
+      instruction: 'Write the growth factor of the remaining time as an expression in $x$.',
+      math: `\\frac{x^{${a}}}{x^{${b}}}`,
+      why: `The total factor is the first part times the rest, so the rest is the total divided by the first part: $\\frac{x^{${a}}}{x^{${b}}}$. Dividing removes the first ${b} periods of growth, which is why the exponents subtract, not add. The number in the story that is not a growth factor is ignored.`,
+      ask: {
+        prompt: 'Write the growth factor of the remaining time in terms of $x$.',
+        answer: { kind: 'expression', value: `x^${a} / x^${b}`, variables: ['x'], display: `\\frac{x^{${a}}}{x^{${b}}}` },
+        verify: { type: 'equivalent', expr: `x^${a} / x^${b}`, variables: ['x'] },
+      },
+    };
+  }
+  return { ...body, prompt, steps: [setup, ...body.steps] };
 }
 
 // ---------- Level 2: power of a power, coefficient ----------

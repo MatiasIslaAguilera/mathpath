@@ -9,6 +9,7 @@
 //   3. time on task: median seconds for right and wrong answers; fast misses (< 12 s)
 //   4. learning curve: accuracy and level by how many attempts the skill already had
 //   5. content runway: built core skills not yet started, and the pace of starting new ones
+//   6. translation gap: story (word-problem) vs plain items at the same skill and level
 
 import { readFileSync } from 'node:fs';
 import { SKILLS } from '../src/engine/registry';
@@ -35,6 +36,7 @@ interface Row {
   recall?: number;
   secs?: number;
   ts: number;
+  story: boolean;
 }
 const p = emptyProgress();
 const rows: Row[] = [];
@@ -59,6 +61,7 @@ for (const e of events) {
         recall: firstOfDay && sp.fsrs ? retrievability(sp.fsrs, new Date(e.ts)) : undefined,
         secs: gap < 900 ? gap : undefined,
         ts: e.ts,
+        story: e.problemId.endsWith(':s'),
       });
   }
   prevTs = e.ts;
@@ -125,3 +128,19 @@ const ahead = built.length - started.length;
 console.log('\n## 5. Content runway\n');
 console.log(`  core skills: ${core.length} in the tree, ${built.length} built, ${started.length} started`);
 console.log(`  pace: ${perWeek.toFixed(1)} new core skills per week → ${ahead} built-but-unstarted = ~${(ahead / Math.max(perWeek, 0.1)).toFixed(1)} weeks of runway (keep ≥ 3)`);
+
+// 6. Translation gap
+console.log('\n## 6. Translation gap: story vs plain, same skill and level (the story batch should shrink it)\n');
+const cells = [...new Set(rows.filter((r) => r.story).map((r) => `${r.skill}|${r.level}`))];
+if (!cells.length) console.log('  no story items answered yet');
+for (const cell of cells) {
+  const [skill, level] = cell.split('|');
+  const at = rows.filter((r) => r.skill === skill && r.level === Number(level));
+  const st = at.filter((r) => r.story);
+  const pl = at.filter((r) => !r.story);
+  const secs = (xs: Row[]) => median(xs.filter((r) => r.secs !== undefined && r.y).map((r) => r.secs!));
+  console.log(
+    `  ${`${skill} L${level}`.padEnd(30)} story ${f2(mean(st.map((r) => r.y)))} (n ${st.length}, ${secs(st)})   plain ${f2(mean(pl.map((r) => r.y)))} (n ${pl.length}, ${secs(pl)})   gap ${(100 * (mean(pl.map((r) => r.y)) - mean(st.map((r) => r.y)))).toFixed(0)} pts`,
+  );
+}
+
