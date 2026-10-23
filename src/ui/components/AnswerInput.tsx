@@ -45,7 +45,12 @@ function TextField(props: {
       autoFocus={props.autoFocus}
       onChange={(e) => props.onChange(e.target.value)}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') props.onEnter();
+        if (e.key === 'Enter') {
+          // Checking moves focus to the feedback's Next button; without this, the browser
+          // delivers this same Enter to that button and the feedback is skipped instantly.
+          e.preventDefault();
+          props.onEnter();
+        }
       }}
     />
   );
