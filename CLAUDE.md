@@ -136,6 +136,11 @@ Checklist:
    - RichText uses `$inline$` and `$$display$$` math, `*emphasis*`, and `\$` for a dollar sign.
    - `value` strings must parse in mathjs **and** SymPy: explicit `*`, `^` for powers,
      `sqrt()`, `log()` (natural), fractions as `(7/3)`. Use `Q.toExpr()` and `Q.toString()`.
+   - LaTeX in a JS string needs a doubled backslash (`'\\cdot'`, also inside nested template
+     literals and `.join('\\cdot')`). A single one is silently dropped and KaTeX renders the
+     letters; the harness fails on it.
+   - Derivative and determinant steps verify with `partial` (multivariable, optionally at a
+     point) and `det`; see `VerifySpec` in `engine/types.ts`.
 7. Register the skill in `src/skills/index.ts`, then run `npm test` and `npm run verify:sympy:skills -- <skill-id>`.
 
 ## GRE Quant track
