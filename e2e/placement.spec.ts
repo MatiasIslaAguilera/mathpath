@@ -1,9 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 import { correctInput, currentProblemIn, fillAnswer, freshStart } from './helpers';
+import { MAX_ITEMS } from '../src/learning/placement';
 
 async function takePlacement(page: Page, answer: 'correct' | 'skip') {
   await page.getByTestId('placement-start').click();
-  for (let i = 0; i <= 40; i++) {
+  for (let i = 0; i <= MAX_ITEMS; i++) {
     if (await page.getByTestId('placement-results').isVisible()) return;
     const p = await currentProblemIn(page, 'placement-question');
     if (answer === 'skip') {

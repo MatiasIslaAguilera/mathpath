@@ -18,8 +18,8 @@ import { reviewCard } from './scheduler';
 
 export const PLACEMENT_LEVEL: Level = 3;
 export const ITEMS_PER_SKILL = 2;
-/** Acing the test must still reach every skill: 30 placeable skills need 34 items (batch I). */
-export const MAX_ITEMS = 34;
+/** Acing the test must still reach every skill: 34 placeable skills need 42 items (batch J). */
+export const MAX_ITEMS = 42;
 /** σ(1.2 − 0) = 0.77 at level 3: "practiced", working level 3. */
 export const PLACED_RATING = 1.2;
 /** Working level 2, still "learning". */
