@@ -378,10 +378,53 @@ app/
    Check. It is on for equation skills (linear, systems, quadratics, exp/log equations, inverse
    L1). Next: name the mistake from the jump between lines, "check my working" as a hint,
    expression working (derivatives).
-9. **After a few days of real use:** analyze your answer history (`attempt_log` in Supabase
-   or progress.json) and adjust generators, hints and Learn cards to your weak spots.
+9. ✅ **Progress reviews** (4 so far, logged in `docs/review-ledger.json`): `npm run analyze`
+   reports only what is new since the last review; `npm run measure` checks the model itself.
+   The improvement backlog that came out of them is §8.
 
 **Also shipped:** a static **Past papers** deck with 200 GRE Quant questions imported from
 `lbcty56/GRE-Quiz-App-Python-` (`docs/CONTENT-SOURCES.md`). It is separate from the mastery
 rating; `docs/skill-specs/bank-archetypes.md` lists the bank's question archetypes for the next
 batch of generators.
+
+## 8. Improvement backlog (from review 4, 2026-10-22)
+
+### Starting a session on this
+
+1. Export a fresh progress file (Settings → Export) and run, in order:
+   - `npm run analyze -- <file>`: new mistakes since the last review, trends between reviews,
+     misconceptions that persist after a fix.
+   - `npm run measure -- <file>`: the model checks below (Brier, calibration, FSRS, time on
+     task, learning curve, content runway). Every number in this section comes from it.
+2. Pick the top open item below. Each one names the evidence, the change, the files, and the
+   **check that decides whether it worked**. A change is done when its check passes on real data,
+   not when the code is written.
+3. Verify: `npm run test:quick` while iterating, then `npm test`,
+   `npm run verify:sympy:skills -- <changed skill ids>`, and `npm run test:e2e` for UI or session
+   changes.
+4. Close the loop: `npm run analyze -- <file> --mark-reviewed "what changed"`, commit the ledger
+   with the code, and update the status column here.
+
+Baseline (export of 2026-10-23, 232 solo attempts over 5 days): solo accuracy 86%; rating-model
+Brier 0.1285 vs 0.1189 for a constant guess; FSRS first-of-day recall predicted 0.97, actual
+0.77 (n 13); 34 timed minutes per active day; 23 of 54 core skills built, 4 started, ~2.8 weeks
+of runway.
+
+### Backlog, in priority order
+
+| # | Item | Evidence | Change | Check | Status |
+|---|---|---|---|---|---|
+| 1 | **Calibrate level difficulty per skill** | The rating model predicts worse than a constant (Brier 0.1285 vs 0.1189; 0.0994 vs 0.0977 once settled). Actual beats predicted at every level (L3: 0.74 → 0.83); actual L2 and L3 accuracy are equal (0.83), but the model spaces levels one logit apart. Accuracy climbs 0.76 → 0.92 while the average level only moves 1.1 → 1.7. Tested and **rejected**: a slip parameter (best Brier 0.1262). | Estimate each skill's level offsets from the attempt log (shrunk toward the current spacing −2…2, so sparse skills keep the default), used by `pCorrect` / `nextLevel` in `learning/mastery.ts`. Offsets must be rebuilt by replay (no hidden state), like `held`. | `npm run measure`: model Brier below the constant baseline on attempts made *after* the change, and solo accuracy inside 75–85%. | open |
+| 2 | **Content runway: build by syllabus weight** | 2.8 weeks of runway at 6.8 new core skills/week (keep ≥ 3). The topics Econ 7370 leans on hardest (matrices, partial derivatives, multivariable optimization, Lagrange, comparative statics) are all unbuilt. | Next batch, in this order: partial derivatives → total differential → multivariable optimization (FOC/SOC); matrices → determinants → inverse/Cramer; Lagrangian. Specs in `docs/skill-specs/`, generators per CLAUDE.md, subagents for the files. Supersedes the order in §7 item 8 where they differ. | `npm run measure` §5: runway ≥ 3 weeks; harness + SymPy green for each new skill. | open |
+| 3 | **Personal FSRS parameters** | First-of-day recall predicted 0.97, actual 0.77 (n 13). All 3 misses came at predicted recall ≈ 1.0: cold-start slips, not forgetting. | Once ≥ 50 first-of-day reviews exist, fit FSRS weights from the log (fsrs optimizer, offline in `tools/`), store them in `learning/scheduler.ts`. Until then, no change: n is too small. | `npm run measure` §2: predicted and actual recall within 5 points. | waiting for data |
+| 4 | **Contrasting cases for rule confusion** | Exponent rules: median 7 s right, 9 s wrong; 5 of 7 misses under 12 s. `add-for-quotient` persists after its fix (2 before review 3, 1 after). | A level-1 item type showing $x^a\cdot x^b$ and $rac{x^a}{x^b}$ side by side (tuple answer: both exponents), so the learner must tell the rules apart. Same idea for power-of-a-power vs product at level 2. Also log `durationMs` on attempts so fast misses can be named in feedback. | `npm run analyze` trend: `add-for-quotient` rate per attempt falls; `measure` §3: fast misses drop. | open |
+| 5 | **Time-box slow items** | GRE fractions & percents: a correct item takes a median 523 s; one GRE item can be a quarter of a 34-minute day. | After ~2 min on any item, offer the first hint (counts as hinted). An "I don't know" button that opens guided mode and logs `help: 'reveal'`, so guesses stop polluting the data (the two "50" answers). | `measure` §3: median time on the skill falls with accuracy stable. | open |
+| 6 | **Outside benchmark of readiness** | The app only grades itself. | A monthly 20-item mock from the Past papers GRE deck (held out from practice), and a readiness set of textbook problems for 7370 topics (Hoy et al.), scored and stored as their own history. | The benchmark itself: score trend month to month. | open |
+
+### Done in review 4 (for context)
+
+Level hold (promote at P ≥ 0.75, hold while P ≥ 0.6); `coefficient-raised-to-inner`
+misconception; GRE percent-change step split (simplify, then convert); interpretation answers
+record the chosen option; review ledger and `npm run analyze`; generator harness in 4
+parallel shards (12.5 → 5.4 min); `npm run test:quick`; `npm run verify:sympy:skills`.
+

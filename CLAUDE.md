@@ -2,7 +2,8 @@
 
 A personal "Duolingo for math and economics" for one learner preparing for Mizzou's online
 MA in Economics. React + TypeScript + Vite, fully local (no backend, no login). Plan, research,
-and design rationale: [docs/PLAN.md](docs/PLAN.md).
+and design rationale: [docs/PLAN.md](docs/PLAN.md); the open improvement backlog, with the check
+for each item, is its §8.
 
 ## Commands
 
@@ -14,6 +15,7 @@ and design rationale: [docs/PLAN.md](docs/PLAN.md).
 | `npm run verify:sympy:skills -- id1,id2` | The same check for just those skills (seconds, not most of an hour) |
 | `npm run test:e2e` | Playwright on an Android phone profile (Pixel 7, 412×839): session, hints, guided mode, misconceptions, back gesture, export/import |
 | `npm run analyze -- <progress.json>` | Weak-spot report for an exported progress file: replays the event log, re-diagnoses every wrong answer with today's misconceptions, first-of-day vs later accuracy, levels served |
+| `npm run measure -- <progress.json>` | Model checks: rating-model Brier vs a constant baseline, calibration, FSRS recall, time on task, learning curve, content runway |
 | `npm run import:gre-bank` | Re-import the 200-question GRE challenge bank (`python tools/import_gre_bank.py`) |
 | `npm run typecheck` / `npm run build` | `tsc -b` / production build |
 

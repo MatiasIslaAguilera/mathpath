@@ -12,6 +12,7 @@
     "test:quick": "vitest run --mode quick",
     "test:e2e": "playwright test",
     "analyze": "tsx tools/analyze-progress.ts",
+    "measure": "tsx tools/measure-model.ts",
     "import:gre-bank": "python tools/import_gre_bank.py",
     "verify:sympy": "tsx verify/export-samples.ts && python -I verify/sympy_check.py verify/out/samples.json",
     "verify:sympy:skills": "node verify/sympy-skills.mjs",
