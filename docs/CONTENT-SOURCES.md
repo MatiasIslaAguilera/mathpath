@@ -3,7 +3,7 @@
 The app has two content paths:
 
 1. **Adaptive skills** (`src/skills/`): procedural generators, independently verified by
-   `tests/generators.test.ts` and SymPy. This is still the main curriculum.
+   the generator harness (`tests/generators.harness.ts`) and SymPy. This is still the main curriculum.
 2. **Static challenge deck** (`src/content/` + `Challenge.tsx`): bank questions imported as-is.
    These are extra practice, not part of the Elo/FSRS mastery rating.
 

@@ -37,6 +37,9 @@ export interface InterpretationEvent extends EventBase {
   problemId: string;
   level: Level;
   correct: boolean;
+  /** The option id chosen, and which of the problem's interpretation questions it answered. */
+  input?: string;
+  question?: number;
 }
 
 export interface PlacementEvent extends EventBase {

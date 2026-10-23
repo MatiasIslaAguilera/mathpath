@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { makeProblem } from '../src/engine/registry';
 import { linearEquations } from '../src/skills/math/linear-equations';
 import { prefilledSteps } from '../src/learning/fading';
-import { INITIAL_RATING, nextLevel, pCorrect, skillStatus, updateRating } from '../src/learning/mastery';
-import { recordAttempt } from '../src/learning/record';
+import { HOLD_P, INITIAL_RATING, heldLevel, nextLevel, pCorrect, skillStatus, updateRating } from '../src/learning/mastery';
+import { recordAttempt, recordInterpretation } from '../src/learning/record';
 import { afterProblem, nextProblem, sessionDone, startSession } from '../src/learning/session';
 import { skillState } from '../src/learning/states';
 import { isUnlocked } from '../src/learning/unlock';
@@ -193,5 +193,36 @@ describe('progress storage', () => {
     const p = migrate({ version: 1, skills: {}, days: {}, mistakes: [] });
     expect(p.settings.dailyGoal).toBe(10);
     expect(p.stepMisses).toEqual({});
+  });
+});
+
+describe('recording interpretation answers', () => {
+  it('logs the chosen option and question index on a miss', () => {
+    const problem = makeProblem(linearEquations, 1, 1);
+    const { progress, logged } = recordInterpretation(emptyProgress(), problem, false, new Date(), { input: 'o2', question: 0 });
+    expect(logged).toMatchObject({ input: 'o2', question: 0 });
+    expect(progress.mistakes.at(-1)).toMatchObject({ kind: 'interpretation', input: 'o2', question: 0 });
+  });
+});
+
+describe('working level hysteresis', () => {
+  it('promotes at TARGET_P but holds a reached level while P stays above HOLD_P', () => {
+    // Rating 0: P(level 2) = σ(1) ≈ 0.73, below TARGET_P, above HOLD_P.
+    expect(nextLevel(0)).toBe(1);
+    expect(heldLevel(0)).toBe(1); // never reached level 2: no hold
+    expect(heldLevel(0, 2)).toBe(2); // reached it: stay
+    expect(pCorrect(-0.7, 2)).toBeLessThan(HOLD_P);
+    expect(heldLevel(-0.7, 2)).toBe(1); // clearly too hard now: drop
+    expect(heldLevel(1.2, 1)).toBe(3); // a higher rating always promotes past the hold
+  });
+
+  it('keeps a settled skill on level 2 after a slip there, where the plain rule drops it', () => {
+    const skill = linearEquations;
+    const p = emptyProgress();
+    p.skills[skill.id] = { ...emptySkill(), rating: 0.15, attempts: 60, held: 2 };
+    const after = recordAttempt(p, { problem: makeProblem(skill, 2, 999), correct: false, help: 'none', hintsUsed: 0, missedSteps: [] }).progress;
+    const sp = after.skills[skill.id];
+    expect(nextLevel(sp.rating)).toBe(1); // the plain rule would drop back
+    expect(sp.held).toBe(2);
   });
 });

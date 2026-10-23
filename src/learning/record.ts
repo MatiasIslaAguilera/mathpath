@@ -6,7 +6,7 @@
 import type { Problem } from '../engine/types';
 import { newEventId, type AttemptEvent, type InterpretationEvent } from '../storage/events';
 import { dateKey, emptySkill, HISTORY_CAP, MISTAKE_CAP, type MistakeEntry, type Progress } from '../storage/progress';
-import { nextLevel, pCorrect, TARGET_P, updateRating, type Help } from './mastery';
+import { heldLevel, pCorrect, TARGET_P, updateRating, type Help } from './mastery';
 import { gradeFor, reviewCard } from './scheduler';
 import { countsTowardMastery, xpFor } from './scoring';
 import { addDays, CHECK_START_LEVEL, MASTERY_LEVEL, RETENTION_DELAY_DAYS, skillState, strongRecentRecord } from './states';
@@ -68,8 +68,9 @@ export function applyAttemptEvent(p: Progress, e: AttemptEvent): { xp: number; e
 
   const firstOfDay = skill.lastPracticed !== today;
   const stateBefore = skillState(skill);
-  const levelBefore = nextLevel(skill.rating);
+  const levelBefore = heldLevel(skill.rating, skill.held);
   skill.rating = updateRating(skill.rating, skill.attempts, e.level, e.correct, e.help);
+  skill.held = heldLevel(skill.rating, skill.held);
   skill.attempts += 1;
   if (solo) skill.correctUnassisted += 1;
   skill.lastPracticed = today;
@@ -110,7 +111,7 @@ export function applyAttemptEvent(p: Progress, e: AttemptEvent): { xp: number; e
     }
   }
   if (stateBefore === 'learning' && skillState(skill) === 'practiced') events.push({ type: 'practiced', skillId: id });
-  const levelAfter = nextLevel(skill.rating);
+  const levelAfter = skill.held;
   if (levelAfter > levelBefore) events.push({ type: 'level-up', skillId: id, level: levelAfter });
   p.skills[id] = skill;
 
@@ -164,11 +165,26 @@ export function applyInterpretationEvent(p: Progress, e: InterpretationEvent): v
   if (e.correct) skill.interpretation.correct += 1;
   p.skills[e.skillId] = skill;
   if (!e.correct) {
-    p.mistakes.push({ ts: e.ts, skillId: e.skillId, problemId: e.problemId, level: e.level, kind: 'interpretation', missedSteps: [] });
+    p.mistakes.push({
+      ts: e.ts,
+      skillId: e.skillId,
+      problemId: e.problemId,
+      level: e.level,
+      kind: 'interpretation',
+      ...(e.input !== undefined && { input: e.input }),
+      ...(e.question !== undefined && { question: e.question }),
+      missedSteps: [],
+    });
   }
 }
 
-export function recordInterpretation(prev: Progress, problem: Problem, correct: boolean, now = new Date()): { progress: Progress; logged: InterpretationEvent } {
+export function recordInterpretation(
+  prev: Progress,
+  problem: Problem,
+  correct: boolean,
+  now = new Date(),
+  pick?: { input: string; question: number },
+): { progress: Progress; logged: InterpretationEvent } {
   const progress: Progress = structuredClone(prev);
   const logged: InterpretationEvent = {
     id: newEventId(),
@@ -178,6 +194,7 @@ export function recordInterpretation(prev: Progress, problem: Problem, correct: 
     problemId: problem.id,
     level: problem.level,
     correct,
+    ...pick,
   };
   applyInterpretationEvent(progress, logged);
   return { progress, logged };

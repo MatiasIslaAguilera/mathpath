@@ -27,7 +27,7 @@ interface Props {
   firstTime: boolean;
   /** Called once when the main problem resolves; returns XP earned and state changes. */
   onAttempt(r: AttemptResult): { xp: number; events: SkillEvent[] };
-  onInterpretation(correct: boolean): void;
+  onInterpretation(correct: boolean, input: string, question: number): void;
   onNext(): void;
   onOpenLearn(): void;
 }
@@ -326,7 +326,7 @@ export function Exercise({ problem, rating, kind, hideSkill, firstTime, onAttemp
                 onEnter={() => {}}
                 onChange={(id) => {
                   setInterpChoice(id as string);
-                  onInterpretation(id === currentQ.correct);
+                  onInterpretation(id === currentQ.correct, id as string, interpIndex);
                 }}
               />
               {interpChoice !== null && (

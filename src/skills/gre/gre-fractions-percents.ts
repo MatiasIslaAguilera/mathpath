@@ -45,6 +45,7 @@ function level1(rng: Rng): Body {
     `A town's population ${verb} from ${old} thousand to ${nw} thousand.`,
   ][ctxIdx];
   const change = Math.abs(nw - old);
+  const ratio = Q.of(change).div(old);
   return {
     params: { old, p, up: up ? 1 : 0, nw },
     prompt: `${ctx} What was the percent ${up ? 'increase' : 'decrease'}?`,
@@ -59,9 +60,20 @@ function level1(rng: Rng): Body {
       },
       {
         key: 'divide-original',
-        instruction: 'Divide by the ORIGINAL value and convert to a percent.',
-        math: `\\frac{${change}}{${old}} \\times 100 = ${p}\\%`,
-        why: 'Percent change is always measured against the starting value, not the ending one.',
+        instruction: 'Divide the change by the ORIGINAL value, and simplify the fraction.',
+        math: `\\frac{${change}}{${old}} = ${ratio.toLatex()}`,
+        why: 'Percent change is always measured against the starting value, not the ending one. Simplify before converting: a small fraction like 4/5 is easy to read as a percent.',
+        ask: {
+          prompt: `What is $\\frac{${change}}{${old}}$ in lowest terms (or as a decimal)?`,
+          answer: numberAnswer(ratio),
+          verify: { type: 'evaluate', expr: `abs(${nw}-${old})/${old}` },
+        },
+      },
+      {
+        key: 'to-percent',
+        instruction: 'Convert the fraction to a percent: multiply by 100.',
+        math: `${ratio.toLatex()} \\times 100 = ${p}\\%`,
+        why: 'A percent is a fraction out of 100: 0.8 is 80%, not 8%.',
         ask: { prompt: `What percent ${up ? 'increase' : 'decrease'} is that?`, answer, verify },
       },
     ],
@@ -502,6 +514,7 @@ export const greFractionsPercents: SkillDefinition = {
   stepLabels: {
     'find-change': 'Find the amount of change',
     'divide-original': 'Divide by the original',
+    'to-percent': 'Convert the fraction to a percent',
     'first-multiplier': 'Write the first change as a multiplier',
     'multiply-factors': 'Multiply the multipliers',
     'net-change': 'Subtract 100% for the net change',
@@ -526,7 +539,10 @@ export const greFractionsPercents: SkillDefinition = {
       { latex: '\\frac{a}{b} > \\frac{c}{d} \\iff ad > bc', note: 'For positive $b, d$.' },
     ],
     example: { seed: 4, level: 2 },
-    tips: ['To reverse a percent change, divide by the multiplier.', '$x\\%$ of $y$ always equals $y\\%$ of $x$.'],
+    tips: [
+      'Simplify change ÷ original before converting: $\\frac{144}{180} = \\frac{4}{5} = 80\\%$. Divide top and bottom by any common factor you see (here 36, or 4 then 9).',
+      'Know the common fractions as percents: $\\frac15 = 20\\%$, $\\frac14 = 25\\%$, $\\frac13 \\approx 33.3\\%$, $\\frac38 = 37.5\\%$, $\\frac35 = 60\\%$.',
+      'To reverse a percent change, divide by the multiplier.', '$x\\%$ of $y$ always equals $y\\%$ of $x$.'],
   },
 
   generate(rng, level: Level) {

@@ -9,14 +9,17 @@ and design rationale: [docs/PLAN.md](docs/PLAN.md).
 | Command | What it does |
 |---|---|
 | `npm run dev` | Dev server |
-| `npm test` | Unit tests: generator harness (1,000 seeds × 5 levels per skill), checker property tests, learning logic. `SEEDS=100 npm test` for a quick run |
+| `npm test` | Unit tests: generator harness (1,000 seeds × 5 levels per skill), checker property tests, learning logic. `npm run test:quick` (100 seeds) while iterating; the full run before committing |
 | `npm run verify:sympy` | Independent cross-check: exports ~200 problems/level/skill and re-solves them with SymPy |
+| `npm run verify:sympy:skills -- id1,id2` | The same check for just those skills (seconds, not most of an hour) |
 | `npm run test:e2e` | Playwright on an Android phone profile (Pixel 7, 412×839): session, hints, guided mode, misconceptions, back gesture, export/import |
+| `npm run analyze -- <progress.json>` | Weak-spot report for an exported progress file: replays the event log, re-diagnoses every wrong answer with today's misconceptions, first-of-day vs later accuracy, levels served |
 | `npm run import:gre-bank` | Re-import the 200-question GRE challenge bank (`python tools/import_gre_bank.py`) |
 | `npm run typecheck` / `npm run build` | `tsc -b` / production build |
 
 **Never mark work as correct on judgment alone.** After any change to a generator, run
-`npm test` and `npm run verify:sympy`. After UI changes, run `npm run test:e2e`.
+`npm test` and `npm run verify:sympy:skills -- <changed skill ids>`; the full `npm run verify:sympy` only when
+shared engine code it depends on changes (checker, rational, answers, verify specs). After UI changes, run `npm run test:e2e`.
 
 ## Architecture
 
@@ -43,7 +46,7 @@ src/ui/          components/ (MathText, AnswerInput, StepCard, WorkingPad, Confi
                    App.tsx maps the Android back gesture to "back one layer" (one history entry)
 public/          PWA icons; vite.config.ts configures vite-plugin-pwa (precache, manifest)
 docs/skill-specs/  per-batch specs handed to skill-writing subagents
-tests/           generators.test.ts (shared harness), verify-check.ts (independent verifier),
+tests/           generators.harness.ts (shared harness, run as 4 parallel shards generators.<k>.test.ts), verify-check.ts (independent verifier),
                  checker.property.test.ts, learning.test.ts, skills/<skill>.test.ts
 verify/          export-samples.ts + sympy_check.py
 e2e/             Playwright specs
@@ -126,7 +129,7 @@ Checklist:
    - RichText uses `$inline$` and `$$display$$` math, `*emphasis*`, and `\$` for a dollar sign.
    - `value` strings must parse in mathjs **and** SymPy: explicit `*`, `^` for powers,
      `sqrt()`, `log()` (natural), fractions as `(7/3)`. Use `Q.toExpr()` and `Q.toString()`.
-7. Register the skill in `src/skills/index.ts`, then run `npm test` and `npm run verify:sympy`.
+7. Register the skill in `src/skills/index.ts`, then run `npm test` and `npm run verify:sympy:skills -- <skill-id>`.
 
 ## GRE Quant track
 
@@ -178,7 +181,7 @@ Checklist:
 
 | Logic | File | What it does |
 |---|---|---|
-| Rating | `learning/mastery.ts` | Elo-style per skill. P(correct) = σ(θ − b_level). Difficulty = hardest level with P ≥ 0.75. Hinted solves never raise θ. |
+| Rating | `learning/mastery.ts` | Elo-style per skill. P(correct) = σ(θ − b_level). Difficulty = hardest level with P ≥ 0.75, then *held* while P ≥ 0.6 (`heldLevel`, stored as `held`), so a learner at the level boundary doesn't bounce back down. Hinted solves never raise θ. |
 | Fading | `learning/fading.ts` | Backward fading: low mastery → more steps worked in guided mode. The learner always does ≥ 1 step. |
 | Scoring | `learning/scoring.ts` | Unassisted: 10·level XP. Hints: half. Guided/reveal: 0 XP but counts for the day. |
 | States | `learning/states.ts` | new → learning → practiced → check-pending → mastered, and rusty. "Fragile" is an overlay flag: first-of-day accuracy ≪ later accuracy. |
@@ -195,7 +198,9 @@ Checklist:
 
 When the user drops a `progress.json` (exported from Settings) into the repo and asks for an analysis:
 
-1. **Read the file. These fields matter:**
+1. **Run `npm run analyze -- <file>` first.** It does steps 1–2 mechanically (and lists the
+   undiagnosed wrong answers with their regenerated prompts). Then read the file for detail.
+   **These fields matter:**
    - `skills[id]`: `rating`, `attempts`, `correctUnassisted`, `interpretation`, and `history`
      (per attempt: `level`, `correct`, `help`, `hintsUsed`, `firstOfDay`).
    - `mistakes[]`: `{skillId, problemId, level, kind: wrong|hint|guided|reveal|interpretation, input, misconception, missedSteps}`.
@@ -221,7 +226,7 @@ When the user drops a `progress.json` (exported from Settings) into the repo and
      is the real gap.
    - **Interpretation errors:** add explanations or more targeted questions.
 4. **Verify and report:**
-   - Run `npm test` and `npm run verify:sympy` (plus `npm run test:e2e` if the UI changed).
+   - Run `npm test` and `npm run verify:sympy:skills -- <changed skill ids>` (plus `npm run test:e2e` if the UI changed).
    - Report what you found, with numbers, and what you changed.
    - Don't commit the user's progress.json. It is in `.gitignore`.
 

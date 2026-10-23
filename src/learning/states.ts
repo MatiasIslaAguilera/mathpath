@@ -12,7 +12,7 @@
 // attempt of the day, which means the skill is warmed up, not remembered.
 
 import type { SkillProgress } from '../storage/progress';
-import { nextLevel, pCorrect, TARGET_P } from './mastery';
+import { heldLevel, pCorrect, TARGET_P } from './mastery';
 
 export const RETENTION_DELAY_DAYS = 3;
 export const MASTERY_LEVEL = 4;
@@ -92,9 +92,9 @@ export function fragileReport(sp: SkillProgress): FragileReport {
   };
 }
 
-/** Working difficulty, one level gentler for a rusty skill. */
+/** Working difficulty (held once reached, mastery.ts `heldLevel`), one level gentler for a rusty skill. */
 export function workingLevel(sp: SkillProgress) {
-  const l = nextLevel(sp.rating);
+  const l = heldLevel(sp.rating, sp.held);
   return sp.rusty ? (Math.max(1, l - 1) as typeof l) : l;
 }
 

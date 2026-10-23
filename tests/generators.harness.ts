@@ -1,5 +1,7 @@
 // Shared harness: runs every registered skill × level × N seeds (default 1000; set SEEDS=…).
 // A new skill gets all of these checks automatically once it is in src/skills/index.ts.
+// Split into SHARDS files (generators.<k>.test.ts, every SHARDS-th skill each) so vitest runs
+// them on separate workers in parallel; one file would run every skill on a single core.
 
 import { existsSync } from 'node:fs';
 import katex from 'katex';
@@ -144,7 +146,10 @@ function checkProblem(skill: SkillDefinition, p: Problem, seed: number) {
   }
 }
 
-describe.each(SKILLS.map((s) => [s.id, s] as const))('%s', (_id, skill) => {
+export const SHARDS = 4;
+
+export function harness(shard: number) {
+describe.each(SKILLS.filter((_, i) => i % SHARDS === shard).map((s) => [s.id, s] as const))('%s', (_id, skill) => {
   it('has complete metadata and a renderable Learn card', () => {
     expect(skill.title).toBeTruthy();
     expect(LEVELS.every((l) => skill.levels[l])).toBe(true);
@@ -186,3 +191,4 @@ describe.each(SKILLS.map((s) => [s.id, s] as const))('%s', (_id, skill) => {
     expect([...Object.keys(skill.misconceptions)].filter((id) => !hit.has(id))).toEqual([]);
   });
 });
+}

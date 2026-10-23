@@ -89,3 +89,13 @@ describe('exponent-rules', () => {
     }
   });
 });
+
+describe('exponent-rules diagnoses from logged progress', () => {
+  it('reads (2x^3)^2 -> "8, 6" as the coefficient raised to the inside exponent', async () => {
+    const { problemFromId } = await import('../../src/engine/registry');
+    const { matchMisconception } = await import('../../src/engine/misconceptions');
+    const p = problemFromId('exponent-rules:2:1703201749');
+    expect(p.prompt).toContain('(2x^{3})^{2}');
+    expect(matchMisconception(p, ['8', '6'])).toBe('coefficient-raised-to-inner');
+  });
+});

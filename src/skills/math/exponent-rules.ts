@@ -93,6 +93,11 @@ export const exponentRules: SkillDefinition = {
       explanation:
         'The power applies to everything inside the brackets, number included: $(2x^3)^2 = 2^2\\,x^6 = 4x^6$, not $2x^6$.',
     },
+    'coefficient-raised-to-inner': {
+      name: 'Raised the coefficient to the inside exponent',
+      explanation:
+        'In $(2x^3)^2$ the exponent 3 belongs to $x$ only. The coefficient takes the *outside* power: $2^2 = 4$, not $2^3 = 8$. So $(2x^3)^2 = 4x^6$. Read it as two copies of $2x^3$: $2x^3\\cdot 2x^3$.',
+    },
     'negative-means-negative': {
       name: 'Read a negative exponent as a negative number',
       explanation:
@@ -313,6 +318,7 @@ function level2(rng: Rng): Body {
     ],
     misconceptions: distinctMisconceptions(answer, [
       { id: 'coefficient-not-raised', wrong: tupleAnswer(['Coefficient', 'Exponent'], [c, e]) },
+      { id: 'coefficient-raised-to-inner', wrong: tupleAnswer(['Coefficient', 'Exponent'], [c ** a, e]) },
       { id: 'add-for-power', wrong: tupleAnswer(['Coefficient', 'Exponent'], [k, a + b]) },
       { id: 'power-as-product', wrong: tupleAnswer(['Coefficient', 'Exponent'], [c, a + b]) },
     ]),

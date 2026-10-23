@@ -85,8 +85,8 @@ export function SessionScreen({ initial, progress, record, onFinish, onQuit, bac
         hideSkill={current.hideSkill}
         firstTime={firstTime}
         onAttempt={onAttempt}
-        onInterpretation={(ok) => {
-          const { progress: next, logged } = recordInterpretation(progress, problem, ok);
+        onInterpretation={(ok, input, question) => {
+          const { progress: next, logged } = recordInterpretation(progress, problem, ok, new Date(), { input, question });
           record([logged], next);
         }}
         onNext={onNext}

@@ -23,6 +23,20 @@ export function nextLevel(rating: number): Level {
   return best;
 }
 
+/** Once a level is reached, stay on it until P drops below this (hysteresis). */
+export const HOLD_P = 0.6;
+
+/**
+ * Working level with hysteresis: promote at P ≥ TARGET_P, but keep a level already reached while
+ * P ≥ HOLD_P. Without it, a learner who solves ~88% at level 1 (slips included) settles right at
+ * the level-1/2 boundary and keeps dropping back to level 1, though level 2 sits in the band.
+ * Simulated: half the level-1 items for such a learner, accuracy still ~80%, fewer level drops.
+ */
+export function heldLevel(rating: number, held?: Level): Level {
+  const l = nextLevel(rating);
+  return held && held > l && pCorrect(rating, held) >= HOLD_P ? held : l;
+}
+
 /**
  * Learning rate: big for the first attempts so the estimate settles fast, then smaller.
  * Tuned by simulation: 16 straight unassisted solves reach level 4; a steady learner's

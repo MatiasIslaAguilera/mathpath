@@ -100,3 +100,13 @@ describe('gre-fractions-percents', () => {
     }
   });
 });
+
+describe('gre-fractions-percents level 1 steps', () => {
+  it('splits the percent change into simplify-the-fraction, then convert', async () => {
+    const { problemFromId } = await import('../../src/engine/registry');
+    const p = problemFromId('gre-fractions-percents:1:475803838'); // 180 -> 36, an 80% decrease
+    expect(p.steps.map((s) => s.key)).toEqual(['find-change', 'divide-original', 'to-percent']);
+    expect(p.steps[1].ask!.answer).toMatchObject({ kind: 'number', value: '4/5' });
+    expect(p.answer).toMatchObject({ kind: 'number', value: '80' });
+  });
+});

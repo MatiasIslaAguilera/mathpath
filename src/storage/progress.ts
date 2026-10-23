@@ -21,6 +21,8 @@ export interface AttemptRecord {
 
 export interface SkillProgress {
   rating: number;
+  /** Working level reached, held while P ≥ HOLD_P (mastery.ts `heldLevel`); rebuilt on replay. */
+  held?: Level;
   attempts: number;
   correctUnassisted: number;
   lastPracticed?: string; // YYYY-MM-DD
@@ -51,8 +53,10 @@ export interface MistakeEntry {
   problemId: string;
   level: Level;
   kind: 'wrong' | 'hint' | 'guided' | 'reveal' | 'interpretation';
-  /** What was typed (wrong answers only). */
+  /** What was typed (wrong answers only), or the option chosen (interpretation). */
   input?: string;
+  /** Interpretation only: index into the problem's interpretation questions. */
+  question?: number;
   misconception?: string;
   /** Step keys missed in guided mode (wrong attempt or "Show me"), or revealed by hints. */
   missedSteps: string[];

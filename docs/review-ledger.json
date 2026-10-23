@@ -1,0 +1,28 @@
+{
+  "_about": "Progress-file reviews, newest last. `npm run analyze` reports only events after the last `through` (ms timestamp); add an entry with `npm run analyze -- <file> --mark-reviewed \"summary\"`.",
+  "reviews": [
+    {
+      "date": "2026-10-18",
+      "through": 1792369948000,
+      "commit": "8e85fe8",
+      "summary": "Linear equations: sign-x-term both directions; collect-step work shown"
+    },
+    {
+      "date": "2026-10-19",
+      "through": 1792452158637,
+      "commit": "aaf437c",
+      "summary": "Unlock at level 2; stretch items; 3 new linear-equation misconceptions (sign-answer, forgot-divide, divide-one-coefficient)"
+    },
+    {
+      "date": "2026-10-22",
+      "through": 1792701099000,
+      "commit": "a2a2e3b",
+      "summary": "Earlier retention checks; faster stretch above band; exponent-rules add-for-quotient"
+    },
+    {
+      "date": "2026-10-22",
+      "through": 1792720159583,
+      "summary": "coefficient-raised-to-inner; GRE percent step split + tips; interpretation picks recorded; level hold (hysteresis); analyze tool"
+    }
+  ]
+}
