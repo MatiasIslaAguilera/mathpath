@@ -375,12 +375,29 @@ app/
    Also built (Oct 22): Android back gesture (back = one layer back; sessions and placement ask
    first) and the **working pad**: lines of working typed with a math keyboard (MathLive),
    each line checked by substituting the solution, and the first wrong line pinpointed after
-   Check. It is on for equation skills (linear, systems, quadratics, exp/log equations, inverse
-   L1). Next: name the mistake from the jump between lines, "check my working" as a hint,
-   expression working (derivatives).
+   Check. On Oct 23 it was widened to the econ skills (see item 11). Next: §8 item 7.
 9. ✅ **Progress reviews** (4 so far, logged in `docs/review-ledger.json`): `npm run analyze`
    reports only what is new since the last review; `npm run measure` checks the model itself.
    The improvement backlog that came out of them is §8.
+
+10. ✅ **Home redesign (Oct 23)**: the garden (one plot per master's skill, growth = skill state,
+    a water drop = review due today, plants never shrink), Pareto the cat (mood = today's
+    progress, bubble = the next concrete thing, never a reproach), streak and days practiced as
+    equal figures, and two charts (problems per day; weekly solo accuracy from the full event
+    log, against the 75–85% band). Fraunces + Atkinson Hyperlegible Next, with digits from a
+    4 KB IBM Plex subset (`src/ui/fonts/`, renamed per its OFL) because Atkinson's slashed zero
+    read as ∅. Reviewed by four adversarial critics (visual, motion/mobile, learning science,
+    dataviz/a11y); their must-fixes are in, the rest are §8 item 8. Logic in
+    `learning/garden.ts` (`tests/garden.test.ts`), UI in `ui/components/{Garden,Cat,Charts}.tsx`,
+    checks in `e2e/home.spec.ts`. Review PNGs: `SCREENS=<dir> npx playwright test screens`.
+11. ✅ **Working pad widened (Oct 23)** to supply & demand 1–5, optimization 1–5, cost & profit
+    2–5, elasticity 5, transformations 1–4, limits 4, concavity 3, GRE exponents 2, GRE word
+    problems 1 and 3. `Problem.working.names` declares the other quantities a learner writes
+    (`AC`, `MC`, `Pb`, `pi` for profit, `e` for elasticity): checked, never filled into the answer.
+    The pad now reads derivative sides (`R'(q) = 21 - 2q = 0` checks the rest of the chain;
+    the keyboard's `^{\prime}` is converted), function notation at the unknown (`R(q) = …` is R at
+    the solution), and starred optima (`P^*`). Guard: `tests/working.test.ts` asserts the app's own
+    worked solution is never marked wrong, for every opted-in skill.
 
 **Also shipped:** a static **Past papers** deck with 200 GRE Quant questions imported from
 `lbcty56/GRE-Quiz-App-Python-` (`docs/CONTENT-SOURCES.md`). It is separate from the mastery
@@ -421,6 +438,14 @@ of runway.
 | 4 | **Contrasting cases for rule confusion** | Exponent rules: median 7 s right, 9 s wrong; 5 of 7 misses under 12 s. `add-for-quotient` persists after its fix (2 before review 3, 1 after). | A level-1 item type showing $x^a\cdot x^b$ and $rac{x^a}{x^b}$ side by side (tuple answer: both exponents), so the learner must tell the rules apart. Same idea for power-of-a-power vs product at level 2. Also log `durationMs` on attempts so fast misses can be named in feedback. | `npm run analyze` trend: `add-for-quotient` rate per attempt falls; `measure` §3: fast misses drop. | open |
 | 5 | **Time-box slow items** | GRE fractions & percents: a correct item takes a median 523 s; one GRE item can be a quarter of a 34-minute day. | After ~2 min on any item, offer the first hint (counts as hinted). An "I don't know" button that opens guided mode and logs `help: 'reveal'`, so guesses stop polluting the data (the two "50" answers). | `measure` §3: median time on the skill falls with accuracy stable. | open |
 | 6 | **Outside benchmark of readiness** | The app only grades itself. | A monthly 20-item mock from the Past papers GRE deck (held out from practice), and a readiness set of textbook problems for 7370 topics (Hoy et al.), scored and stored as their own history. | The benchmark itself: score trend month to month. | open |
+| 7 | **Working pad: identity working** | 6 skills had the pad before Oct 23, 15 now. Still off: exponent rules, log rules, all derivative skills, inverse L2–3, because their working is identities in free letters ($(xy)^3/(x^7y^5) = x^{-4}y^{-2}$, $f'(x) = 6x + 2$), which substitution can't judge. Also off, with reasons in the skill files: concavity L5 (its method lists the rejected critical point), inverse L4 and GRE word problems L2 (only some variants are equations). | In `engine/working.ts`: a line whose free letters aren't unknowns is checked as an identity by sampling, like `checker.ts` does for expression answers (both sides equal at random points). Derivative lines: `f'(x) = …` compared with the problem's derivative via the step's `diff` verify. Then opt in exponent rules, log rules, derivatives. Run the worked-solution guard on each. | `tests/working.test.ts` worked-solution guard green for the new skills; share of practice items offering the pad (from the event log) rises; no rise in `wrong` lines on correct final answers. | open |
+| 8 | **Home: the rest of the design review** | The adversarial review (Oct 23) left these: Home has ~80 buttons, mostly the 38-row skill list that repeats the skill tree (PLAN: "Home shows one button"); the cat stands beside the garden, not in it (no watering pose); no radius scale (3–999 px, 9 values); XP is still a volume reward on Home. | Move the skill list to the skill tree screen (a dozen e2e specs click `skill-*` rows on Home: move them to the tree first); put the cat on a tile with a pose per mood; 3 radius tokens; XP to the Stats page. | Playwright: buttons on Home ≤ 6; `npm run test:e2e` green; review PNGs approved. | open |
+
+### Done on Oct 23 (for context)
+
+Home redesign and its adversarial review (§7 item 10); the working pad widened to 10 more skills
+(§7 item 11). The GRE past-papers e2e (`e2e/challenge.spec.ts`) fails about 1 run in 8 on clean
+`main` too (a wait for "Show answer"): a pre-existing flake, not yet looked into.
 
 ### Done in review 4 (for context)
 

@@ -442,6 +442,7 @@ export const greExponentsRoots: SkillDefinition = {
   description: 'Simplifying roots, same-base equations, powers of fractions and negatives, factoring common powers, and units digits.',
   prerequisites: ['gre-integers'],
   maxDenominator: 4,
+  workingPad: [2],
   levels: {
     1: { description: 'Roots and powers', ranges: { form: [0, 2], k: [0, 9], b: [0, 11], c: [0, 4], e: [0, 5], x: [0, 48], y: [0, 48] } },
     2: { description: 'Same-base equations', ranges: { form: [0, 2], r: [2, 5], s: [0, 3], t: [0, 9], c: [0, 4], m: [0, 3] } },

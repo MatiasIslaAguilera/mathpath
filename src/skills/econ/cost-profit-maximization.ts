@@ -103,6 +103,8 @@ function level2(rng: Rng): Body {
       { id: 'mc-as-ac', wrong: tupleAnswer(labels, [mc, avc], disp) },
     ]),
     verify: { type: 'solve', equations: [`A = ${tcExpr(F, v, w, `${q0}`)}/${q0}`, `B = (${tcExpr(F, v, w, `${q0}`)} - ${F})/${q0}`], unknowns: ['A', 'B'] },
+    // Working pad: the cost names at q0, as the learner writes them.
+    working: { solutions: [{ AC: String(ac), AVC: String(avc) }], names: { q: String(q0), TC: String(ac * q0), VC: String(avc * q0), FC: String(F), MC: String(mc) } },
   };
 }
 
@@ -151,6 +153,8 @@ function level3(rng: Rng): Body {
       { prompt: 'Why does the firm set price = marginal cost (not price = average cost)?', options: ch.options, correct: ch.correct, explanation: 'Profit grows as long as the next unit brings in more (the price) than it costs (MC). Beyond q*, MC exceeds the price and each extra unit loses money. Average cost decides whether profit is positive at all, not where it peaks.' },
     ],
     verify,
+    // Working pad: P = MC at q*; profit is pi (π), revenue R = TR.
+    working: { solutions: [{ q: String(k), pi: String(profit) }], names: { MC: String(p), P: String(p), R: String(p * k), TR: String(p * k), TC: String(F + v * k + w * k * k) } },
   };
 }
 
@@ -188,6 +192,8 @@ function level4(rng: Rng): Body {
     ],
     misconceptions: distinctMisconceptions(answer, [{ id: 'forgot-sqrt-scale', wrong: tupleAnswer(labels, [q(F, w), q(F).div(q(F, w)).add(v).add(q(F, w).mul(w))], disp) }]),
     verify,
+    // Working pad: at the efficient scale MC = AC.
+    working: { solutions: [{ q: String(s), AC: String(minAc) }], names: { MC: String(minAc), TC: String(F + v * s + w * s * s), AVC: String(v + w * s) } },
   };
 }
 
@@ -247,6 +253,8 @@ function level5(rng: Rng): Body {
       misconceptions: distinctMisconceptions(answer, mis),
       interpretation: [interp],
       verify,
+      // Working pad: at minimum AVC, MC = AVC, and that value is the shutdown price.
+      working: { solutions: [{ q: String(m), P: String(minAvc) }], names: { AVC: String(minAvc), MC: String(minAvc), S: String(minAvc) } },
     };
   }
 }
@@ -259,6 +267,7 @@ export const costProfitMaximization: SkillDefinition = {
   description: 'Marginal and average cost, price = MC, efficient scale, and the shutdown rule.',
   prerequisites: ['derivatives-power-rule', 'optimization'],
   maxDenominator: 4,
+  workingPad: [2, 3, 4, 5],
   levels: {
     1: { description: 'Marginal cost', ranges: { F: [20, 500], v: [2, 20], w: [1, 5], q0: [3, 30] } },
     2: { description: 'Average and average variable cost', ranges: { F: [10, 800], v: [2, 20], w: [1, 4], q0: [2, 20] } },

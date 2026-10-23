@@ -313,6 +313,7 @@ export const greEquationsWordProblems: SkillDefinition = {
   description: 'Translating words to equations: sentences, consecutive integers, ages, coins, systems, and "which could be n?" questions.',
   prerequisites: ['gre-fractions-percents'],
   maxDenominator: 3,
+  workingPad: [1, 3],
   levels: {
     1: { description: 'Translate a sentence into an equation', ranges: { form: [0, 2], m: [2, 6], k: [1, 15], r: [0, 200], x: [1, 15] } },
     2: {

@@ -17,6 +17,9 @@ const SYMBOL: Record<string, string> = {
   neq: '!=',
   pm: '±',
   pi: 'pi',
+  // Elasticity is written ε; a problem that uses it names `epsilon` (working.names).
+  epsilon: 'epsilon',
+  varepsilon: 'epsilon',
   ln: 'log', // natural log, as in the checker
   log: 'log10',
   exp: 'exp',
@@ -27,7 +30,11 @@ export class LatexError extends Error {}
 /** Convert one line of keyboard LaTeX to a mathjs expression/equation string. */
 export function latexToMath(latex: string): string {
   let i = 0;
-  const s = latex.replace(/−/g, '-');
+  // The keyboard writes a derivative's prime as a superscript: R^{\prime}(q) → R'(q).
+  const s = latex
+    .replace(/−/g, '-')
+    .replace(/\^\{\\prime\\prime\}/g, "''")
+    .replace(/\^\{\\prime\}|\^\\prime/g, "'");
 
   const group = (): string => {
     while (s[i] === ' ') i++;

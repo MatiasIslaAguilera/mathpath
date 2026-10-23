@@ -198,6 +198,8 @@ function pointProblem(rng: Rng, level: 1 | 2 | 3 | 4): Generated {
     misconceptions: distinctMisconceptions(answer, candidates),
     interpretation,
     verify,
+    // Working pad: the learner writes the point as x and y (the verify uses X, Y).
+    working: { solutions: [{ x: X.toExpr(), y: Y.toExpr() }] },
   };
 }
 
@@ -286,6 +288,7 @@ export const functionTransformations: SkillDefinition = {
   description: 'Shift, stretch and reflect graphs: follow a point to its new position and build g(x) from a list of moves.',
   prerequisites: ['functions-basics', 'quadratics-factoring'],
   maxDenominator: 4,
+  workingPad: [1, 2, 3, 4],
   levels: {
     1: { description: 'One shift: f(x) + k or f(x - h)', ranges: { base: [0, 3], form: [0, 1], p: [-6, 16], h: [-6, 6], k: [-6, 6] } },
     2: { description: 'Both shifts: f(x - h) + k', ranges: { base: [0, 3], p: [-6, 16], h: [-6, 6], k: [-6, 6] } },

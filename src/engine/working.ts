@@ -10,10 +10,12 @@ import { evalExact, math, normalizeInput } from './checker';
 import type { AnswerInput, AnswerSpec, Problem } from './types';
 
 export interface WorkingSpec {
-  /** Variables the learner writes in their working. */
+  /** The unknowns the learner solves for, in answer order (they fill the answer box). */
   vars: string[];
-  /** Every correct solution (a quadratic has two). */
+  /** Every correct solution (a quadratic has two), including the values of `names`. */
   solutions: Record<string, number>[];
+  /** Other named quantities a line may use (`AC`, `MC`, `pi` for profit); checked, never filled in. */
+  names?: string[];
 }
 
 /** ok: true for every solution · some: true for some (one root of a quadratic) · wrong: false for all. */
@@ -29,9 +31,18 @@ const CONSTANTS = new Set(['e', 'pi']);
 
 /** What the working pad checks against, or null when this problem has no equation working. */
 export function workingSpec(problem: Problem): WorkingSpec | null {
-  if (problem.working) {
-    const solutions = problem.working.solutions.map((s) => Object.fromEntries(Object.entries(s).map(([k, v]) => [k, evalExact(v)])));
-    return { vars: Object.keys(problem.working.solutions[0] ?? {}), solutions };
+  const base = unknownsSpec(problem);
+  const names = problem.working?.names;
+  if (!base || !names) return base;
+  const values = Object.fromEntries(Object.entries(names).map(([k, v]) => [k, evalExact(v)]));
+  return { vars: base.vars, names: Object.keys(names), solutions: base.solutions.map((s) => ({ ...values, ...s })) };
+}
+
+function unknownsSpec(problem: Problem): WorkingSpec | null {
+  const given = problem.working?.solutions;
+  if (given?.length) {
+    const solutions = given.map((s) => Object.fromEntries(Object.entries(s).map(([k, v]) => [k, evalExact(v)])));
+    return { vars: Object.keys(given[0]), solutions };
   }
   const v = problem.verify;
   if (v.type !== 'solve') return null;
@@ -70,21 +81,70 @@ interface ParsedPart {
   sides: MathNode[];
 }
 
+const isMathFunction = (name: string) => name === 'ln' || typeof (math as unknown as Record<string, unknown>)[name] === 'function';
+
+/**
+ * One side of a line, rewritten into something to evaluate, or null when it is notation the pad
+ * can't judge (that side is then left out of the chain, and the rest is still checked):
+ * - "P^*", "q^*": the optimum is the same quantity (P, q).
+ * - "R'(q)": a derivative; substitution can't check it. (In mathjs ' would be a transpose.)
+ * - "R(q)", "MC(q)": a named quantity at the unknown, so its value at the solution (R, MC).
+ * - "x(x + 1)", "P(30 - 5P)": a one-letter unknown times a bracket, a product.
+ * - "R(3)", "f(x)", "AC(q + 1)": a function at some other point: can't judge.
+ */
+function readSide(text: string, vars: string[], names: string[]): string | null {
+  let t = text.replace(/\^\s*\(\s*\*\s*\)|\^\s*\*/g, '');
+  if (t.includes("'")) return null;
+  const known = new Set([...vars, ...names]);
+  const call = /([A-Za-z_]\w*)\s*\(/g;
+  for (let m = call.exec(t); m; m = call.exec(t)) {
+    const name = m[1];
+    if (!known.has(name) && isMathFunction(name)) continue; // sqrt(...), log(...): real functions
+    const open = m.index + m[0].length - 1;
+    let depth = 0;
+    let close = -1;
+    for (let j = open; j < t.length; j++) {
+      if (t[j] === '(') depth++;
+      else if (t[j] === ')' && --depth === 0) {
+        close = j;
+        break;
+      }
+    }
+    if (close < 0) return t; // unbalanced: let the parser report it as unreadable
+    const arg = t.slice(open + 1, close).trim();
+    if (known.has(name) && name !== arg && vars.includes(arg)) {
+      t = t.slice(0, m.index) + name + t.slice(close + 1);
+      call.lastIndex = m.index + name.length;
+    } else if (vars.includes(name) && name.length === 1 && (/^[a-z]$/.test(name) || !/^[\d.\s]+$/.test(arg))) {
+      t = t.slice(0, open) + '*' + t.slice(open);
+      call.lastIndex = open + 2;
+    } else return null;
+  }
+  return t;
+}
+
 /** Parse a line into alternatives ("x = 2 or x = 3"), each a chain of equal sides. */
-function parseLine(line: string, vars: string[]): ParsedPart[] | 'skipped' | 'unreadable' {
+function parseLine(line: string, vars: string[], names: string[] = []): ParsedPart[] | 'skipped' | 'unreadable' {
   if (/<|>|!=/.test(line)) return 'skipped'; // inequalities aren't judged by substitution
   if (!line.includes('=')) return 'skipped';
   const parts = splitTop(line, /^(\s+or\s+|,|;)/).flatMap(expandPm);
-  const allowed = new Set([...vars, ...CONSTANTS]);
+  // A name listed for the problem (pi for profit) is that quantity here, not the constant.
+  const allowed = new Set([...vars, ...names, ...CONSTANTS]);
+  // readSide has already turned products into "x*(": nothing else gets that reading.
+  const products: string[] = [];
   const parsed: ParsedPart[] = [];
   for (const part of parts) {
-    const sideTexts = part.split('=').map((t) => t.trim());
-    if (sideTexts.length < 2 || sideTexts.some((t) => !t)) return 'unreadable';
+    const allSides = part.split('=').map((t) => t.trim());
+    if (allSides.length < 2 || allSides.some((t) => !t)) return 'unreadable';
+    // Notation sides ("R'(q)", "f(3)") are left out; the rest of the chain is still judged
+    // ("R'(q) = 16 - 8q = 0" checks "16 - 8q = 0").
+    const sideTexts = allSides.map((t) => readSide(t, vars, names)).filter((t): t is string => t !== null);
+    if (sideTexts.length < 2) return 'skipped';
     const sides: MathNode[] = [];
     for (const t of sideTexts) {
       let node: MathNode;
       try {
-        node = math.parse(normalizeInput(t, vars));
+        node = math.parse(normalizeInput(t, products));
       } catch {
         return 'unreadable';
       }
@@ -120,7 +180,7 @@ function sidesEqual(a: number, b: number, rounded: boolean): boolean {
 /** Check one line of working (mathjs syntax) against the correct solutions. */
 export function checkLine(line: string, spec: WorkingSpec): LineStatus {
   if (!line.trim()) return 'empty';
-  const parsed = parseLine(line, spec.vars);
+  const parsed = parseLine(line, spec.vars, spec.names);
   if (typeof parsed === 'string') return parsed;
   const rounded = /\d\.\d/.test(line);
   let held = 0;

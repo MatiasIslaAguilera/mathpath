@@ -2,7 +2,7 @@
 // four learner states (new, early, mid, goal met), light and dark, on the Pixel 7 profile.
 // Skipped in the normal e2e run.
 
-import { test, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { hasSkill } from '../src/engine/registry';
 import { TREE } from '../src/skills/tree';
 
@@ -143,5 +143,55 @@ for (const scheme of ['light', 'dark'] as const) {
     await page.getByTestId('nav-tree').click();
     await page.waitForTimeout(300);
     await page.screenshot({ path: `${OUT}/tree-${scheme}.png` });
+  });
+}
+
+// The working pad on economics problems, with working typed as a learner would.
+async function practiceSkill(page: Page, skillId: string) {
+  await page.goto('/?e2e');
+  await page.evaluate(() => {
+    // Every prerequisite solid, the target untouched (level 1).
+    const skill = { rating: 2.4, attempts: 30, correctUnassisted: 28, history: [], interpretation: { correct: 0, total: 0 } };
+    const progress = { version: 1, createdAt: new Date().toISOString(), xp: 0, days: {}, skills: {} as Record<string, unknown>, mistakes: [], misconceptionCounts: {}, stepMisses: {}, settings: { dailyGoal: 10 }, onboarding: 'skipped' };
+    for (const id of ['linear-equations', 'linear-inequalities', 'systems-of-equations', 'quadratics-factoring', 'quadratic-formula', 'functions-basics', 'function-composition', 'inverse-functions', 'function-transformations', 'exponent-rules', 'logarithm-rules', 'exp-log-equations', 'growth-decay', 'limits', 'derivatives-power-rule', 'derivatives-product-quotient', 'derivatives-chain-rule', 'derivatives-exp-log', 'concavity-second-derivative'])
+      progress.skills[id] = skill;
+    localStorage.clear();
+    localStorage.setItem('mathpath.progress', JSON.stringify(progress));
+  });
+  await page.goto('/?e2e');
+  await page.getByTestId(`skill-${skillId}`).getByRole('button', { name: 'Practice' }).click();
+}
+
+async function typeWorking(page: Page, lines: string[]) {
+  for (let i = 0; i < lines.length; i++) {
+    if (i > 0 || !(await page.getByTestId('working-line-0').isVisible())) await page.getByTestId('working-add').click();
+    const field = page.getByTestId(`working-line-${i}`);
+    await field.click();
+    await expect.poll(() => field.evaluate((el) => (el as HTMLElement & { hasFocus(): boolean }).hasFocus())).toBe(true);
+    await page.keyboard.press('Control+a');
+    await page.keyboard.press('Backspace');
+    await page.keyboard.type(lines[i]);
+    console.log(`line ${i}:`, await field.evaluate((el) => (el as HTMLElement & { value: string }).value));
+    await page.getByTestId('prompt').click();
+  }
+}
+
+for (const [skillId, working] of [
+  ['supply-demand-equilibrium', (p: Record<string, number>) => [`${p.a}-${p.b === 1 ? '' : p.b}P=${p.c}+${p.d === 1 ? '' : p.d}P`, `${p.b + p.d}P=${p.a - p.c}`, `P=${p.P}`, `Q=${p.a}-${p.b === 1 ? '' : p.b + '*'}${p.P}`]],
+  ['optimization', (p: Record<string, number>) => [`R'(q)=${p.a}-${2 * p.b}q=0`, `q=${p.a / (2 * p.b)}`, `R=${p.a}*${p.a / (2 * p.b)}-${p.b}*${p.a / (2 * p.b)}^2`]],
+] as const) {
+  test(`working pad on ${skillId}`, async ({ page }) => {
+    await practiceSkill(page, skillId);
+    for (let i = 0; i < 6; i++) {
+      const p = await page.evaluate(() => (window as unknown as { __mathpath?: { problem: { skillId: string; params: Record<string, number> } } }).__mathpath?.problem);
+      if (p?.skillId === skillId && (await page.getByTestId('working-pad').isVisible())) break;
+      await page.getByRole('button', { name: /I don't know/ }).click();
+      await page.getByTestId('next').click();
+    }
+    const p = await page.evaluate(() => (window as unknown as { __mathpath: { problem: { params: Record<string, number> } } }).__mathpath.problem);
+    await typeWorking(page, working(p.params));
+    await page.getByRole('button', { name: 'Check', exact: true }).first().click();
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: `${OUT}/pad-${skillId}.png`, fullPage: true });
   });
 }

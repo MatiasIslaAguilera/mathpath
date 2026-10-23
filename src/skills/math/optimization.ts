@@ -30,6 +30,8 @@ interface Spec {
   params: Record<string, number>;
   prompt: string;
   v: string; // variable
+  /** What the learner calls the optimal value in their working: R, AC, pi (profit), A (area). */
+  valueName: string;
   fLatex: string; // objective, LaTeX
   fExpr: string; // objective, mathjs/SymPy
   dLatex: string;
@@ -90,6 +92,7 @@ function build(s: Spec): Body {
     misconceptions: distinctMisconceptions(answer, s.wrong),
     interpretation: s.interpretation.length ? s.interpretation : undefined,
     verify: { type: 'solve', equations: [`${s.dExpr} = 0`, `V = ${s.fExpr}`], unknowns: [s.v, 'V'], positive: true },
+    working: { solutions: [{ [s.v]: s.xStar.toExpr(), [s.valueName]: s.value.toExpr() }] },
   };
 }
 
@@ -108,6 +111,7 @@ function level1(rng: Rng): Body {
     params: { a, b },
     prompt: `A firm's revenue (in dollars) from selling $q$ units is $$R(q) = ${a}q - ${b === 1 ? '' : b}q^2$$ Find the quantity that maximizes revenue and the maximum revenue.`,
     v: 'q',
+    valueName: 'R',
     fLatex: `R(q) = ${a}q - ${b === 1 ? '' : b}q^2`,
     fExpr: `${a}*q - ${b}*q^2`,
     dLatex: `R'(q) = ${a} - ${2 * b}q`,
@@ -138,6 +142,7 @@ function level2(rng: Rng): Body {
     params: { w, qs, F },
     prompt: `A firm's average cost (dollars per unit) is $$AC(q) = \\frac{${F}}{q} + ${w === 1 ? '' : w}q$$ for $q > 0$. Find the output that minimizes average cost and that minimum.`,
     v: 'q',
+    valueName: 'AC',
     fLatex: `AC(q) = \\frac{${F}}{q} + ${w === 1 ? '' : w}q`,
     fExpr: `${F}/q + ${w}*q`,
     dLatex: `AC'(q) = -\\frac{${F}}{q^2} + ${w}`,
@@ -178,6 +183,7 @@ function level3(rng: Rng): Body {
     params: { p, v, w, F },
     prompt: `A competitive firm sells at a price of \\$${p} per unit. Its total cost is $$C(q) = ${F} + ${v}q + ${w === 1 ? '' : w}q^2$$ Find the profit-maximizing output and the maximum profit.`,
     v: 'q',
+    valueName: 'pi',
     fLatex: `\\pi(q) = ${p}q - (${F} + ${v}q + ${w === 1 ? '' : w}q^2)`,
     fExpr: `${p}*q - (${F} + ${v}*q + ${w}*q^2)`,
     dLatex: `\\pi'(q) = ${p} - ${v} - ${2 * w}q`,
@@ -249,6 +255,8 @@ function level4(rng: Rng): Body {
       },
     ],
     verify: { type: 'solve', equations: [`${A} - ${2 * B}*q - ${c} = 0`, `P = ${A} - ${B}*q`], unknowns: ['q', 'P'] },
+    // Working pad: at q*, marginal revenue equals marginal cost, and profit is (P − c)q.
+    working: { names: { MR: String(c), MC: String(c), pi: price.sub(c).mul(qStar).toExpr() } },
   };
 }
 
@@ -264,6 +272,7 @@ function level5(rng: Rng): Body {
     params: { L },
     prompt: `You have ${L} meters of fence to enclose a rectangular area against a long wall (the wall needs no fence). If $x$ is the length of each side perpendicular to the wall, what $x$ gives the largest area, and what is that area (in m²)?`,
     v: 'x',
+    valueName: 'A',
     fLatex: `A(x) = x(${L} - 2x) = ${L}x - 2x^2`,
     fExpr: `x*(${L} - 2*x)`,
     dLatex: `A'(x) = ${L} - 4x`,
@@ -288,6 +297,7 @@ export const optimization: SkillDefinition = {
   description: 'Maximize revenue and profit, minimize average cost: derivative = 0, then check.',
   prerequisites: ['concavity-second-derivative'],
   maxDenominator: 4,
+  workingPad: [1, 2, 3, 4, 5],
   levels: {
     1: { description: 'Maximize revenue', ranges: { a: [4, 246], b: [1, 6] } },
     2: { description: 'Minimize average cost', ranges: { w: [1, 6], qs: [2, 15], F: [4, 1350] } },

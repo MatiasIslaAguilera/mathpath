@@ -226,6 +226,7 @@ export const limits: SkillDefinition = {
   description: 'Limits by substitution, factoring, leading terms and conjugates; continuity.',
   prerequisites: ['functions-basics'],
   maxDenominator: 12,
+  workingPad: [4],
   levels: {
     1: { description: 'Direct substitution', ranges: { a: [-5, 5], b: [-9, 9], c: [-9, 9], k: [1, 9], x0: [-4, 4] } },
     2: { description: '0/0: factor and cancel', ranges: { r: [-6, 6], s: [-6, 6] } },

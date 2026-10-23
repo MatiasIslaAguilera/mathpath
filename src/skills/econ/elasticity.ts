@@ -284,6 +284,8 @@ function level5(rng: Rng): Body {
       },
     ],
     verify,
+    // Working pad: the elasticity is written e (here not Euler's number), E or ε.
+    working: { solutions: [{ P: String(P), e: '-1' }], names: { E: '-1', epsilon: '-1', Q: String(a - b * P), R: String(P * (a - b * P)), TR: String(P * (a - b * P)) } },
   };
 }
 
@@ -295,6 +297,7 @@ export const elasticity: SkillDefinition = {
   description: 'Point and arc elasticity, elastic vs inelastic, and what it means for revenue.',
   prerequisites: ['supply-demand-equilibrium', 'derivatives-power-rule'],
   maxDenominator: 20,
+  workingPad: [5],
   levels: {
     1: { description: 'Point elasticity of linear demand', ranges: { a: [3, 200], b: [1, 6], P0: [1, 30] } },
     2: { description: 'Elastic, inelastic, or unit elastic?', ranges: { a: [2, 240], b: [1, 6], P0: [1, 30] } },

@@ -205,6 +205,7 @@ export const supplyDemandEquilibrium: SkillDefinition = {
   description: 'Find the price and quantity where quantity demanded equals quantity supplied.',
   prerequisites: ['linear-equations'],
   maxDenominator: 1,
+  workingPad: [1, 2, 3, 4, 5],
   levels: {
     1: { description: 'Small whole numbers', ranges: { a: [7, 200], b: [1, 5], c: [0, 100], d: [1, 5], P: [2, 20], Q: [5, 100] } },
     2: { description: 'Larger numbers, negative supply intercept', ranges: { a: [15, 900], b: [1, 10], c: [-590, 300], d: [1, 10], P: [5, 60], Q: [10, 300] } },
@@ -414,6 +415,17 @@ export const supplyDemandEquilibrium: SkillDefinition = {
       misconceptions: distinctMisconceptions(answer, candidates),
       interpretation,
       verify,
+      // Working pad: quantity demanded and supplied are Q at equilibrium; with a tax, buyers pay P
+      // and sellers keep P − t.
+      working: {
+        names: {
+          Qd: Qty.toExpr(),
+          Q_d: Qty.toExpr(),
+          Qs: Qty.toExpr(),
+          Q_s: Qty.toExpr(),
+          ...(isTax ? { Pb: P.toExpr(), P_b: P.toExpr(), Ps: P.sub(t).toExpr(), P_s: P.sub(t).toExpr() } : {}),
+        },
+      },
     };
   },
 };

@@ -149,7 +149,16 @@ export interface Problem {
    * the learner writes in their working (e.g. both roots `{ x: '-9' }`, `{ x: '4' }`). Only needed
    * when it can't be read off a `solve` verify (whose unknowns may be `r1`, `r2`).
    */
-  working?: { solutions: Record<string, string>[] };
+  working?: {
+    solutions?: Record<string, string>[];
+    /**
+     * Other quantities the learner may name in their working, with their exact values at the
+     * solution (the same in every solution): `AC`, `MC`, `Pb`, `pi` for profit. Lines using them
+     * are checked; they never fill the answer box. Keep the names short and the ones the prompt
+     * or the Learn card uses.
+     */
+    names?: Record<string, string>;
+  };
 }
 
 // ---------------------------------------------------------------------------

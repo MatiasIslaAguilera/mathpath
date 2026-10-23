@@ -22,6 +22,8 @@ describe('latexToMath (math keyboard LaTeX → mathjs)', () => {
     [String.raw`\sqrt[3]{8}`, 'nthRoot(8, 3)'],
     [String.raw`x_1=3`, 'x_1=3'],
     [String.raw`\frac12`, '((1)/(2))'],
+    [String.raw`R^{\prime}\left(q\right)=21-2q=0`, "R'(q)=21-2q=0"],
+    [String.raw`R^{\prime\prime}\left(q\right)=-2`, "R''(q)=-2"],
   ];
   for (const [latex, expected] of cases) it(latex, () => expect(latexToMath(latex)).toBe(expected));
   it('rejects commands it does not know', () => expect(() => latexToMath(String.raw`\int x`)).toThrow());
@@ -149,6 +151,75 @@ describe('skills that offer the working pad have something to check at those lev
       for (const level of skill.workingPad!) {
         for (let seed = 1; seed <= SEEDS; seed++) {
           expect(workingSpec(makeProblem(skill, level, seed)), `${skill.id}:${level}:${seed}`).not.toBeNull();
+        }
+      }
+    });
+  }
+});
+
+describe('economics notation in working', () => {
+  // Revenue R(q) = 20q - 5q^2: q* = 2, R* = 20.
+  const revenue: WorkingSpec = { vars: ['q', 'R'], solutions: [{ q: 2, R: 20, MR: 0 }], names: ['MR'] };
+  it("a derivative side is left out and the rest of the chain is judged (in mathjs ' is a transpose)", () => {
+    expect(checkLine("R'(q) = 20 - 10q = 0", revenue)).toBe('ok');
+    expect(checkLine("R'(q) = 20 - 10q", revenue)).toBe('skipped');
+    expect(checkLine("R'(q) = 20 - 5q = 0", revenue)).toBe('wrong');
+  });
+  it('a named quantity at the unknown is its value at the solution, so a wrong function is caught', () => {
+    expect(checkLine('R(q) = 20q - 5q^2', revenue)).toBe('ok');
+    expect(checkLine('R(q) = 20q - 4q^2', revenue)).toBe('wrong');
+    expect(checkLine('R(2) = 20', revenue)).toBe('skipped'); // a function at a point: notation, not judged
+  });
+  it('starred optima are the quantity itself', () => {
+    expect(checkLine('q^* = 2', revenue)).toBe('ok');
+    expect(checkLine('R^(*) = 20*2 - 5*2^2 = 20', revenue)).toBe('ok');
+    expect(checkLine('R^* = 24', revenue)).toBe('wrong');
+  });
+  it('a one-letter unknown before a bracket is still a product', () => {
+    const demand: WorkingSpec = { vars: ['P', 'e'], solutions: [{ P: 3, e: -1, R: 45 }], names: ['R'] };
+    expect(checkLine('R = P(30 - 5P)', demand)).toBe('ok');
+    expect(checkLine('R(P) = P(30 - 5P)', demand)).toBe('ok');
+    expect(checkLine('x(x + 1) = 2', { vars: ['x'], solutions: [{ x: 1 }] })).toBe('ok');
+  });
+  it('a problem can name pi (profit) and e (elasticity): they are those quantities, not the constants', () => {
+    const profit: WorkingSpec = { vars: ['q', 'pi'], solutions: [{ q: 20, pi: 250 }] };
+    expect(checkLine('pi = 56*20 - (150 + 16*20 + 20^2)', profit)).toBe('ok');
+    expect(checkLine('pi(q) = 56q - (150 + 16q + q^2)', profit)).toBe('ok');
+    expect(checkLine(latexToMath(String.raw`\pi^{*}=250`), profit)).toBe('ok');
+    const elastic: WorkingSpec = { vars: ['P', 'e'], solutions: [{ P: 3, e: -1, epsilon: -1 }], names: ['epsilon'] };
+    expect(checkLine('e = -5*3/15', elastic)).toBe('ok');
+    expect(checkLine(latexToMath(String.raw`\varepsilon=-1`), elastic)).toBe('ok');
+    // Without the name, pi is still the constant.
+    expect(checkLine('x = pi', { vars: ['x'], solutions: [{ x: Math.PI }] })).toBe('ok');
+  });
+  it('named quantities are checked but never fill the answer box', () => {
+    const cost: WorkingSpec = { vars: ['AC', 'AVC'], solutions: [{ AC: 33, AVC: 26, TC: 66 }], names: ['TC'] };
+    expect(checkLine('AC = TC/2 = 66/2 = 33', cost)).toBe('ok');
+    const ans = { kind: 'tuple' as const, labels: ['Average cost', 'Average variable cost'], values: ['33', '26'], display: '' };
+    expect(answerFromWorking(['TC = 66', 'AC = 33', 'AVC = 26'], cost, ans)).toEqual(['33', '26']);
+  });
+});
+
+describe('the pad never marks a line of the app\'s own worked solution wrong', () => {
+  // Statements in a step's display math are separated by arrows and spacing.
+  const SPLIT = /\Rightarrow|\implies|\qquad|\quad|\;/;
+  for (const skill of SKILLS.filter((s) => s.workingPad?.length)) {
+    it(skill.id, () => {
+      for (const level of skill.workingPad!) {
+        for (let seed = 1; seed <= Math.min(SEEDS, 30); seed++) {
+          const p = makeProblem(skill, level, seed);
+          const spec = workingSpec(p)!;
+          for (const step of p.steps) {
+            for (const piece of step.math.split(SPLIT).map((x) => x.trim()).filter((x) => x.includes('='))) {
+              let line: string;
+              try {
+                line = latexToMath(piece.replace(/\left|\right/g, ''));
+              } catch {
+                continue; // LaTeX the keyboard can't produce
+              }
+              expect(checkLine(line, spec), `${p.id} [${step.key}] ${piece}`).not.toBe('wrong');
+            }
+          }
         }
       }
     });

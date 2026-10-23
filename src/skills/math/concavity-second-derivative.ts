@@ -234,6 +234,9 @@ export const concavitySecondDerivative: SkillDefinition = {
   description: 'Second derivatives, inflection points, and telling maxima from minima.',
   prerequisites: ['derivatives-power-rule'],
   maxDenominator: 6,
+  // Level 5 is left out: its worked solution lists the rejected negative critical point too, which
+  // the pad (true only at the answer) would mark wrong.
+  workingPad: [3],
   levels: {
     1: { description: "Find f″(x)", ranges: { deg: [3, 4], c0: [-9, 9], c1: [-9, 9], c2: [-9, 9], c3: [-9, 9], c4: [-5, 5] } },
     2: { description: "Evaluate f″ and read the concavity", ranges: { a: [-4, 4], b: [-9, 9], c: [-9, 9], d: [-9, 9], x0: [-3, 3] } },
