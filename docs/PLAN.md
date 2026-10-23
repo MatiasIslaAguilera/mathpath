@@ -367,7 +367,7 @@ app/
 8. **Next skills (I and beyond), in this order** (matches the first-semester courses):
    1. ✅ partial derivatives → total differential → multivariable optimization (batch I)
    2. ✅ Cobb-Douglas → utility maximization → Lagrangian (batch J)
-   3. present value, growth rates (batch K, next: see §8 "Next session")
+   3. ✅ present value, growth rates (batch K)
    4. ✅ matrices → Cramer's rule → comparative statics (batches I and J)
    5. statistics → regression interpretation
    6. integrals → surplus/DWL
@@ -410,6 +410,17 @@ app/
     Built by Sonnet subagents from the specs (two waves for I, four in parallel for J), every
     example reviewed by hand. Review found: lost backslashes (I), Cramer L1–2 drawing
     zero-coefficient systems, and a Lagrangian choice that marked the valid `f + λ(g − c)` as wrong.
+13. ✅ **Batch K (Oct 23): Time & growth, 4 skills, 38 of 55 non-GRE tree skills built.**
+    `batch-k.md`: geometric series (math; multiplier, repeating decimals, convergence), present
+    value (discounting, NPV, annuities, perpetuities, loan and sinking-fund payments), growth
+    rates & logs (log approximation from printed logs, rule of 70, ratio/product growth, index
+    numbers), two-period consumption & Solow (endowment PV/FV, optimal c₁/c₂, saving, steady
+    state, golden rule). Kept clear of `growth-decay` (compounding forward, doubling time, solving
+    for r). Every answer exact; infinite sums verify as a `limit` of the n-term sum to `oo`.
+    Four Sonnet subagents in parallel; SymPy 13,230/13,230. Review found: the spec's golden-rule
+    question was wrong (moving s to the golden rule never lowers c*; the subagent caught it), and
+    a lost `\alpha` that the harness can't see because `\a` isn't a JS escape (found by a
+    scan for any undoubled backslash + letter; run it on every new batch).
 
 **Also shipped:** a static **Past papers** deck with 200 GRE Quant questions imported from
 `lbcty56/GRE-Quiz-App-Python-` (`docs/CONTENT-SOURCES.md`). It is separate from the mastery
@@ -418,25 +429,23 @@ batch of generators.
 
 ## 8. Improvement backlog (from reviews 4–5, 2026-10-22/23)
 
-### Next session: start here (written Oct 23, after batch J shipped)
+### Next session: start here (written Oct 23, after batch K shipped)
 
-1. **Review the learner's data first** (steps below). Watch two things in particular:
+1. **Review the learner's data first** (steps below). No new export arrived between batches J
+   and K, so these are still open:
    - The inequality-story fix from review 5: `npm run measure` §6, linear-inequalities L1 story
      vs plain was 0.22 vs 0.96 (n 9 vs 23). It worked if the gap shrinks and the
      `read-backwards` misconception count falls.
-   - First attempts on the batch I/J skills. They unlock behind derivatives and systems, so
-     there may be none yet. When there are, look for undiagnosed wrong answers; these generators
-     have never met a real learner.
-2. **Then build batch K, the "Time & growth" chain:** `geometric-series` (math, prereq of
-   present value) → `present-value` → `growth-rates-logs` → `intertemporal-solow`. Write
-   `docs/skill-specs/batch-k.md` the way `batch-j.md` is written: book shapes first (Rosser §7
-   growth, Hoy ch. 3 present value, Workouts ch. 10 intertemporal choice), PLAN §2.3 rows for
-   present value and growth rates, worked examples checked by hand, then subagents.
-3. **After K, in order:** batch L, statistics (probability basics → expected value & variance →
+   - First attempts on the batch I/J/K skills. When there are some, look for undiagnosed wrong
+     answers; these generators have never met a real learner.
+2. **Then build batch L, statistics:** probability basics → expected value & variance →
    normal & z-scores → sampling & inference → regression interpretation, plus expected value &
-   risk); batch M, integrals → surplus/DWL, plus monopoly vs competition and Cournot; then the
-   leftovers (vertex form, implicit differentiation, differentials, Kuhn–Tucker). 20 core skills
-   remain unbuilt (`tree.ts` against `hasSkill`).
+   risk. Write `docs/skill-specs/batch-l.md` the way `batch-k.md` is written (book shapes, PLAN
+   §2.3 rows, examples checked by hand, then subagents). Check overlap with the GRE statistics
+   skills (`gre-descriptive-stats`, `gre-normal-distribution`, `gre-counting-probability`).
+3. **After L:** batch M, integrals → surplus/DWL, plus monopoly vs competition and Cournot; then
+   the leftovers (vertex form, implicit differentiation, differentials, Kuhn–Tucker). 17 non-GRE
+   tree skills remain unbuilt (`tree.ts` against `hasSkill`).
 4. **Backlog item 1** (calibrate levels) is now less urgent: once settled, the rating model
    already beats the constant (0.1193 vs 0.1244, review 5). Re-check before starting it.
 
@@ -479,7 +488,7 @@ built at the time (34 now, after batches I and J), 4 started, 3.1 weeks of runwa
 |---|---|---|---|---|---|
 | 0 | **Story variants: translation, not just execution** | 16% of math and 24% of GRE prompts tell a situation; the most-practiced skills were 0%. Weakest skill is a narrative one (GRE percents, 40% solo, median 523 s per correct item vs 25 s for a bare linear equation). | Batch S (`docs/skill-specs/batch-s-stories.md`): `SkillDefinition.story`, ids `…:s`, about half of practice items at story levels; a first *setup* step asks for the expression (checked by equivalence). First batch: linear equations L1–3, inequalities L1–3, systems L2, functions L1–2, exponent rules L1 (growth factors, aimed at `add-for-quotient`). Shapes mined from the learner's books in `.books/` (git-ignored; never copied). Next: Hoy et al. and Workouts shapes for the econ skills. | `npm run measure` §6: the story-vs-plain gap per skill and level shrinks over weeks; plain accuracy holds. | in progress |
 | 1 | **Calibrate level difficulty per skill** | The rating model predicts worse than a constant (Brier 0.1285 vs 0.1189; 0.0994 vs 0.0977 once settled). Actual beats predicted at every level (L3: 0.74 → 0.83); actual L2 and L3 accuracy are equal (0.83), but the model spaces levels one logit apart. Accuracy climbs 0.76 → 0.92 while the average level only moves 1.1 → 1.7. Tested and **rejected**: a slip parameter (best Brier 0.1262). | Estimate each skill's level offsets from the attempt log (shrunk toward the current spacing −2…2, so sparse skills keep the default), used by `pCorrect` / `nextLevel` in `learning/mastery.ts`. Offsets must be rebuilt by replay (no hidden state), like `held`. | `npm run measure`: model Brier below the constant baseline on attempts made *after* the change, and solo accuracy inside 75–85%. | open |
-| 2 | **Content runway: build by syllabus weight** | 2.8 weeks of runway at 6.8 new core skills/week (keep ≥ 3). The topics Econ 7370 leans on hardest (matrices, partial derivatives, multivariable optimization, Lagrange, comparative statics) are all unbuilt. | Next batch, in this order: partial derivatives → total differential → multivariable optimization (FOC/SOC); matrices → determinants → inverse/Cramer; Lagrangian. Specs in `docs/skill-specs/` (the first seven: `batch-i.md`), generators per CLAUDE.md, subagents for the files. Supersedes the order in §7 item 8 where they differ. | `npm run measure` §5: runway ≥ 3 weeks; harness + SymPy green for each new skill. | I and J built (Oct 23, 11 skills; §7 item 12). Next: batch K, Time & growth ("Next session" above) |
+| 2 | **Content runway: build by syllabus weight** | 2.8 weeks of runway at 6.8 new core skills/week (keep ≥ 3). The topics Econ 7370 leans on hardest (matrices, partial derivatives, multivariable optimization, Lagrange, comparative statics) are all unbuilt. | Next batch, in this order: partial derivatives → total differential → multivariable optimization (FOC/SOC); matrices → determinants → inverse/Cramer; Lagrangian. Specs in `docs/skill-specs/` (the first seven: `batch-i.md`), generators per CLAUDE.md, subagents for the files. Supersedes the order in §7 item 8 where they differ. | `npm run measure` §5: runway ≥ 3 weeks; harness + SymPy green for each new skill. | I, J and K built (Oct 23, 15 skills; §7 items 12–13). Next: batch L, statistics ("Next session" above) |
 | 3 | **Personal FSRS parameters** | First-of-day recall predicted 0.97, actual 0.77 (n 13). All 3 misses came at predicted recall ≈ 1.0: cold-start slips, not forgetting. | Once ≥ 50 first-of-day reviews exist, fit FSRS weights from the log (fsrs optimizer, offline in `tools/`), store them in `learning/scheduler.ts`. Until then, no change: n is too small. | `npm run measure` §2: predicted and actual recall within 5 points. | waiting for data |
 | 4 | **Contrasting cases for rule confusion** | Exponent rules: median 7 s right, 9 s wrong; 5 of 7 misses under 12 s. `add-for-quotient` persists after its fix (2 before review 3, 1 after). | A level-1 item type showing $x^a\cdot x^b$ and $rac{x^a}{x^b}$ side by side (tuple answer: both exponents), so the learner must tell the rules apart. Same idea for power-of-a-power vs product at level 2. Also log `durationMs` on attempts so fast misses can be named in feedback. | `npm run analyze` trend: `add-for-quotient` rate per attempt falls; `measure` §3: fast misses drop. | open |
 | 5 | **Time-box slow items** | GRE fractions & percents: a correct item takes a median 523 s; one GRE item can be a quarter of a 34-minute day. | After ~2 min on any item, offer the first hint (counts as hinted). An "I don't know" button that opens guided mode and logs `help: 'reveal'`, so guesses stop polluting the data (the two "50" answers). | `measure` §3: median time on the skill falls with accuracy stable. | open |
