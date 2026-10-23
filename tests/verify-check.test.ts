@@ -48,3 +48,32 @@ describe('QC verifier: tiny values', () => {
     expect(qcRelation(spec)).toBe('b');
   });
 });
+
+describe('independent verifier: partial derivatives and determinants', () => {
+  const expr = (value: string) => ({ kind: 'expression' as const, value, variables: ['x', 'y'], display: value });
+  const f = '3*x^2*y^3 - 4*x*y + 5*y^2 + 7';
+  const partial = (wrt: string[], at?: Record<string, string>) => ({ type: 'partial' as const, expr: f, wrt, variables: ['x', 'y'], at });
+
+  it('checks a partial derivative as an expression', () => {
+    expect(verifyAnswer(partial(['x']), expr('6*x*y^3 - 4*y'))).toBeNull();
+    expect(verifyAnswer(partial(['y']), expr('9*x^2*y^2 - 4*x + 10*y'))).toBeNull();
+    expect(verifyAnswer(partial(['x']), expr('6*x*y^3 - 4*y + 5*y^2'))).not.toBeNull(); // kept a y-only term
+    expect(verifyAnswer(partial(['x']), expr('18*x*y^2 - 4'))).not.toBeNull(); // differentiated y too
+  });
+
+  it('checks second-order and mixed partials at a point', () => {
+    // f_xy = 18 x y^2 - 4; at (1, 2): 72 - 4 = 68. f_yy = 18 x^2 y + 10; at (1, 2): 46.
+    expect(verifyAnswer(partial(['x', 'y'], { x: '1', y: '2' }), numberAnswer(68))).toBeNull();
+    expect(verifyAnswer(partial(['y', 'y'], { x: '1', y: '2' }), numberAnswer(46))).toBeNull();
+    expect(verifyAnswer(partial(['x', 'x'], { x: '1', y: '2' }), numberAnswer(68))).not.toBeNull(); // f_xx = 6y^3 = 48
+    expect(verifyAnswer(partial(['x'], { x: '-1', y: '(1/2)' }), numberAnswer(q(-11, 4)))).toBeNull(); // -6/8 - 2
+  });
+
+  it('checks determinants', () => {
+    const det = (matrix: string[][]) => ({ type: 'det' as const, matrix });
+    expect(verifyAnswer(det([['2', '3'], ['1', '4']]), numberAnswer(5))).toBeNull();
+    expect(verifyAnswer(det([['2', '3'], ['1', '4']]), numberAnswer(11))).not.toBeNull(); // ad + bc
+    expect(verifyAnswer(det([['1', '2', '3'], ['0', '1', '4'], ['5', '6', '0']]), numberAnswer(1))).toBeNull();
+    expect(verifyAnswer(det([['(1/2)', '1'], ['3', '4']]), numberAnswer(-1))).toBeNull();
+  });
+});

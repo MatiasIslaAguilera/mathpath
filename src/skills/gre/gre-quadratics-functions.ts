@@ -322,7 +322,7 @@ function level4(rng: Rng): Body {
         {
           key: 'decide',
           instruction: `Compare ${min} with ${t}.`,
-          math: `${min} 	ext{ vs } ${t}`,
+          math: `${min} \\text{ vs } ${t}`,
           why: 'With no free variable left, the relationship is determined (never D).',
           ask: { prompt: 'So which is it?', answer },
         },

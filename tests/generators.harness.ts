@@ -19,7 +19,13 @@ const KATEX_SEEDS = 40;
 const inputOf = (a: AnswerSpec): AnswerInput =>
   a.kind === 'tuple' ? a.values : a.kind === 'choice' ? a.correct : a.kind === 'multi' ? a.correct : a.value;
 
+// A LaTeX command whose backslash JS dropped ('\cdot' in a plain string is 'cdot'; '\times' is a
+// tab + 'imes'). KaTeX renders these as letters without complaint, so look for them directly.
+const LOST_BACKSLASH = /(?<![\\a-zA-Z])(cdot|frac|tfrac|dfrac|qquad|Rightarrow|det|sqrt|neq|infty|ldots|cdots)(?![a-zA-Z])|[\t\b\f\v]/;
+
 function renderLatex(latex: string, where: string) {
+  const lost = latex.match(LOST_BACKSLASH);
+  if (lost) throw new Error(`LaTeX in ${where} has a command without its backslash ("${lost[0]}"): ${latex}`);
   try {
     katex.renderToString(latex, { throwOnError: true, displayMode: true });
   } catch (e) {

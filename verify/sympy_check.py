@@ -77,6 +77,19 @@ def check(item):
         expected = sp.diff(parse(spec["expr"], names), var)
         got = parse(values[0], names)
         return None if same(expected, got) else f"SymPy {expected}, app {got}"
+    if kind == "partial":
+        at = spec.get("at") or {}
+        names = names_in(spec["expr"], values[0], *spec["wrt"], *spec["variables"])
+        f = parse(spec["expr"], names)
+        expected = sp.diff(f, *[sp.Symbol(w, positive=True) for w in spec["wrt"]])
+        if at:
+            expected = expected.subs({sp.Symbol(k, positive=True): parse(v, set()) for k, v in at.items()})
+        got = parse(values[0], names)
+        return None if same(expected, got) else f"SymPy {expected}, app {got}"
+    if kind == "det":
+        m = sp.Matrix([[parse(e, set()) for e in row] for row in spec["matrix"]])
+        expected, got = m.det(), parse(values[0], set())
+        return None if same(expected, got) else f"SymPy det {expected}, app {got}"
     if kind == "equivalent":
         names = names_in(spec["expr"], values[0])
         a, b = parse(spec["expr"], names), parse(values[0], names)

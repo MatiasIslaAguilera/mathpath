@@ -62,6 +62,30 @@ export function verifyAnswer(spec: VerifySpec, answer: AnswerSpec): string | nul
       }
       return null;
     }
+    case 'partial': {
+      // Symbolic differentiation by mathjs (not the generator's arithmetic), then compared by
+      // evaluation: at the point, or at sample points over every variable.
+      let d = math.parse(spec.expr);
+      for (const w of spec.wrt) d = math.derivative(d, w);
+      if (spec.at) {
+        const scope = Object.fromEntries(Object.entries(spec.at).map(([k, v]) => [k, ev(v)]));
+        const want = d.evaluate(scope);
+        const got = ev(vals[0]);
+        return close(want, got, 1e-9) ? null : `∂/∂${spec.wrt.join('∂')} of ${spec.expr} at ${JSON.stringify(spec.at)}: ${want}, claimed ${got}`;
+      }
+      for (const x of POINTS) {
+        const scope = Object.fromEntries(spec.variables.map((v, i) => [v, x + 0.37 * i]));
+        const want = d.evaluate(scope);
+        const got = ev(vals[0], scope);
+        if (!close(want, got, 1e-9)) return `∂/∂${spec.wrt.join('∂')} of ${spec.expr} at ${JSON.stringify(scope)}: ${want}, claimed ${got} (${vals[0]})`;
+      }
+      return null;
+    }
+    case 'det': {
+      const want = math.det(spec.matrix.map((row) => row.map((e) => ev(e))));
+      const got = ev(vals[0]);
+      return close(want, got, 1e-9) ? null : `det ${JSON.stringify(spec.matrix)} = ${want}, claimed ${got}`;
+    }
     case 'equivalent': {
       for (const x of POINTS) {
         const scope = Object.fromEntries(spec.variables.map((v, i) => [v, x + 0.37 * i]));

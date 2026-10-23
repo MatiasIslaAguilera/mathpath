@@ -36,9 +36,16 @@ import { functionsBasics } from './math/functions-basics';
 import { functionComposition } from './math/function-composition';
 import { linearInequalities } from './math/linear-inequalities';
 import { systemsOfEquations } from './math/systems-of-equations';
+import { matrixOperations } from './math/matrix-operations';
+import { matrixInverse } from './math/matrix-inverse';
+import { determinants } from './math/determinants';
+import { cramersRule } from './math/cramers-rule';
 import { quadraticsFactoring } from './math/quadratics-factoring';
 import { quadraticFormula } from './math/quadratic-formula';
+import { partialDerivatives } from './math/partial-derivatives';
+import { multivariableOptimization } from './math/multivariable-optimization';
+import { totalDifferential } from './math/total-differential';
 import { inverseFunctions } from './math/inverse-functions';
 import { functionTransformations } from './math/function-transformations';
 
-export const SKILLS: SkillDefinition[] = [inverseFunctions, functionTransformations, linearEquations, linearInequalities, systemsOfEquations, derivativesPowerRule, supplyDemandEquilibrium, exponentRules, logarithmRules, expLogEquations, growthDecay, functionsBasics, functionComposition, greIntegers, greQuadraticsFunctions, greCoordinateGeometry, greLinesAnglesTriangles, greCirclesPolygons, greSolids, concavitySecondDerivative, optimization, costProfitMaximization, elasticity, limits, derivativesProductQuotient, derivativesChainRule, derivativesExpLog, greDescriptiveStats, greFractionsPercents, greRatiosRates, greExponentsRoots, greEquationsWordProblems, greInequalitiesAbsoluteValue, greCountingProbability, greDataInterpretation, greNormalDistribution, quadraticsFactoring, quadraticFormula];
+export const SKILLS: SkillDefinition[] = [cramersRule, determinants, inverseFunctions, functionTransformations, linearEquations, linearInequalities, systemsOfEquations, derivativesPowerRule, supplyDemandEquilibrium, exponentRules, logarithmRules, expLogEquations, growthDecay, functionsBasics, functionComposition, greIntegers, greQuadraticsFunctions, greCoordinateGeometry, greLinesAnglesTriangles, greCirclesPolygons, greSolids, concavitySecondDerivative, optimization, costProfitMaximization, elasticity, limits, derivativesProductQuotient, derivativesChainRule, derivativesExpLog, greDescriptiveStats, greFractionsPercents, greRatiosRates, greExponentsRoots, greEquationsWordProblems, greInequalitiesAbsoluteValue, greCountingProbability, greDataInterpretation, greNormalDistribution, quadraticsFactoring, quadraticFormula, matrixOperations, partialDerivatives, totalDifferential, matrixInverse, multivariableOptimization];

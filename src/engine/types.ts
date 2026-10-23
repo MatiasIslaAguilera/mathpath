@@ -51,6 +51,13 @@ export type VerifySpec =
   | { type: 'solve'; equations: string[]; unknowns: string[]; positive?: boolean }
   /** The answer (an expression) is d/d`variable` of `expr`. */
   | { type: 'diff'; expr: string; variable: string }
+  /**
+   * Partial derivative of `expr` (free in `variables`) by each of `wrt` in order (['x', 'y'] is
+   * f_xy). Without `at` the answer is that expression; with `at` it is the number at that point.
+   */
+  | { type: 'partial'; expr: string; wrt: string[]; variables: string[]; at?: Record<string, string> }
+  /** The answer (a number) is the determinant of `matrix` (square; entries are number strings). */
+  | { type: 'det'; matrix: string[][] }
   /** The answer (an expression) is algebraically equivalent to `expr`. */
   | { type: 'equivalent'; expr: string; variables: string[] }
   /** The answer (a number) equals the value of `expr`. */
