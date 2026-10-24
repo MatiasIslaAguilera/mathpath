@@ -126,6 +126,49 @@ describe('session builder', () => {
       ts: i, problemId: `${LIN}:${level}:${i}`, level, correct: true, help: 'none' as const, hintsUsed: 0, firstOfDay: false,
     }));
 
+  // Review 6: the warm-up and finisher always took the single most likely skill at level 1.
+  const solved = (id: string, level: 1 | 2, from: number, count: number, correct = true) =>
+    Array.from({ length: count }, (_, i) => ({
+      ts: from + i, problemId: `${id}:${level}:${i}`, level, correct, help: 'none' as const, hintsUsed: 0, firstOfDay: false,
+    }));
+  const playThrough = (p: ReturnType<typeof emptyProgress>, s: ReturnType<typeof startSession>) => {
+    const served: { kind: string; skillId: string; level: number }[] = [];
+    for (let t = 10_000; !sessionDone(s); t += 1000) {
+      const r = nextProblem(s, p)!;
+      served.push({ kind: r.next.kind, skillId: r.next.problem.skillId, level: r.next.problem.level });
+      ({ progress: p } = recordAttempt(p, { problem: r.next.problem, correct: true, help: 'none', hintsUsed: 0, missedSteps: [] }, new Date(t)));
+      s = afterProblem(r.session, r.next.problem, true, false, 10);
+    }
+    return served;
+  };
+
+  it('rotates the warm-up and finisher over likely wins instead of repeating the easiest skill', () => {
+    const p = emptyProgress();
+    // exponent-rules is the most likely win but was just practiced; the other two were seen earlier.
+    p.skills[LIN] = { ...emptySkill(), rating: 1.6, held: 3, attempts: 20, history: solved(LIN, 2, 1000, 5) };
+    p.skills['functions-basics'] = { ...emptySkill(), rating: 1.2, held: 2, attempts: 20, history: solved('functions-basics', 2, 2000, 5) };
+    p.skills['exponent-rules'] = { ...emptySkill(), rating: 2.5, held: 2, attempts: 20, history: solved('exponent-rules', 1, 9000, 5) };
+    const served = playThrough(p, startSession(p, 6, { random: () => 0.5 }));
+    const warm = served[0];
+    const finish = served.at(-1)!;
+    expect(warm.kind).toBe('warmup');
+    expect(finish.kind).toBe('finisher');
+    expect(warm.skillId).not.toBe('exponent-rules');
+    expect(finish.skillId).not.toBe(warm.skillId);
+  });
+
+  it('serves the warm-up at the working level once a skill is above the 75–85% band', () => {
+    const p = emptyProgress();
+    p.skills[LIN] = { ...emptySkill(), rating: 1.6, held: 3, attempts: 30, history: [...solved(LIN, 2, 1000, 19), ...solved(LIN, 2, 1100, 1, false)] };
+    const s = startSession(p, 5, { only: LIN, random: () => 0.5 });
+    const warm = nextProblem(s, p)!;
+    expect(warm.next.kind).toBe('warmup');
+    expect(warm.next.problem.level).toBe(3);
+    // Inside the band (80% recent), it stays one level below: a likely win.
+    p.skills[LIN].history = [...solved(LIN, 2, 1000, 16), ...solved(LIN, 2, 1100, 4, false)];
+    expect(nextProblem(startSession(p, 5, { only: LIN }), p)!.next.problem.level).toBe(2);
+  });
+
   it('opens dependent skills once a prerequisite is solid at level 2, and moves on to one', () => {
     const p = emptyProgress();
     // Solid at level 2 (P ≈ 0.79) but not practiced (P(level 3) ≈ 0.57).

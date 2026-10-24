@@ -202,16 +202,26 @@ const gentleLevel = (s: Session, level: Level) => (s.gentle ? (Math.max(1, level
 
 export const sessionDone = (s: Session) => s.index >= s.slots.length && !s.pendingFollowUp;
 
-/** The skill/level with the highest predicted success, one level below its working level. */
-function easiest(p: Progress, ids: string[]): { id: string; level: Level } {
-  let best = { id: ids[0], level: 1 as Level, prob: -1 };
-  for (const id of ids) {
+/** A warm-up or finisher should be a likely win. */
+const EASY_MIN_P = 0.8;
+
+/**
+ * Warm-up and finisher: a likely win, rotated. Among skills you'd likely solve, the one seen
+ * least recently, one level below its working level (at the working level once you're above the
+ * 75–85% band, where one below is a giveaway). With no likely win, the most likely one. Always
+ * taking the most likely one served the same fastest skill at level 1 in every session (review 6:
+ * 45 level-1 exponent-rules items in 6 days, 100% correct, and the skill never climbed).
+ */
+function easiest(p: Progress, ids: string[], gentle: boolean): { id: string; level: Level } {
+  const options = ids.map((id) => {
     const s = skillOf(p, id);
-    const level = Math.max(1, nextLevel(s.rating) - 1) as Level;
-    const prob = s.attempts ? pCorrect(s.rating, level) : 0;
-    if (prob > best.prob) best = { id, level, prob };
-  }
-  return best;
+    const working = workingLevel(s);
+    const level = (!gentle && isAboveTargetBand(s) ? working : Math.max(1, working - 1)) as Level;
+    return { id, level, prob: s.attempts ? pCorrect(s.rating, level) : 0, seen: s.history.at(-1)?.ts ?? 0 };
+  });
+  const likely = options.filter((o) => o.prob >= EASY_MIN_P);
+  if (likely.length) return likely.reduce((a, b) => (b.seen < a.seen ? b : a));
+  return options.reduce((a, b) => (b.prob > a.prob ? b : a));
 }
 
 export interface NextUp {
@@ -249,7 +259,7 @@ export function nextProblem(s: Session, p: Progress, now = new Date()): { sessio
   switch (slot.kind) {
     case 'warmup':
     case 'finisher': {
-      const { id, level } = easiest(p, practiced.length ? practiced : [s.only ?? s.currentSkill ?? pool[0]]);
+      const { id, level } = easiest(p, practiced.length ? practiced : [s.only ?? s.currentSkill ?? pool[0]], s.gentle);
       return { session: advanced, next: { problem: make(id, level, true), kind: slot.kind, hideSkill: false } };
     }
     case 'retention': {

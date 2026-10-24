@@ -196,6 +196,7 @@ const misKeys = [...new Set(served.filter((s) => s.now).map((s) => `${s.e.skillI
 if (misKeys.length) {
   console.log(`\n${'misconception (per attempts on the skill)'.padEnd(52)}${segs.map((s) => `[${s}]`.padEnd(10)).join('')}`);
   const persisting: string[] = [];
+  const predeploy: string[] = [];
   for (const key of misKeys) {
     const [skill, mis] = key.split('/');
     const counts = segs.map((g) => {
@@ -203,11 +204,18 @@ if (misKeys.length) {
       return { n: xs.filter((s) => s.now === mis).length, d: xs.length };
     });
     console.log(`${key.padEnd(52)}${counts.map((c) => (c.d ? `${c.n}/${c.d}` : '').padEnd(10)).join('')}`);
-    const newN = fresh.filter((s) => s.e.skillId === skill && s.now === mis).length;
+    // A review's fix reaches the phone only once it's deployed. A miss logged in-app under another
+    // label than today's came from a build without the fix, so it says nothing about the fix
+    // (review 6: 3 of 5 "persisting" read-backwards misses were logged as flip-positive).
+    const since = fresh.filter((s) => s.e.skillId === skill && s.now === mis);
+    const newN = since.filter((s) => s.e.misconception === mis).length;
+    const olderBuild = since.length - newN;
     const oldN = old.filter((s) => s.e.skillId === skill && s.now === mis).length;
-    if (newN && oldN) persisting.push(`${key}: ${oldN} before, ${newN} since`);
+    if (newN && oldN) persisting.push(`${key}: ${oldN} before, ${newN} since${olderBuild ? ` (+${olderBuild} on a build without the fix)` : ''}`);
+    else if (olderBuild && oldN) predeploy.push(`${key}: all ${olderBuild} since were on a build without the fix`);
   }
   if (lastReview && persisting.length) console.log(`\nPersisting after review (already diagnosed; the explanation or practice isn't landing):\n${persisting.map((p) => `- ${p}`).join('\n')}`);
+  if (lastReview && predeploy.length) console.log(`\nNot yet tested (misses logged under an older label, before the fix was deployed):\n${predeploy.map((p) => `- ${p}`).join('\n')}`);
 }
 
 // ---------- 3. new wrong answers ----------

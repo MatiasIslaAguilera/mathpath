@@ -496,6 +496,18 @@ built at the time (34 now, after batches I and J), 4 started, 3.1 weeks of runwa
 | 7 | **Working pad: identity working** | 6 skills had the pad before Oct 23, 15 now. Still off: exponent rules, log rules, all derivative skills, inverse L2–3, because their working is identities in free letters ($(xy)^3/(x^7y^5) = x^{-4}y^{-2}$, $f'(x) = 6x + 2$), which substitution can't judge. Also off, with reasons in the skill files: concavity L5 (its method lists the rejected critical point), inverse L4 and GRE word problems L2 (only some variants are equations). | In `engine/working.ts`: a line whose free letters aren't unknowns is checked as an identity by sampling, like `checker.ts` does for expression answers (both sides equal at random points). Derivative lines: `f'(x) = …` compared with the problem's derivative via the step's `diff` (or, for the batch I skills, `partial`) verify. Then opt in exponent rules, log rules, derivatives. Run the worked-solution guard on each. | `tests/working.test.ts` worked-solution guard green for the new skills; share of practice items offering the pad (from the event log) rises; no rise in `wrong` lines on correct final answers. | open |
 | 8 | **Home: the rest of the design review** | The adversarial review (Oct 23) left these: Home has ~80 buttons, mostly the 38-row skill list that repeats the skill tree (PLAN: "Home shows one button"); the cat stands beside the garden, not in it (no watering pose); no radius scale (3–999 px, 9 values); XP is still a volume reward on Home. | Move the skill list to the skill tree screen (a dozen e2e specs click `skill-*` rows on Home: move them to the tree first); put the cat on a tile with a pose per mood; 3 radius tokens; XP to the Stats page. | Playwright: buttons on Home ≤ 6; `npm run test:e2e` green; review PNGs approved. | open |
 
+### Done in review 6 (Oct 23 evening, for context)
+
+The read-backwards fix works once deployed: inequality stories 10/12 solo after it, 1/4 on the
+older build that afternoon. Warm-ups and finishers always took the single most likely skill one
+level below its working level: 45 level-1 exponent-rules items in 6 days, all correct, and the
+skill never climbed. They now rotate over likely wins (P ≥ 0.8, least recently seen first) and
+serve the working level once a skill is above the band (`easiest` in `learning/session.ts`).
+Check: warm-ups spread over skills; exponent rules gets level 2–3 items. `npm run analyze` no
+longer counts a miss logged in-app under an older label as "persisting" (it came from a build
+without the fix). Evidence moved: `add-for-quotient` 0 since its fix (item 4 less urgent), GRE
+percents right in a median 83 s, down from 523 s (item 5 less urgent), runway 6.1 weeks.
+
 ### Done in review 5 (Oct 23, for context)
 
 Inequality stories: level-1 story items were 22% solo (n 9) against 96% plain (n 23), and every

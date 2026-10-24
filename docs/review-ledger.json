@@ -28,6 +28,11 @@
       "date": "2026-10-23",
       "through": 1792758332074,
       "summary": "Inequality stories: read-backwards misconception + sense-check step (story L1 22% vs plain 96%)"
+    },
+    {
+      "date": "2026-10-23",
+      "through": 1792797320955,
+      "summary": "No changes: read-backwards fix works once deployed (story items 10/12 after, 1/4 on the old build that afternoon); GRE percent '3' for 30 looks like a slip"
     }
   ]
 }
