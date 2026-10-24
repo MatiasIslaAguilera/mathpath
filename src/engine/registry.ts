@@ -23,11 +23,16 @@ export function activePrerequisites(skill: SkillDefinition): string[] {
 }
 
 /** Deterministic: the same (skill, level, seed, variant) always yields the same problem. */
-export function makeProblem(skill: SkillDefinition, level: Level, seed: number, variant?: 'story'): Problem {
+export function makeProblem(skill: SkillDefinition, level: Level, seed: number, variant?: 'story', storyVersion?: 1): Problem {
   if (variant === 'story') {
     if (!hasStory(skill, level)) throw new Error(`${skill.id} has no story variant at level ${level}`);
-    const body = skill.story!.generate(createRng(seed), level);
-    return { id: `${skill.id}:${level}:${seed}:s`, skillId: skill.id, level, seed, variant, ...body };
+    const story = skill.story!;
+    // Ids ending ':s' were served before a skill's story mix grew; they keep regenerating from the
+    // frozen original generator. New story items of such a skill end ':s2'.
+    const frozen = storyVersion === 1 && story.original;
+    const body = (frozen ? story.original! : story.generate)(createRng(seed), level);
+    const suffix = story.original && !frozen ? 's2' : 's';
+    return { id: `${skill.id}:${level}:${seed}:${suffix}`, skillId: skill.id, level, seed, variant, ...body };
   }
   const body = skill.generate(createRng(seed), level);
   return { id: `${skill.id}:${level}:${seed}`, skillId: skill.id, level, seed, ...body };
@@ -35,7 +40,8 @@ export function makeProblem(skill: SkillDefinition, level: Level, seed: number, 
 
 export function problemFromId(id: string): Problem {
   const [skillId, level, seed, variant] = id.split(':');
-  return makeProblem(getSkill(skillId), Number(level) as Level, Number(seed), variant === 's' ? 'story' : undefined);
+  const story = variant === 's' || variant === 's2' ? 'story' : undefined;
+  return makeProblem(getSkill(skillId), Number(level) as Level, Number(seed), story, variant === 's' ? 1 : undefined);
 }
 
 export const hasStory = (skill: SkillDefinition, level: Level) => !!skill.story?.levels.includes(level);

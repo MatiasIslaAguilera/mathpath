@@ -226,6 +226,31 @@ export const linearInequalities: SkillDefinition = {
       explanation:
         'In a word problem it is natural to write the limit first: $41 > 4x + 17$. Solving that ends with $6 > x$, which says *$x$ is less than 6*, so $x < 6$. Before you pick an option, turn the result around so $x$ is on the left. Then sense-check one value in the story: 0 miles costs \\$17, which is under \\$41, so small $x$ must be in the set.',
     },
+    'negated-limit': {
+      name: 'Read a negated limit the wrong way ("must not exceed" as ≥)',
+      explanation:
+        'A negated limit names the side that is *not* allowed. "Must not exceed 50" forbids going over 50, so the total must be $\\le 50$. "Must not fall below 20" means $\\ge 20$. Sense-check with one value: does a small $x$ break the rule or keep it?',
+    },
+    'total-over-count': {
+      name: 'Divided the budget by the count without taking off the fee',
+      explanation:
+        'With 4 tickets and a \\$6 booking fee, a \\$46 budget leaves \\$40 for the tickets, so each can cost at most \\$10. Dividing \\$46 by 4 leaves the fee inside the per-ticket price.',
+    },
+    'price-not-margin': {
+      name: 'Used the price instead of the profit per item',
+      explanation:
+        'Selling one more cup at \\$5 that costs \\$2 to make adds \\$3 of profit, not \\$5. Profit per item is price minus cost per item; write the profit as $(5 - 2)x - \\text{fixed cost}$.',
+    },
+    'unit-mismatch': {
+      name: 'Used the rate in the wrong unit',
+      explanation:
+        'If a candle burns 1 cm every 15 minutes, it burns 4 cm an hour. When $x$ counts hours, the expression needs the amount per hour. Using the per-block amount gives a boundary in 15-minute blocks, not hours.',
+    },
+    'compare-reversed': {
+      name: 'Answered for the other plan',
+      explanation:
+        'The question asked when *B* is cheaper than A, which is $B < A$, the same as $A > B$. Solving "A cheaper than B" instead gives the opposite set. Name the plan the question is about before you write the sign.',
+    },
     'sign-constant': {
       name: 'Moved a number without changing its sign',
       explanation:
@@ -246,6 +271,14 @@ export const linearInequalities: SkillDefinition = {
     check: 'Check one value in the situation',
     setup:'Set up: write the situation as an expression',
     'setup-right': 'Set up the other side',
+    'setup-rate': 'Set up: the price is the unknown',
+    'setup-negated': 'Set up: a limit worded as a negation',
+    'setup-margin': 'Set up: profit per item first',
+    'setup-units': 'Set up: put the rate in the right unit',
+    'setup-falling': 'Set up: values below zero',
+    'setup-profit': 'Set up: revenue against cost',
+    'setup-compare': 'Set up: the question is about the other plan',
+    'setup-pay': 'Set up: more pay is better',
     'subtract-all': 'Subtract from all three parts',
     'divide-all': 'Divide all three parts',
   },
@@ -275,6 +308,12 @@ export const linearInequalities: SkillDefinition = {
   story: {
     levels: [1, 2, 3],
     generate(rng, level) {
+      const pattern = rng.int(0, 3);
+      const story = pattern === 0 ? pickStory(rng, level) : NEW_PATTERNS[level as 1 | 2 | 3][pattern - 1](rng);
+      const body = solveBuilt(rng, story.built, level, false, true, story);
+      return { ...body, prompt: story.prompt, steps: [...story.setup, ...body.steps] };
+    },
+    original(rng, level) {
       const story = pickStory(rng, level);
       const body = solveBuilt(rng, story.built, level, false, true);
       return { ...body, prompt: story.prompt, steps: [...story.setup, ...body.steps] };
@@ -285,7 +324,7 @@ export const linearInequalities: SkillDefinition = {
 // ---------- levels 1-4 ----------
 
 /** Steps, choices and misconceptions for a picked inequality (shared by plain and story problems). */
-function solveBuilt(rng: Rng, b: Built, level: Level, withInterpretation: boolean, story = false) {
+function solveBuilt(rng: Rng, b: Built, level: Level, withInterpretation: boolean, story = false, reading?: StoryReading) {
   const { rel, A, B, C, D } = b;
   const k = q(A - C);
   const r = q(D - B);
@@ -368,8 +407,10 @@ function solveBuilt(rng: Rng, b: Built, level: Level, withInterpretation: boolea
   // In stories the reversed set is almost always the limit written first and read backwards
   // (41 > 4x + 17 → 6 > x read as x > 6): both directions of error showed up there, never in plain items.
   const named = [
-    { id: story ? 'read-backwards' : flips ? 'no-flip' : 'flip-positive', opt: wrongDir },
+    { id: story ? reading?.reversedId ?? 'read-backwards' : flips ? 'no-flip' : 'flip-positive', opt: wrongDir },
     { id: 'sign-constant', opt: signConst },
+    // A misreading of this story's situation (a set it would give), when the pattern has one.
+    ...(reading?.extra?.(relOut) ?? []),
   ];
   const fillers = [
     single(flipRel(relOut), r.add(2 * B).div(k)),
@@ -441,7 +482,7 @@ function solveBuilt(rng: Rng, b: Built, level: Level, withInterpretation: boolea
 const usd = (v: number) => `\\$${v}`;
 
 /** A setup step: write one side of the situation as an expression in x (checked by equivalence). */
-function setupStep(key: 'setup' | 'setup-right', prompt: string, latex: string, expr: string, why: string): Step {
+function setupStep(key: string, prompt: string, latex: string, expr: string, why: string): Step {
   return {
     key,
     instruction: prompt,
@@ -455,10 +496,18 @@ function setupStep(key: 'setup' | 'setup-right', prompt: string, latex: string, 
   };
 }
 
-interface Story {
+interface Story extends StoryReading {
   built: Built;
   prompt: string;
   setup: Step[];
+}
+
+/** How a story pattern's misreadings show up among the options. */
+interface StoryReading {
+  /** Id for the reversed set (default 'read-backwards'), when this story makes a different reading likelier. */
+  reversedId?: string;
+  /** Extra named options, given the correct relation. */
+  extra?: (relOut: number) => { id: string; opt: Opt }[];
 }
 
 /** Relation words (index = relation code 0 '<', 1 '>', 2 '≤', 3 '≥'). */
@@ -743,3 +792,375 @@ function level5(rng: Rng) {
     };
   }
 }
+
+// ---------- Story patterns added in batch S2 (docs/skill-specs/batch-s2-stories.md) ----------
+// Each changes how the situation maps to the inequality: the price is the unknown, the limit is
+// worded as a negation, the per-unit amount needs a step first, the values go below zero, the
+// question is asked about the other plan, or "better" means more rather than less.
+
+/** Params and sides for a·x + b ⊏ c (levels 1-2). */
+function oneSide(a: number, b: number, c: number, t: number, rel: number): Built {
+  return {
+    params: { a, b, c, t, rel },
+    rel,
+    leftLatex: linLatex(a, b),
+    leftExpr: `${a}*x + (${b})`,
+    rightLatex: `${c}`,
+    rightExpr: `(${c})`,
+    A: a, B: b, C: 0, D: c, expand: false,
+  };
+}
+
+/** Params and sides for a·x + b ⊏ c·x + d (level 3). */
+function twoSides(a: number, b: number, c: number, d: number, t: number, rel: number): Built {
+  return {
+    params: { a, b, c, d, t, rel },
+    rel,
+    leftLatex: linLatex(a, b),
+    leftExpr: `${a}*x + (${b})`,
+    rightLatex: linLatex(c, d),
+    rightExpr: `${c}*x + (${d})`,
+    A: a, B: b, C: c, D: d, expand: false,
+  };
+}
+
+/** L1: the count is fixed and the price per item is the unknown. */
+function priceUnknown(rng: Rng): Story {
+  const rel = rng.pick([0, 2]);
+  const a = rng.int(2, 9);
+  const t = rng.int(1, 10);
+  const b = rng.int(1, 20);
+  const c = a * t + b;
+  const built = oneSide(a, b, c, t, rel);
+  const limit = `${rel === 2 ? 'at most' : 'less than'} ${usd(c)}`;
+  const k = rng.pick([
+    {
+      intro: `You are buying ${a} concert tickets online. The site adds one ${usd(b)} booking fee to the order, and you want to spend ${limit} in total.`,
+      unknown: 'the price of one ticket, in dollars',
+      ask: 'For which ticket prices does the order fit your budget?',
+    },
+    {
+      intro: `A club of ${a} members rents a hall for a flat ${usd(b)} and pays for one meal per member. The whole evening must cost ${limit}.`,
+      unknown: 'the price of one meal, in dollars',
+      ask: 'For which meal prices does the evening fit the budget?',
+    },
+  ]);
+  return {
+    built,
+    prompt: `${k.intro} Let $x$ be ${k.unknown}. ${k.ask} Which of the following is the solution set?`,
+    setup: [
+      setupStep(
+        'setup-rate',
+        `Let $x$ be ${k.unknown}. Write the total cost in terms of $x$.`,
+        built.leftLatex,
+        built.leftExpr,
+        `Now the count (${a}) is known and the price is the unknown: ${a} times $x$, plus the one-time ${usd(b)}. Take the fee off the budget before dividing by the count.`,
+      ),
+    ],
+    extra: (relOut) => [{ id: 'total-over-count', opt: single(relOut, q(c, a)) }],
+  };
+}
+
+/** Limits worded as negations ("must not exceed", "can't fall below"), index = relation code. */
+const NEGATED_UP = [
+  (v: string) => `must not reach ${v}`, // <
+  (v: string) => `can't be ${v} or less`, // >
+  (v: string) => `must not exceed ${v}`, // ≤
+  (v: string) => `must not fall below ${v}`, // ≥
+];
+
+/** L1: a load or a total with the limit worded as a negation. */
+function negatedLimit(rng: Rng): Story {
+  const rel = rng.int(0, 3);
+  const a = rng.int(2, 9);
+  const t = rng.int(1, 10);
+  const b = rng.int(1, 20);
+  const c = a * t + b;
+  const built = oneSide(a, b, c, t, rel);
+  const k = rng.pick([
+    {
+      intro: `A small elevator already carries a ${b} kg cart, and each box loaded into it weighs ${a} kg. By the safety rule, the total load ${NEGATED_UP[rel](`${c} kg`)}.`,
+      unit: 'boxes loaded',
+      total: 'total load, in kg',
+      ask: 'For which numbers of boxes is the rule met?',
+    },
+    {
+      intro: `A fundraiser starts with ${usd(b)} from a raffle and gets ${usd(a)} for each ticket sold at the door. To cover the costs, the total ${NEGATED_UP[rel](usd(c))}.`,
+      unit: 'tickets sold at the door',
+      total: 'total raised, in dollars',
+      ask: 'For which numbers of tickets is that condition met?',
+    },
+  ]);
+  return {
+    built,
+    prompt: `${k.intro} Let $x$ be the number of ${k.unit}. ${k.ask} Which of the following is the solution set?`,
+    setup: [
+      setupStep(
+        'setup-negated',
+        `Let $x$ be the number of ${k.unit}. Write the ${k.total} in terms of $x$.`,
+        built.leftLatex,
+        built.leftExpr,
+        `Then turn the words into a sign: "must not exceed" is $\\le$, "must not reach" is $<$, "must not fall below" is $\\ge$, and "can't be ${c} or less" is $>$. A negated limit names the forbidden side, so the allowed side is the opposite.`,
+      ),
+    ],
+    reversedId: 'negated-limit',
+  };
+}
+
+/** L1: profit needs the margin first (price minus cost per unit), and a fixed cost comes off. */
+function margin(rng: Rng): Story {
+  for (;;) {
+    const rel = rng.pick([1, 3]);
+    const a = rng.int(2, 9);
+    const v = rng.int(1, 6);
+    const p = v + a;
+    const F = rng.int(1, 20);
+    const t = rng.int(1, 10);
+    const c = a * t - F;
+    if (c < 1) continue;
+    const built = oneSide(a, -F, c, t, rel);
+    const [seller, thing] = rng.pick([
+      ['A lemonade stand', 'cups'],
+      ['A school bake sale', 'cookies'],
+    ]);
+    return {
+      built,
+      prompt: `${seller} sells ${thing} at ${usd(p)} each. Each one costs ${usd(v)} to make, and the organizers paid ${usd(F)} for a permit. Let $x$ be the number of ${thing} sold. For which $x$ is the profit ${rel === 3 ? 'at least' : 'more than'} ${usd(c)}? Which of the following is the solution set?`,
+      setup: [
+        setupStep(
+          'setup-margin',
+          `Let $x$ be the number of ${thing} sold. Write the profit, in dollars, in terms of $x$.`,
+          `${p}x - ${v === 1 ? '' : v}x - ${F}`,
+          `${p}*x - ${v}*x - ${F}`,
+          `Each one sold earns ${usd(p)} but costs ${usd(v)}, so it adds ${usd(a)} of profit. The permit is paid once, so subtract it once: $${built.leftLatex}$.`,
+        ),
+      ],
+      // Used the price, not the profit per item, and still subtracted the permit.
+      extra: (relOut) => [{ id: 'price-not-margin', opt: single(relOut, q(c + F, p)) }],
+    };
+  }
+}
+
+/** Decreasing quantities worded as negations, index = relation code. */
+const NEGATED_DOWN = [
+  (v: string) => `is no longer at least ${v}`, // <
+  (v: string) => `has not yet dropped to ${v}`, // >
+  (v: string) => `is no more than ${v}`, // ≤
+  (v: string) => `has not dropped below ${v}`, // ≥
+];
+
+/** L2: a falling quantity with the limit worded as a negation. */
+function negatedFalling(rng: Rng): Story {
+  for (;;) {
+    const rel = rng.int(0, 3);
+    const a = -rng.int(2, 9);
+    const b = rng.int(10, 20);
+    const tMax = Math.floor((b - 1) / -a);
+    if (tMax < 1) continue;
+    const t = rng.int(1, tMax);
+    const c = a * t + b;
+    const built = oneSide(a, b, c, t, rel);
+    const m = -a;
+    const k = rng.pick([
+      { intro: `A phone's battery is at ${b}% and drops by ${m} percentage points every 10 minutes of video.`, unit: '10-minute stretches of video', what: 'the charge', units: '%', left: 'charge, in %' },
+      { intro: `A food truck starts the lunch rush with ${b} kg of rice and uses ${m} kg every half hour.`, unit: 'half hours', what: 'the rice left', units: ' kg', left: 'rice left, in kg' },
+    ]);
+    return {
+      built,
+      prompt: `${k.intro} Let $x$ be the number of ${k.unit}. For which values of $x$ is this true: ${k.what} ${NEGATED_DOWN[rel](`${c}${k.units}`)}? Which of the following is the solution set?`,
+      setup: [
+        setupStep(
+          'setup-negated',
+          `Let $x$ be the number of ${k.unit}. Write the ${k.left} in terms of $x$.`,
+          built.leftLatex,
+          built.leftExpr,
+          `It starts at ${b} and loses ${m} each time, so subtract ${m} times $x$. Then read the words as a sign: "no more than" is $\\le$, "not dropped below" is $\\ge$, "not yet dropped to" is $>$, and "no longer at least" is $<$.`,
+        ),
+      ],
+      reversedId: 'negated-limit',
+    };
+  }
+}
+
+/** L2: a candle burns a fixed length per block of minutes; x is in hours. */
+function candle(rng: Rng): Story {
+  for (;;) {
+    const rel = rng.int(0, 3);
+    const [n, block] = rng.pick([
+      [2, '30 minutes'],
+      [3, '20 minutes'],
+      [4, '15 minutes'],
+    ] as const);
+    const r = rng.int(1, Math.floor(9 / n));
+    const a = -n * r;
+    const b = rng.int(10, 20);
+    const t = rng.int(1, 10);
+    const c = a * t + b;
+    if (c < 1) continue;
+    const built = oneSide(a, b, c, t, rel);
+    return {
+      built,
+      prompt: `A candle is ${b} cm tall and burns down ${r} cm every ${block}. Let $x$ be the number of hours it has been burning. For which values of $x$ is the candle ${LIMIT[rel]} ${c} cm tall? Which of the following is the solution set?`,
+      setup: [
+        setupStep(
+          'setup-units',
+          'Let $x$ be the number of hours. Write the height of the candle, in cm, in terms of $x$.',
+          built.leftLatex,
+          built.leftExpr,
+          `An hour has ${n} blocks of ${60 / n} minutes, so the candle loses ${n} times ${r} cm, which is ${n * r} cm, per hour. Put the rate in the unit of $x$ first.`,
+        ),
+      ],
+      // Used the per-block amount as if it were per hour: the boundary comes out in blocks.
+      extra: (relOut) => [{ id: 'unit-mismatch', opt: single(relOut, q(c - b, -r)) }],
+    };
+  }
+}
+
+/** L2: a temperature that falls through zero (negative values in the story). */
+function temperature(rng: Rng): Story {
+  for (;;) {
+    const rel = rng.int(0, 3);
+    const m = rng.int(2, 9);
+    const b = rng.int(1, 20);
+    const t = rng.int(1, 10);
+    const c = b - m * t;
+    if (c >= 0) continue; // the boundary is below freezing: the story needs negative numbers
+    const built = oneSide(-m, b, c, t, rel);
+    const wind = rng.int(5, 40);
+    const words = ['below', 'above', 'at or below', 'at or above'][rel];
+    return {
+      built,
+      prompt: `At sunset the temperature is ${b} °C, with wind at ${wind} km/h. Through the night it falls by ${m} °C every hour. Let $x$ be the number of hours after sunset. For which values of $x$ is the temperature ${words} $${c}$ °C? Which of the following is the solution set?`,
+      setup: [
+        setupStep(
+          'setup-falling',
+          'Let $x$ be the number of hours after sunset. Write the temperature, in °C, in terms of $x$.',
+          built.leftLatex,
+          built.leftExpr,
+          `It starts at ${b} and drops ${m} each hour: subtract ${m} times $x$. Temperatures below zero are negative numbers, so "below $${c}$" means less than $${c}$. The wind speed doesn't enter the temperature.`,
+        ),
+      ],
+    };
+  }
+}
+
+/** L3: revenue against cost (profit, break-even, loss). */
+function profitRange(rng: Rng): Story {
+  const rel = rng.int(0, 3);
+  const a = rng.int(2, 9);
+  const c = rng.int(1, a - 1);
+  const t = rng.int(1, 10);
+  const d = (a - c) * t;
+  const built = twoSides(a, 0, c, d, t, rel);
+  const days = rng.int(4, 7);
+  const goal = ['make a loss', 'make a profit', 'not make a profit', 'at least break even'][rel];
+  const [maker, thing] = rng.pick([
+    ['A bike repair stall', 'repairs'],
+    ['A small print studio', 'print jobs'],
+  ]);
+  return {
+    built,
+    prompt: `${maker} charges ${usd(a)} for each of its ${thing}. Materials cost ${usd(c)} per job, and the rent is ${usd(d)} a week. It is open ${days} days a week. Let $x$ be the number of ${thing} in a week. For which values of $x$ does it ${goal}? Which of the following is the solution set?`,
+    setup: [
+      setupStep('setup-profit', `Let $x$ be the number of ${thing} in a week. Write the week's revenue in terms of $x$.`, built.leftLatex, built.leftExpr, 'Revenue is price times quantity.'),
+      setupStep(
+        'setup-right',
+        "Write the week's total cost in terms of $x$.",
+        built.rightLatex,
+        built.rightExpr,
+        `Cost is the rent plus materials per job times $x$. A profit means revenue $>$ cost, at least breaking even means $\\ge$, a loss means $<$, and no profit means $\\le$. The ${days} opening days don't enter the costs.`,
+      ),
+    ],
+  };
+}
+
+/** L3: the question is about plan B, while the story lists plan A first. */
+function askedAboutB(rng: Rng): Story {
+  for (;;) {
+    const asked = rng.int(0, 3); // B ⊏ A, in COMPARE words
+    const rel = flipRel(asked); // A ⊏ B: the inequality as built (A on the left)
+    const a = rng.int(1, 9);
+    const c = rng.int(1, 9);
+    if (a === c) continue;
+    const t = rng.int(1, 10);
+    const b = rng.int(1, 20);
+    const d = b + (a - c) * t;
+    if (d < 1) continue;
+    const built = twoSides(a, b, c, d, t, rel);
+    const extra = rng.int(3, 12);
+    const k = rng.pick([
+      {
+        name: 'bike share',
+        A: `Bike share A costs ${usd(b)} to unlock plus ${usd(a)} per hour.`,
+        B: `Bike share B costs ${usd(d)} to unlock plus ${usd(c)} per hour.`,
+        unit: 'hours of riding',
+        noise: `Both have ${extra} stations near you.`,
+        ignored: `The ${extra} stations don't enter the cost.`,
+      },
+      {
+        name: 'streaming service',
+        A: `Streaming service A costs ${usd(b)} to sign up plus ${usd(a)} per month.`,
+        B: `Service B costs ${usd(d)} to sign up plus ${usd(c)} per month.`,
+        unit: 'months',
+        noise: `Both add ${extra} new films a week.`,
+        ignored: `The ${extra} new films a week don't enter the cost.`,
+      },
+    ]);
+    return {
+      built,
+      prompt: `${k.A} ${k.B} ${k.noise} Let $x$ be the number of ${k.unit}. For which values of $x$ is *B* ${COMPARE[asked]} A? Which of the following is the solution set?`,
+      setup: [
+        setupStep('setup-compare', `Let $x$ be the number of ${k.unit}. Write the total cost of ${k.name} A in terms of $x$.`, built.leftLatex, built.leftExpr, `Each total is the one-time fee plus the price times $x$. ${k.ignored}`),
+        setupStep(
+          'setup-right',
+          `Write the total cost of ${k.name} B in terms of $x$.`,
+          built.rightLatex,
+          built.rightExpr,
+          `The question is about B: "B ${COMPARE[asked]} A" is $B ${REL[asked]} A$, which is the same as $A ${REL[rel]} B$.`,
+        ),
+      ],
+      reversedId: 'compare-reversed',
+    };
+  }
+}
+
+const PAY = ['less than', 'more than', 'no more than', 'at least as much as'];
+
+/** L3: two pay offers, where the better one is the one that pays more. */
+function payOffers(rng: Rng): Story {
+  for (;;) {
+    const rel = rng.int(0, 3);
+    const a = rng.int(1, 9);
+    const c = rng.int(1, 9);
+    if (a === c) continue;
+    const t = rng.int(1, 10);
+    const b = rng.int(1, 20);
+    const d = b + (a - c) * t;
+    if (d < 1) continue;
+    const built = twoSides(a, b, c, d, t, rel);
+    const k = rng.pick([
+      { A: `Courier job A pays ${usd(b)} a shift plus ${usd(a)} per delivery.`, B: `Job B pays ${usd(d)} a shift plus ${usd(c)} per delivery.`, unit: 'deliveries in a shift', name: 'job' },
+      { A: `Tutoring site A pays ${usd(b)} a week plus ${usd(a)} per lesson.`, B: `Site B pays ${usd(d)} a week plus ${usd(c)} per lesson.`, unit: 'lessons in a week', name: 'site' },
+    ]);
+    return {
+      built,
+      prompt: `${k.A} ${k.B} Let $x$ be the number of ${k.unit}. For which values of $x$ does ${k.name} A pay ${PAY[rel]} ${k.name} B? Which of the following is the solution set?`,
+      setup: [
+        setupStep('setup-pay', `Let $x$ be the number of ${k.unit}. Write the pay from ${k.name} A in terms of $x$.`, built.leftLatex, built.leftExpr, 'Pay is the fixed amount plus the rate times $x$.'),
+        setupStep(
+          'setup-right',
+          `Write the pay from ${k.name} B in terms of $x$.`,
+          built.rightLatex,
+          built.rightExpr,
+          '"Pays more" means a larger amount: $A > B$. With prices the better deal is the smaller number; with pay it is the larger one.',
+        ),
+      ],
+    };
+  }
+}
+
+const NEW_PATTERNS: Record<1 | 2 | 3, ((rng: Rng) => Story)[]> = {
+  1: [priceUnknown, negatedLimit, margin],
+  2: [negatedFalling, candle, temperature],
+  3: [profitRange, askedAboutB, payOffers],
+};

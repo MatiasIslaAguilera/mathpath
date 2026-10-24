@@ -282,7 +282,7 @@ describe('story variants in sessions', () => {
         const k = (byKind[r.next.kind] ??= { story: 0, plain: 0 });
         if (r.next.problem.variant === 'story') {
           k.story++;
-          expect(r.next.problem.id.endsWith(':s')).toBe(true);
+          expect(r.next.problem.id).toMatch(/:s2?$/);
         } else k.plain++;
         s = afterProblem(r.session, r.next.problem, true, false, 10);
       }

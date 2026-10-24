@@ -346,6 +346,15 @@ function level2Body(P: L2Params, prompt: string): Body {
     // a x + b m x + k = c: the constant k is not multiplied by b.
     const xw = q(c - k, K);
     cand.push({ id: 'substitute-distribute', wrong: tupleAnswer(['x', 'y'], [xw, xw.mul(m).add(k)], ['x', 'y']) });
+    // Set mx + k = (c − ax)/b, then moved an x-term across without changing its sign:
+    // (bm − a)x = c − bk (moving −(a/b)x left) or (a − bm)x = c − bk (moving mx right).
+    // y then comes from either equation.
+    if (b * m - a !== 0) {
+      for (const xs of [q(c - b * k, b * m - a), q(c - b * k, a - b * m)]) {
+        cand.push({ id: 'sign-x-term', wrong: tupleAnswer(['x', 'y'], [xs, xs.mul(m).add(k)], ['x', 'y']) });
+        cand.push({ id: 'sign-x-term', wrong: tupleAnswer(['x', 'y'], [xs, q(c).sub(xs.mul(a)).div(b)], ['x', 'y']) });
+      }
+    }
     return {
       params: { m, k, a, b, c, x, y },
       prompt,
@@ -526,9 +535,33 @@ export const systemsOfEquations: SkillDefinition = {
       explanation:
         'When you replace $y$ by $mx + k$ in $by$, the whole expression is multiplied by $b$: $b(mx + k) = bmx + bk$. Forgetting $bk$ changes the constant and gives the wrong $x$.',
     },
+    'per-unit-dropped': {
+      name: 'Dropped the per-unit amount (wrote the slope as 1)',
+      explanation:
+        '"\\$2 plus \\$3 for every thousand units" is $y = 2 + 3x$: the 3 multiplies the quantity. Writing $y = 2 + x$ charges \\$1 per thousand instead. Check your pair in the supply rule in words: at your quantity, is the price really base plus 3 per thousand?',
+    },
+    'compare-reversed': {
+      name: 'Wrote the comparison the wrong way round',
+      explanation:
+        '"Child tickets were 3 more than twice the adult tickets" describes the children: $y = 2x + 3$. Writing $x = 2y + 3$ swaps who is described in terms of whom. Read it as "children *are* 2 times adults plus 3".',
+    },
+    'perimeter-as-sum': {
+      name: 'Counted each side of the rectangle once',
+      explanation:
+        'A rectangle has two widths and two lengths, so the perimeter is $2x + 2y$. Writing $x + y$ for the perimeter goes round only half of it.',
+    },
+    'sign-x-term': {
+      name: 'Moved an x-term without changing its sign',
+      explanation:
+        'In $2 + 3x = 10 - x$, moving $-x$ to the left means adding $x$ to both sides: $3x + x = 4x$, so $4x = 8$, not $2x = 8$. An x-term changes sign when it crosses the equals sign, just like a number. Check: your pair must satisfy *both* equations.',
+    },
   },
   stepLabels: {
     setup: 'Set up: write the supply price as an expression',
+    'setup-market': 'Set up: supply and demand both in words',
+    'setup-demand': 'Set up: write demand from words',
+    'setup-compare': 'Set up: "5 more than twice"',
+    'setup-perimeter': 'Set up: length from width, then perimeter',
     'set-equal': 'Set the two expressions equal',
     substitute: 'Substitute into the other equation',
     'solve-x': 'Solve for x',
@@ -572,6 +605,14 @@ export const systemsOfEquations: SkillDefinition = {
   story: {
     levels: [2],
     generate(rng) {
+      return [supplyStory, demandInWords, countAndValue, rectangle][rng.int(0, 3)](rng);
+    },
+    original: (rng) => supplyStory(rng),
+  },
+};
+
+/** The original story: supply in words, demand as an equation. */
+function supplyStory(rng: Rng): Body {
       // Supply p = k + m·q slopes up; demand a·q + b·p = c slopes down; x = quantity, y = price.
       for (;;) {
         const m = rng.int(1, 4);
@@ -599,8 +640,144 @@ export const systemsOfEquations: SkillDefinition = {
             verify: { type: 'equivalent', expr: supply.expr, variables: ['x'] },
           },
         };
-        return { ...body, steps: [setup, ...body.steps] };
+        return withReadings(body, setup, [perUnitDropped(P)]);
       }
-    },
-  },
-};
+}
+
+// ---------- Story patterns added in batch S2 (docs/skill-specs/batch-s2-stories.md) ----------
+// Level 2 is y = m·x + k with a·x + b·y = c. The patterns change which of the two relations the
+// learner has to write from words: demand as well as supply, a "5 more than twice" count relation
+// next to a money total, a rectangle's length and perimeter.
+
+/** Setup steps first, and story misreadings ahead of the algebra slips (same wrong pair: the reading wins). */
+function withReadings(body: Body, setup: Step | Step[], readings: (MisconceptionInstance | null)[]): Body {
+  return {
+    ...body,
+    steps: [...(Array.isArray(setup) ? setup : [setup]), ...body.steps],
+    misconceptions: distinctMisconceptions(body.answer, [...readings, ...body.misconceptions]),
+  };
+}
+
+const pair = (x: Q | number, y: Q | number) => tupleAnswer(['x', 'y'], [x, y], ['x', 'y']);
+
+/** Wrote the slope as 1 (y = k + x): seen once as (4, 6) for y = 2 + 3x, 2x + 2y = 20. */
+function perUnitDropped(P: L2Params): MisconceptionInstance | null {
+  if (P.a + P.b === 0) return null;
+  const xw = q(P.c - P.b * P.k, P.a + P.b);
+  return { id: 'per-unit-dropped', wrong: pair(xw, xw.add(P.k)) };
+}
+
+/** A setup step in the given variables. */
+function setupIn(key: string, prompt: string, latex: string, expr: string, vars: string[], why: string): Step {
+  return {
+    key,
+    instruction: prompt,
+    math: latex,
+    why,
+    ask: { prompt, answer: { kind: 'expression', value: expr, variables: vars, display: latex }, verify: { type: 'equivalent', expr, variables: vars } },
+  };
+}
+
+const moreFewer = (v: number) => (v > 0 ? `${v} more than` : `${-v} fewer than`);
+const timesWord = (m: number) => (m === 1 ? '' : m === 2 ? 'twice ' : m === 3 ? 'three times ' : `${m} times `);
+
+/** Supply and demand, both in words: demand is x = c − b·y (thousand units at price y). */
+function demandInWords(rng: Rng): Body {
+  for (;;) {
+    const m = rng.int(1, 4);
+    const k = rng.int(1, 9);
+    const b = rng.int(1, 7);
+    const x = rng.int(1, 6);
+    const y = k + m * x;
+    if (y > 10) continue;
+    const c = x + b * y;
+    const P: L2Params = { m, k, a: 1, b, c, x, y };
+    const prompt = `In a local market, let $x$ be the quantity traded in thousands of units and $y$ the price per unit in dollars. Sellers set their price at \\$${k} plus \\$${m} for every thousand units supplied. If the product were free, buyers would take ${c} thousand units, and every \\$1 on the price cuts that by ${b} thousand units. Find the equilibrium pair $(x, y)$: quantity first, then price.`;
+    const body = level2Body(P, prompt);
+    return withReadings(
+      body,
+      [
+        setupIn('setup-market', 'Write the supply price $y$, in dollars, as an expression in the quantity $x$.', linLatex(m, k), linExpr(m, k), ['x'], `A base price plus a charge per thousand units: $y = ${linLatex(m, k)}$.`),
+        setupIn(
+          'setup-demand',
+          'Write the quantity demanded $x$, in thousands, as an expression in the price $y$.',
+          `${c} - ${b === 1 ? '' : b}y`,
+          `${c} - ${b}*y`,
+          ['y'],
+          `Start from ${c} thousand at a price of zero and take off ${b} thousand for every dollar: $x = ${c} - ${b === 1 ? '' : b}y$. Rearranged, that is $x + ${b === 1 ? '' : b}y = ${c}$, the form the next steps use.`,
+        ),
+      ],
+      [perUnitDropped(P)],
+    );
+  }
+}
+
+/** Two counts tied by "k more than m times", and a money total. x = first kind, y = second kind. */
+function countAndValue(rng: Rng): Body {
+  for (;;) {
+    const m = rng.int(1, 3);
+    const k = rng.nonzero(-5, 5);
+    const x = rng.int(1, 10);
+    const y = m * x + k;
+    if (y < 1 || y > 10) continue;
+    const a = rng.int(2, 7);
+    const b = rng.int(2, 7);
+    if (a === b) continue;
+    const c = a * x + b * y;
+    const P: L2Params = { m, k, a, b, c, x, y };
+    const ctx = rng.pick([
+      { intro: `A school play sold adult tickets at \\$${a} and child tickets at \\$${b}, taking in \\$${c} in all.`, X: 'adult tickets', Y: 'child tickets' },
+      { intro: `A farm stand sold baskets of plums at \\$${a} and baskets of pears at \\$${b}, for \\$${c} in all.`, X: 'baskets of plums', Y: 'baskets of pears' },
+    ]);
+    const relation = `${moreFewer(k)} ${timesWord(m)}the number of ${ctx.X}`;
+    const prompt = `${ctx.intro} The number of ${ctx.Y} was ${relation}. Let $x$ be the number of ${ctx.X} and $y$ the number of ${ctx.Y}. Find $(x, y)$.`;
+    const body = level2Body(P, prompt);
+    // Wrote the relation the other way round: x = m·y + k.
+    const ys = a * m + b === 0 ? null : q(c - a * k, a * m + b);
+    return withReadings(
+      body,
+      setupIn(
+        'setup-compare',
+        `Write the number of ${ctx.Y}, $y$, as an expression in $x$.`,
+        linLatex(m, k),
+        linExpr(m, k),
+        ['x'],
+        `The ${ctx.Y} are described in terms of the ${ctx.X}: ${m === 1 ? 'take' : `${m} times`} $x$, then ${k > 0 ? 'add' : 'subtract'} ${Math.abs(k)}. The money total gives the second equation: $${a}x + ${b}y = ${c}$.`,
+      ),
+      [ys ? { id: 'compare-reversed', wrong: pair(ys.mul(m).add(k), ys) } : null],
+    );
+  }
+}
+
+/** A rectangle: length from the width in words, and the perimeter. x = width, y = length. */
+function rectangle(rng: Rng): Body {
+  for (;;) {
+    const m = rng.int(1, 3);
+    const k = rng.nonzero(-5, 9);
+    const x = rng.int(1, 10);
+    const y = m * x + k;
+    if (y <= x || y > 10) continue;
+    const c = 2 * x + 2 * y;
+    const P: L2Params = { m, k, a: 2, b: 2, c, x, y };
+    const depth = rng.int(20, 60);
+    const [thing, unit] = rng.pick([
+      ['garden bed', 'm'],
+      ['photo frame', 'dm'],
+    ]);
+    const prompt = `A rectangular ${thing} has a border running all the way round it, ${c} ${unit} long. Its length is ${moreFewer(k)} ${timesWord(m)}its width.${thing === 'garden bed' ? ` The soil is ${depth} cm deep.` : ` The glass is ${2 + (depth % 4)} mm thick.`} Let $x$ be the width and $y$ the length, in ${unit}. Find $(x, y)$.`;
+    const body = level2Body(P, prompt);
+    return withReadings(
+      body,
+      setupIn(
+        'setup-perimeter',
+        'Write the length $y$ as an expression in the width $x$.',
+        linLatex(m, k),
+        linExpr(m, k),
+        ['x'],
+        `"${moreFewer(k)} ${timesWord(m)}its width" builds the length from the width. The border goes round all four sides, so the perimeter is $2x + 2y = ${c}$, not $x + y$. The ${thing === 'garden bed' ? 'soil depth' : 'glass thickness'} doesn't enter.`,
+      ),
+      // Counted each side once: x + y = c.
+      [{ id: 'perimeter-as-sum', wrong: pair(q(c - k, 1 + m), q(c - k, 1 + m).mul(m).add(k)) }],
+    );
+  }
+}

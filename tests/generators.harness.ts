@@ -193,7 +193,7 @@ describe.each(SKILLS.filter((_, i) => i % SHARDS === shard).map((s) => [s.id, s]
       const seen = new Set<string>();
       for (let seed = 1; seed <= N; seed++) {
         const p = makeProblem(skill, level, seed, 'story');
-        expect(p.id).toBe(`${skill.id}:${level}:${seed}:s`);
+        expect(p.id).toBe(`${skill.id}:${level}:${seed}:${skill.story?.original ? 's2' : 's'}`);
         checkProblem(skill, p, seed);
         const setup = p.steps[0];
         expect(setup.key, `${p.id} first step`).toMatch(/^setup/);
@@ -201,6 +201,13 @@ describe.each(SKILLS.filter((_, i) => i % SHARDS === shard).map((s) => [s.id, s]
         seen.add(p.prompt);
       }
       expect(seen.size, 'distinct story prompts').toBeGreaterThan(Math.min(N, 100) * 0.3);
+      // The frozen original stories (ids ending ':s', already in learners' histories) stay valid.
+      if (skill.story?.original)
+        for (let seed = 1; seed <= Math.min(N, 200); seed++) {
+          const p = makeProblem(skill, level, seed, 'story', 1);
+          expect(p.id).toBe(`${skill.id}:${level}:${seed}:s`);
+          checkProblem(skill, p, seed);
+        }
     });
 
   it('is deterministic for a given seed', () => {

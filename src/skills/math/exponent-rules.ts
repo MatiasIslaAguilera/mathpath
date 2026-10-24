@@ -132,6 +132,9 @@ export const exponentRules: SkillDefinition = {
     combine: 'Combine and state the answer',
     'setup-product': 'Write the growth factor as a product of powers',
     'setup-quotient': 'Write the growth factor as a quotient of powers',
+    'setup-periods': 'Set up: growth periods as powers',
+    'setup-size': 'Set up: an area or how many fit',
+    'setup-scale': 'Set up: "how many times as large"',
   },
   learn: {
     whyItMatters:
@@ -169,7 +172,10 @@ export const exponentRules: SkillDefinition = {
 
   story: {
     levels: [1],
-    generate: (rng) => level1Story(rng),
+    generate(rng) {
+      return [level1Story, periodsInWords, sizes, scale][rng.int(0, 3)](rng);
+    },
+    original: (rng) => level1Story(rng),
   },
 };
 
@@ -638,5 +644,98 @@ function level5(rng: Rng): Body {
       { id: 'divide-for-quotient', wrong: tupleAnswer(labels, [q(ex1, d), q(ey1, e)], ['x', 'y']) },
     ]),
     verify,
+  };
+}
+
+// ---------- Story patterns added in batch S2 (docs/skill-specs/batch-s2-stories.md) ----------
+// The original story hands over the factors as powers. These make the learner write the powers
+// from the situation: periods of growth in words, sizes (an area, how many fit), and "how many
+// times as large", where dividing is the reason the exponents subtract.
+
+/** A setup step for x^a·x^b or x^a/x^b. */
+function powerSetup(key: string, prompt: string, form: number, a: number, b: number, why: string): Step {
+  const expr = form === 0 ? `x^${a} * x^${b}` : `x^${a} / x^${b}`;
+  const latex = form === 0 ? `x^{${a}}\\cdot x^{${b}}` : `\\frac{x^{${a}}}{x^{${b}}}`;
+  return {
+    key,
+    instruction: prompt,
+    math: latex,
+    why,
+    ask: { prompt, answer: { kind: 'expression', value: expr, variables: ['x'], display: latex }, verify: { type: 'equivalent', expr, variables: ['x'] } },
+  };
+}
+
+/** Growth told as periods, not as powers: "multiplied by x every year, for a years, then b more". */
+function periodsInWords(rng: Rng): Body {
+  const { form, a, b } = level1Params(rng);
+  const body = solveLevel1(rng, form, a, b);
+  const [subject, unit] = rng.pick([
+    ['A colony of yeast', 'hour'],
+    ['The number of members of an online forum', 'month'],
+    ['An invested sum', 'year'],
+  ]);
+  const pl = (n: number) => `${n} ${unit}${n === 1 ? '' : 's'}`;
+  const prompt =
+    form === 0
+      ? `${subject} is multiplied by the same factor $x$ every ${unit}. It grows for ${pl(a)}, and then for another ${pl(b)}. Over the whole time it is multiplied by $x^{?}$. Fill in the exponent.`
+      : `${subject} is multiplied by the same factor $x$ every ${unit}, for ${pl(a)} in total. How many times as large is it at the end as it was after the first ${pl(b)}? The answer is $x^{?}$. Fill in the exponent.`;
+  const why =
+    form === 0
+      ? `Each ${unit} multiplies by $x$, so ${pl(a)} multiply by $x^{${a}}$, and the next ${pl(b)} by $x^{${b}}$. One stretch after the other multiplies the factors.`
+      : `"How many times as large" is a division: the end value over the value after ${pl(b)}, $\\frac{x^{${a}}}{x^{${b}}}$. What is left is the growth over the remaining ${pl(a - b)}.`;
+  return {
+    ...body,
+    prompt,
+    steps: [powerSetup('setup-periods', form === 0 ? 'Write the total growth factor as an expression in $x$.' : 'Write "how many times as large" as an expression in $x$.', form, a, b, why), ...body.steps],
+  };
+}
+
+/** Sizes: a rectangle's area (product) or how many small containers fill a big one (quotient). */
+function sizes(rng: Rng): Body {
+  const { form, a, b } = level1Params(rng);
+  const body = solveLevel1(rng, form, a, b);
+  const prompt =
+    form === 0
+      ? rng.pick([
+          `A rectangular solar panel field is $x^{${a}}$ m long and $x^{${b}}$ m wide. Its area is $x^{?}$ square metres. Fill in the exponent.`,
+          `A spreadsheet has $x^{${a}}$ rows and $x^{${b}}$ columns. It has $x^{?}$ cells. Fill in the exponent.`,
+        ])
+      : rng.pick([
+          `A water tank holds $x^{${a}}$ litres. A tanker truck carries $x^{${b}}$ litres per trip. It takes $x^{?}$ trips to fill the tank. Fill in the exponent.`,
+          `A data center stores $x^{${a}}$ bytes. Each drive holds $x^{${b}}$ bytes. It needs $x^{?}$ drives. Fill in the exponent.`,
+        ]);
+  const why =
+    form === 0
+      ? 'An area (or a grid count) is one side times the other, so the powers multiply and their exponents add.'
+      : 'How many fit is the big amount divided by the small one, so the powers divide and their exponents subtract.';
+  return {
+    ...body,
+    prompt,
+    steps: [powerSetup('setup-size', form === 0 ? 'Write the total as an expression in $x$.' : 'Write the number needed as an expression in $x$.', form, a, b, why), ...body.steps],
+  };
+}
+
+/** Scale comparisons: "how many times farther" (quotient) or "x^b times as many, each x^a" (product). */
+function scale(rng: Rng): Body {
+  const { form, a, b } = level1Params(rng);
+  const body = solveLevel1(rng, form, a, b);
+  const prompt =
+    form === 0
+      ? rng.pick([
+          `A library has $x^{${b}}$ shelves, and every shelf holds $x^{${a}}$ pages of books. The library holds $x^{?}$ pages. Fill in the exponent.`,
+          `A factory makes $x^{${a}}$ chips a day and runs for $x^{${b}}$ days. It makes $x^{?}$ chips. Fill in the exponent.`,
+        ])
+      : rng.pick([
+          `A galaxy is $x^{${a}}$ km away; the Sun is $x^{${b}}$ km away. The galaxy is $x^{?}$ times as far away as the Sun. Fill in the exponent.`,
+          `Country A's economy produces $x^{${a}}$ dollars a year; a small town produces $x^{${b}}$ dollars. The country's output is $x^{?}$ times the town's. Fill in the exponent.`,
+        ]);
+  const why =
+    form === 0
+      ? 'A count of groups times the amount in each group: multiply the powers, so the exponents add.'
+      : '"How many times as large" divides one amount by the other, so the exponents subtract (not add).';
+  return {
+    ...body,
+    prompt,
+    steps: [powerSetup('setup-scale', form === 0 ? 'Write the total as an expression in $x$.' : 'Write "how many times as large" as an expression in $x$.', form, a, b, why), ...body.steps],
   };
 }

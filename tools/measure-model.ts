@@ -61,7 +61,7 @@ for (const e of events) {
         recall: firstOfDay && sp.fsrs ? retrievability(sp.fsrs, new Date(e.ts)) : undefined,
         secs: gap < 900 ? gap : undefined,
         ts: e.ts,
-        story: e.problemId.endsWith(':s'),
+        story: /:s2?$/.test(e.problemId),
       });
   }
   prevTs = e.ts;

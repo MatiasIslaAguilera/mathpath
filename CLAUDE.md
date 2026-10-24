@@ -141,7 +141,12 @@ Checklist:
      letters; the harness fails on it.
    - Derivative and determinant steps verify with `partial` (multivariable, optionally at a
      point) and `det`; see `VerifySpec` in `engine/types.ts`.
-7. Register the skill in `src/skills/index.ts`, then run `npm test` and `npm run verify:sympy:skills -- <skill-id>`.
+7. **Story variants** (`story`, specs in `docs/skill-specs/batch-s*-stories.md`): each pattern
+   changes how the words map to the math (a different unknown, a comparison, a unit), not just the
+   setting, and computes its misreading as a misconception. Its first step key is `setup-<pattern>`.
+   Adding patterns to a skill whose stories learners have already seen: freeze the old generator as
+   `story.original` (ids `…:s` keep regenerating from it; new ones end `…:s2`) and never edit it.
+8. Register the skill in `src/skills/index.ts`, then run `npm test` and `npm run verify:sympy:skills -- <skill-id>`.
 
 ## GRE Quant track
 

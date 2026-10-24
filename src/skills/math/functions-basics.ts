@@ -132,6 +132,12 @@ function evaluateCareful(rng: Rng): Generated {
   const a = rng.int(1, 3);
   const b = rng.nonzero(-6, 6);
   const x0 = rng.int(-5, -1);
+  return buildNegQuad(a, b, x0);
+}
+
+/** f(x) = -a x^2 + b x at x0 (shared by plain and story problems). */
+function buildNegQuad(a: number, b: number, x0: number): Generated {
+  const form = 0;
   const value = -a * x0 * x0 + b * x0;
   const expr = `-${a}*${par(x0)}^2 + ${b}*${par(x0)}`;
   const steps: Step[] = [
@@ -225,9 +231,9 @@ function buildPiecewise(a: number, b: number, p: number, qq: number, k: number, 
 // ---------- story variants (levels 1-2): the same evaluations as situations ----------
 
 /** A setup step: write the situation as an expression in x (checked by equivalence). */
-function setupStep(prompt: string, expr: string, display: string, why: string): Step {
+function setupStep(prompt: string, expr: string, display: string, why: string, key = 'setup'): Step {
   return {
-    key: 'setup',
+    key,
     instruction: prompt,
     math: display,
     why,
@@ -259,6 +265,9 @@ function storyProfit(rng: Rng): Generated {
     ['print shop', 'posters'],
   ]);
   const body = buildQuadratic(a, b, c, x0);
+  // Left out the fixed cost: the profit comes out too high by |c|.
+  const noFixed: MisconceptionInstance = { id: 'fixed-cost-dropped', wrong: numberAnswer(a * x0 * x0 + b * x0) };
+  body.misconceptions = distinctMisconceptions(body.answer, [noFixed, ...body.misconceptions]);
   const cost = quadLatex(-a, 0, -c);
   const profit = quadLatex(a, b, c);
   const expr = `${a}*x^2 + ${b}*x + ${c}`;
@@ -611,6 +620,31 @@ export const functionsBasics: SkillDefinition = {
       explanation:
         'Check with a test value. For $\\sqrt{x - 3}$, $x = 0$ gives $\\sqrt{-3}$, which is not real, so small $x$ is excluded: $x \\ge 3$. For $\\sqrt{3 - x}$ it is the other way: $x \\le 3$.',
     },
+    'fixed-cost-dropped': {
+      name: 'Left out the fixed cost',
+      explanation:
+        'Profit is revenue minus *all* of the cost, including the part paid whatever is made (rent, a permit). Subtract it once, at every output level.',
+    },
+    'price-not-revenue': {
+      name: 'Gave the price instead of the revenue',
+      explanation:
+        'Revenue is price times quantity. If 3 hundred cups sell at \\$4 each, revenue is $3 \\cdot 4 = 12$ hundred dollars, not 4.',
+    },
+    'wall-side-fenced': {
+      name: 'Fenced the side along the wall too',
+      explanation:
+        'Against a wall only three sides need fence: two of length $x$ and one long side. With 6 m of fence the long side is $6 - 2x$, so the area is $x(6 - 2x)$.',
+    },
+    'clock-not-duration': {
+      name: 'Used a clock time instead of the time parked',
+      explanation:
+        'The charge depends on how long you stayed: from 9:00 to 12:00 is $12 - 9 = 3$ hours. Work out the duration first, then put that into the rule.',
+    },
+    'time-direction': {
+      name: 'Read "before" as a positive input',
+      explanation:
+        'When $x$ counts quarters *after* an event, quarters before it are negative: 3 quarters before is $x = -3$. Then square with parentheses: $(-3)^2 = 9$.',
+    },
     'range-direction': {
       name: 'Flipped the range for the parabola',
       explanation:
@@ -633,6 +667,12 @@ export const functionsBasics: SkillDefinition = {
     direction: 'Opens up or down?',
     'combine-conditions': 'Combine the conditions',
     setup: 'Set up: write the situation as an expression',
+    'setup-words': 'Set up: profit from words',
+    'setup-revenue': 'Set up: revenue is price times quantity',
+    'setup-area': 'Set up: an area from a fence',
+    'setup-boundary': 'Set up: which rate at the cut-off',
+    'setup-duration': 'Set up: the input is a duration',
+    'setup-time': 'Set up: "before" is a negative input',
     'solve-condition': 'Solve the condition for x',
     'state-range': 'State the range',
   },
@@ -667,8 +707,213 @@ export const functionsBasics: SkillDefinition = {
   story: {
     levels: [1, 2],
     generate(rng, level) {
-      return level === 1 ? storyProfit(rng) : storySchedule(rng);
+      const pattern = rng.int(0, 3);
+      return pattern === 0 ? (level === 1 ? storyProfit(rng) : storySchedule(rng)) : NEW_PATTERNS[level as 1 | 2][pattern - 1](rng);
     },
+    original: (rng, level) => (level === 1 ? storyProfit(rng) : storySchedule(rng)),
   },
 };
 
+
+// ---------- Story patterns added in batch S2 (docs/skill-specs/batch-s2-stories.md) ----------
+// The original stories hand over the formula; these make the learner build it from words (profit
+// from prices and costs, revenue as price times quantity, an area from a fence), or work out the
+// input first (a duration from two clock times, "3 quarters before" as a negative input).
+
+/** Setup first, and the story's misreadings ahead of the algebra slips. */
+function withSetup(body: Generated, setup: Step, readings: (MisconceptionInstance | null)[]): Generated {
+  return {
+    ...body,
+    steps: [setup, ...body.steps],
+    misconceptions: distinctMisconceptions(body.answer, [...readings, ...body.misconceptions]),
+  };
+}
+
+/** L1: profit from words: price per unit, a cost that grows with the square, and rent. */
+function profitInWords(rng: Rng): Generated {
+  for (;;) {
+    const a = -rng.int(1, 3);
+    const b = rng.int(1, 6);
+    const c = -rng.int(1, 9);
+    const x0 = rng.int(1, 4);
+    const value = a * x0 * x0 + b * x0 + c;
+    if (value <= 0) continue;
+    const [maker, thing] = rng.pick([
+      ['A furniture workshop', 'stools'],
+      ['A jam maker', 'jars'],
+    ]);
+    const body = buildQuadratic(a, b, c, x0);
+    return {
+      ...withSetup(
+        body,
+        setupStep(
+          'Write the monthly profit $f(x)$, in thousands of dollars, as an expression in $x$.',
+          `${a}*x^2 + ${b}*x + ${c}`,
+          `f(x) = ${quadLatex(a, b, c)}`,
+          `Revenue is $${b === 1 ? '' : b}x$. The cost is $${-a === 1 ? '' : -a}x^2$ plus the rent of ${-c}, and profit is revenue minus *all* of the cost: $${b === 1 ? '' : b}x - ${-a === 1 ? '' : -a}x^2 - ${-c}$.`,
+          'setup-words',
+        ),
+        // Forgot the rent: the profit comes out too high by the fixed cost.
+        [{ id: 'fixed-cost-dropped', wrong: numberAnswer(value - c) }],
+      ),
+      prompt: `${maker} sells $x$ hundred ${thing} a month. Each hundred brings in ${b} thousand dollars. Making them costs ${-a === 1 ? '' : `${-a} times `}the square of $x$, in thousands of dollars, because the workshop gets crowded, and on top of that the rent is ${-c} thousand dollars a month. Let $f(x)$ be the monthly profit in thousands of dollars. Find $f(${x0})$.`,
+    };
+  }
+}
+
+/** L1: revenue when the price falls as more is sold: x(b − |a|x). */
+function fallingPrice(rng: Rng): Generated {
+  for (;;) {
+    const a = -rng.int(1, 3);
+    const b = rng.int(3, 6);
+    const x0 = rng.int(2, 4); // at x = 1 the revenue equals the price, which hides the misreading
+    const price = b + a * x0;
+    if (price < 1) continue;
+    const body = buildQuadratic(a, b, 0, x0);
+    const [seller, thing] = rng.pick([
+      ['A coffee cart', 'cups'],
+      ['A museum shop', 'posters'],
+    ]);
+    return {
+      ...withSetup(
+        body,
+        setupStep(
+          'Write the revenue $f(x)$, in hundreds of dollars, as an expression in $x$.',
+          `x*(${b} - ${-a}*x)`,
+          `f(x) = x(${b} - ${-a === 1 ? '' : -a}x)`,
+          `Revenue is price times quantity. The price is $${b} - ${-a === 1 ? '' : -a}x$ dollars and the quantity is $x$ hundred, so the revenue is $x(${b} - ${-a === 1 ? '' : -a}x)$ hundred dollars.`,
+          'setup-revenue',
+        ),
+        // Gave the price at x0, not the revenue.
+        [{ id: 'price-not-revenue', wrong: numberAnswer(price) }],
+      ),
+      prompt: `${seller} finds that to sell $x$ hundred ${thing} a week it has to set the price at $${b}$ dollars minus $${-a}$ dollar${-a === 1 ? '' : 's'} for each hundred sold, that is, $${b} - ${-a === 1 ? '' : -a}x$ dollars each. Let $f(x)$ be the weekly revenue in hundreds of dollars. Find $f(${x0})$.`,
+    };
+  }
+}
+
+/** L1: a pen against a wall: two sides of x and one side of L − 2x; area x(L − 2x). */
+function penArea(rng: Rng): Generated {
+  for (;;) {
+    const L = rng.int(3, 6);
+    const x0 = rng.int(1, 2);
+    if (L - 2 * x0 < 1) continue;
+    const body = buildQuadratic(-2, L, 0, x0);
+    const [animal, wall] = rng.pick([
+      ['rabbits', 'the back wall of a shed'],
+      ['chickens', 'a garden wall'],
+    ]);
+    return {
+      ...withSetup(
+        body,
+        setupStep(
+          'Write the area $f(x)$, in square metres, as an expression in $x$.',
+          `x*(${L} - 2*x)`,
+          `f(x) = x(${L} - 2x)`,
+          `The wall makes the fourth side, so the fencing covers two sides of $x$ and one long side. The long side is what is left: $${L} - 2x$. Area is width times length.`,
+          'setup-area',
+        ),
+        // Fenced all four sides: the long side would be (L − 2x)/2.
+        [{ id: 'wall-side-fenced', wrong: numberAnswer(q(x0 * (L - 2 * x0), 2)) }],
+      ),
+      prompt: `A rectangular pen for ${animal} is built against ${wall}, so only three sides need fencing. There are ${L} m of fence. The two sides that meet the wall are each $x$ m long. Let $f(x)$ be the area of the pen in square metres. Find $f(${x0})$.`,
+    };
+  }
+}
+
+/** L2: a courier's two rates, given in words; parcels at the cut-off are common. */
+function courier(rng: Rng): Generated {
+  for (;;) {
+    const p = rng.int(1, 4);
+    const qq = rng.int(1, 9);
+    const a = rng.int(1, 3);
+    const b = rng.int(0, 9);
+    const k = rng.int(1, 3);
+    const x0 = rng.chance(0.5) ? k : k + rng.int(-1, 2);
+    if (x0 < 1 || a * k * k + b < p * k + qq) continue;
+    const right = x0 >= k;
+    const body = buildPiecewise(a, b, p, qq, k, x0);
+    const rightL = b === 0 ? `${coefLatex(q(a))}x^{2}` : `${coefLatex(q(a))}x^{2} + ${b}`;
+    return {
+      ...withSetup(
+        body,
+        setupStep(
+          `Which rate applies to a ${x0} kg parcel? Write it as an expression in $x$.`,
+          right ? `${a}*x^2 + ${b}` : `${p}*x + ${qq}`,
+          right ? `f(x) = ${rightL}` : `f(x) = ${linLatex(p, qq)}`,
+          `"${k} kg or more" includes ${k} kg itself. ${x0} kg is ${right ? `at least ${k}` : `under ${k}`}, so the ${right ? 'bulky' : 'standard'} rate applies.`,
+          'setup-boundary',
+        ),
+        [],
+      ),
+      prompt: `A courier prices parcels by weight, $x$ kg. Parcels under ${k} kg cost \\$${p} per kg plus a \\$${qq} handling fee. Parcels of ${k} kg or more count as bulky: they cost ${a === 1 ? '' : `${a} times `}the square of the weight${b === 0 ? '' : `, plus \\$${b}`}. Let $f(x)$ be the price in dollars. Your parcel weighs ${x0} kg. Find $f(${x0})$.`,
+    };
+  }
+}
+
+/** L2: a car park charged by the hours parked; the input is a duration between two clock times. */
+function parking(rng: Rng): Generated {
+  for (;;) {
+    const p = rng.int(1, 4);
+    const qq = rng.int(1, 9);
+    const a = rng.int(1, 3);
+    const b = rng.int(0, 9);
+    const k = rng.int(1, 3);
+    const x0 = k + rng.int(-2, 2);
+    if (x0 < 1 || a * k * k + b < p * k + qq) continue;
+    const arrive = rng.int(8, 12);
+    const leave = arrive + x0;
+    const right = x0 >= k;
+    const body = buildPiecewise(a, b, p, qq, k, x0);
+    const rightL = b === 0 ? `${coefLatex(q(a))}x^{2}` : `${coefLatex(q(a))}x^{2} + ${b}`;
+    return {
+      ...withSetup(
+        body,
+        setupStep(
+          'First find the hours parked. Which rule applies to that stay? Write it as an expression in $x$.',
+          right ? `${a}*x^2 + ${b}` : `${p}*x + ${qq}`,
+          right ? `f(x) = ${rightL}` : `f(x) = ${linLatex(p, qq)}`,
+          `From ${arrive}:00 to ${leave}:00 is ${leave} − ${arrive} = ${x0} hours. That is ${right ? `at least ${k}` : `under ${k}`}, so the ${right ? 'second' : 'first'} rule applies.`,
+          'setup-duration',
+        ),
+        // Put the clock time in for x.
+        [{ id: 'clock-not-duration', wrong: numberAnswer(leave >= k ? a * leave * leave + b : p * leave + qq) }],
+      ),
+      prompt: `A car park charges by the number of hours parked, $x$. Stays under ${k} hour${k === 1 ? '' : 's'} cost $${linLatex(p, qq)}$ dollars; stays of ${k} hour${k === 1 ? '' : 's'} or more cost $${rightL}$ dollars. You arrive at ${arrive}:00 and leave at ${leave}:00. Let $f(x)$ be the charge in dollars. What do you pay?`,
+    };
+  }
+}
+
+/** L2: an index around a launch date: x quarters after (negative = before). */
+function beforeLaunch(rng: Rng): Generated {
+  const a = rng.int(1, 3);
+  const b = rng.nonzero(-6, 6);
+  const x0 = rng.int(-5, -1);
+  const body = buildNegQuad(a, b, x0);
+  const [what, intro, event] = rng.pick([
+    ['a sales index', 'the launch of a new phone', 'the launch'],
+    ['an attendance index', 'the reopening of a stadium', 'the reopening'],
+  ]);
+  const bWords = b === 1 ? '$x$' : b > 0 ? `${b} times $x$` : `minus ${b === -1 ? '' : `${-b} times `}$x$`;
+  const aWords = a === 1 ? 'the square of $x$' : `${a} times the square of $x$`;
+  return {
+    ...withSetup(
+      body,
+      setupStep(
+        'Write the index $f(x)$ as an expression in $x$.',
+        `-${a}*x^2 + ${b}*x`,
+        `f(x) = ${quadLatex(-a, b, 0)}`,
+        `Translate the words term by term: ${bWords.replace(/\$/g, '')}, then take away ${aWords.replace(/\$/g, '')}. Quarters *before* ${event} are negative inputs, so ${-x0} quarters before is $x = ${x0}$.`,
+        'setup-time',
+      ),
+      // Used +|x0| for "before".
+      [{ id: 'time-direction', wrong: numberAnswer(-a * x0 * x0 - b * x0) }],
+    ),
+    prompt: `An analyst models ${what} around ${intro}. With $x$ the number of quarters after ${event} (negative for quarters before it), the index $f(x)$ is ${bWords}, minus ${aWords}. What was the index ${-x0} quarter${x0 === -1 ? '' : 's'} before ${event}?`,
+  };
+}
+
+const NEW_PATTERNS: Record<1 | 2, ((rng: Rng) => Generated)[]> = {
+  1: [profitInWords, fallingPrice, penArea],
+  2: [courier, parking, beforeLaunch],
+};

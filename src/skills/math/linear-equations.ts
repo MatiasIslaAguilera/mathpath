@@ -8,7 +8,7 @@ import { linExpr, linLatex } from '../../engine/format';
 import { distinctMisconceptions } from '../../engine/misconceptions';
 import { Q, q } from '../../engine/rational';
 import type { Rng } from '../../engine/rng';
-import type { Level, SkillDefinition, Step } from '../../engine/types';
+import type { Level, MisconceptionInstance, SkillDefinition, Step } from '../../engine/types';
 
 const ID = 'linear-equations';
 
@@ -217,6 +217,36 @@ export const linearEquations: SkillDefinition = {
       explanation:
         'The distributive property multiplies every term inside: $3(x + 4) = 3x + 12$, not $3x + 4$.',
     },
+    'total-over-count': {
+      name: 'Divided the total by the count without taking off the other part',
+      explanation:
+        'A 4-night stay at \\$44 with a \\$4 fee every night: $44 \\div 4 = 11$ is the cost of one night *including* the fee, not the rate. Take off the other part first: $11 - 4 = 7$. With a one-time fee, subtract the fee from the total before dividing by the count.',
+    },
+    'compare-reversed': {
+      name: 'Read the comparison the wrong way round',
+      explanation:
+        '"Red is 5 more than 3 times blue" describes red in terms of blue: $\\text{red} = 3\\cdot\\text{blue} + 5$. If red is 26, then $3x + 5 = 26$. Multiplying the *known* number by 3 describes it the other way round. Sense-check: the quantity that is "3 times" the other should be the bigger one.',
+    },
+    'unit-mismatch': {
+      name: 'Used the rate in the wrong unit',
+      explanation:
+        'If parking costs \\$2 per half hour, one hour costs \\$4. When $x$ counts hours, the equation needs the price per hour. Using \\$2 gives the number of half-hour blocks, twice the number of hours.',
+    },
+    'aged-one-only': {
+      name: 'Added the years to only one person',
+      explanation:
+        'In $x$ years everyone is $x$ years older. If a parent is 40 and a child is 10, in $x$ years they are $40 + x$ and $10 + x$, so "twice as old" is $40 + x = 2(10 + x)$, giving $x = 20$.',
+    },
+    'ignored-gap': {
+      name: 'Found when they are equal instead of the gap asked for',
+      explanation:
+        '"A has \\$15 more than B" means $A = B + 15$, not $A = B$. Put the gap on the side of the smaller amount before solving.',
+    },
+    'discount-sign': {
+      name: 'Added a discount instead of subtracting it',
+      explanation:
+        'A discount lowers each price: in the sale one item costs $x - 3$, not $x + 3$. Then $4(x - 3) = 28$ gives $x - 3 = 7$, so $x = 10$. The regular price is *more* than what you paid per item.',
+    },
     'lcd-skip-term': {
       name: "Didn't multiply every term by the LCD",
       explanation:
@@ -226,6 +256,15 @@ export const linearEquations: SkillDefinition = {
   stepLabels: {
     setup: 'Set up: write the situation as an expression',
     'setup-right': 'Set up the other side',
+    'setup-rate': 'Set up: the rate is the unknown',
+    'setup-compare': 'Set up: "5 more than 3 times"',
+    'setup-units': 'Set up: put the rate in the right unit',
+    'setup-age': 'Set up: both ages change',
+    'setup-gap': 'Set up: include the gap',
+    'setup-chase': 'Set up: head start plus speed × time',
+    'setup-extra': 'Set up: the per-item extra is the unknown',
+    'setup-discount': 'Set up: a discount on every item',
+    'setup-orders': 'Set up: two orders, one price',
     'clear-fractions': 'Clear the fractions (multiply by the LCD)',
     expand: 'Expand the parentheses',
     collect: 'Collect x-terms and numbers',
@@ -255,12 +294,24 @@ export const linearEquations: SkillDefinition = {
   story: {
     levels: [1, 2, 3],
     generate(rng, level) {
-      const story = pickStory(rng, level);
-      const body = solveBuilt(story.built, level);
-      return { ...body, prompt: story.prompt, steps: [...story.setup, ...body.steps] };
+      const pattern = rng.int(0, 3);
+      return tell(pattern === 0 ? pickStory(rng, level) : NEW_PATTERNS[level as 1 | 2 | 3][pattern - 1](rng), level);
     },
+    original: (rng, level) => tell(pickStory(rng, level), level),
   },
 };
+
+/** A story's setup steps, then the equation's own steps. */
+function tell(story: Story, level: Level): Body {
+  const body = solveBuilt(story.built, level);
+  return {
+    ...body,
+    prompt: story.prompt,
+    steps: [...story.setup, ...body.steps],
+    // Story readings first: when one gives the same number as an algebra slip, the reading is the likelier cause.
+    misconceptions: distinctMisconceptions(body.answer, [...(story.mis ?? []), ...body.misconceptions]),
+  };
+}
 
 type Body = ReturnType<SkillDefinition['generate']>;
 
@@ -391,7 +442,7 @@ function solveBuilt(built: Built, level: Level): Body {
 // ---------- Story variants: the same equations as situations ----------
 
 /** A setup step: write one side of the situation as an expression in x (checked by equivalence). */
-function setupStep(key: 'setup' | 'setup-right', prompt: string, side: Side, why: string): Step {
+function setupStep(key: string, prompt: string, side: Side, why: string): Step {
   return {
     key,
     instruction: prompt,
@@ -412,6 +463,8 @@ interface Story {
   built: Built;
   prompt: string;
   setup: Step[];
+  /** Misreadings of the situation, computed with this story's numbers. */
+  mis?: (MisconceptionInstance | null)[];
 }
 
 /** Story params stay inside the level's ranges (positive prices, counts and totals). */
@@ -431,6 +484,7 @@ function pickStory(rng: Rng, level: Level): Story {
         built,
         prompt: `Concert tickets cost ${usd(a)} each. With a ${usd(-b)} discount code on the whole order, you paid ${usd(c)}. How many tickets did you buy?`,
         setup: [setupStep('setup', 'Let $x$ be the number of tickets. Write what you paid, in dollars, in terms of $x$.', left, 'The tickets cost the price times $x$; the discount comes off once, so subtract it.')],
+        mis: [wrongNumber('total-over-count', () => q(c, a))],
       };
     }
     const settings = [
@@ -443,6 +497,7 @@ function pickStory(rng: Rng, level: Level): Story {
       built,
       prompt,
       setup: [setupStep('setup', `Let $x$ be ${unit}. Write the total cost, in dollars, in terms of $x$.`, left, SETUP_WHY)],
+      mis: [wrongNumber('total-over-count', () => q(c, a))],
     };
   }
 
@@ -507,5 +562,317 @@ function pickStory(rng: Rng, level: Level): Story {
         `Each ${hotel ? 'night' : 'jersey'} costs $x + ${b}$, and there are ${a} of them: multiply the whole bracket by ${a}. The ${days} days doesn't enter the equation.`,
       ),
     ],
+    // Seen: a 4-night stay costing 44 with a fee of 4 a night answered 11 (= 44/4, the fee still inside).
+    mis: [wrongNumber('total-over-count', () => q(d, a))],
   };
 }
+
+// ---------- Story patterns added in batch S2 (docs/skill-specs/batch-s2-stories.md) ----------
+// Each pattern changes how the situation maps to the equation, not just the setting: a different
+// unknown, a comparison, a rate in the wrong unit, two quantities that both change, a gap, a chase.
+
+/** A setup step with its own display and expression (for sides written in story order). */
+function setupAs(key: string, prompt: string, latex: string, expr: string, why: string): Step {
+  return {
+    key,
+    instruction: prompt,
+    math: latex,
+    why,
+    ask: { prompt, answer: { kind: 'expression', value: expr, variables: ['x'], display: latex }, verify: { type: 'equivalent', expr, variables: ['x'] } },
+  };
+}
+
+/** "5 more than" / "3 fewer than". */
+const moreFewer = (b: number) => (b > 0 ? `${b} more than` : `${-b} fewer than`);
+const times = (a: number) => (a === 2 ? 'twice' : a === 3 ? 'three times' : `${a} times`);
+
+/** L1: the rate is unknown and the count is given (a·x + b = c with x the price). */
+function rateUnknown(rng: Rng): Story {
+  const a = rng.int(2, 9);
+  const x = rng.int(1, 10);
+  const b = rng.int(1, 20);
+  const c = a * x + b;
+  const left = plain(a, b);
+  const [prompt, unknown] = rng.pick([
+    [`A ${a}-mile taxi ride cost ${usd(c)}, including a ${usd(b)} pickup fee. What does the taxi charge per mile?`, 'the price per mile, in dollars'],
+    [`A plumber's ${a}-hour job came to ${usd(c)}, which includes a ${usd(b)} call-out fee. What is the plumber's hourly rate?`, 'the hourly rate, in dollars'],
+    [`You bought ${a} identical notebooks online and paid ${usd(c)}, including ${usd(b)} for shipping. What did one notebook cost?`, 'the price of one notebook, in dollars'],
+  ]);
+  return {
+    built: { params: { a, b, c, x }, left, right: plain(0, c) },
+    prompt,
+    setup: [
+      setupStep(
+        'setup-rate',
+        `Let $x$ be ${unknown}. Write the total paid in terms of $x$.`,
+        left,
+        `This time the count (${a}) is known and the rate is the unknown: the count multiplies $x$, and the one-time fee is added once. Take the fee off before you divide by the count.`,
+      ),
+    ],
+    mis: [wrongNumber('total-over-count', () => q(c, a))],
+  };
+}
+
+/** L1: one quantity described through another ("5 more than 3 times as many"). */
+function comparison(rng: Rng): Story {
+  for (;;) {
+    const a = rng.int(2, 9);
+    const x = rng.int(1, 10);
+    const b = rng.nonzero(-20, 20);
+    const c = a * x + b;
+    if (c < 1) continue;
+    const left = plain(a, b);
+    const rel = `${moreFewer(b)} ${times(a)}`;
+    const k = rng.pick([
+      {
+        prompt: `A jar holds red and blue marbles. The number of red marbles is ${rel} the number of blue marbles. There are ${c} red marbles. How many blue marbles are there?`,
+        unknown: 'the number of blue marbles',
+        known: 'the number of red marbles',
+      },
+      {
+        prompt: `A chess club has ${c} members this year. That is ${rel} the number of members it had when it started. How many members did it start with?`,
+        unknown: 'the number of members at the start',
+        known: "this year's number of members",
+      },
+      {
+        prompt: `A shop sold ${c} umbrellas on a rainy Saturday: ${rel} the number it sold the sunny Saturday before. How many umbrellas did it sell on the sunny Saturday?`,
+        unknown: 'the number sold on the sunny Saturday',
+        known: 'the number sold on the rainy Saturday',
+      },
+    ]);
+    return {
+      built: { params: { a, b, c, x }, left, right: plain(0, c) },
+      prompt: k.prompt,
+      setup: [
+        setupStep(
+          'setup-compare',
+          `Let $x$ be ${k.unknown}. Write ${k.known} in terms of $x$.`,
+          left,
+          `"${times(a)} the number" multiplies the unknown by ${a}, then "${moreFewer(b)}" ${b > 0 ? 'adds' : 'subtracts'} ${Math.abs(b)}. The quantity described *in terms of* the other one is the one you write as an expression.`,
+        ),
+      ],
+      // Read the comparison the other way round: x = a·c ± |b|.
+      mis: [wrongNumber('compare-reversed', () => a * c + b)],
+    };
+  }
+}
+
+/** L1: the price is per block of minutes, x is in hours (convert the rate first). */
+function unitRate(rng: Rng): Story {
+  const [n, block] = rng.pick([
+    [2, 'half hour'],
+    [3, '20 minutes'],
+    [4, '15 minutes'],
+  ] as const);
+  const r = rng.int(1, Math.floor(9 / n));
+  const a = n * r;
+  const x = rng.int(1, 10);
+  const b = rng.int(1, 20);
+  const c = a * x + b;
+  const left = plain(a, b);
+  const [intro, what] = rng.pick([
+    [`A parking garage charges a ${usd(b)} entry fee plus ${usd(r)} for every ${block}.`, 'How many hours did you park?'],
+    [`A kayak rental costs a ${usd(b)} booking fee plus ${usd(r)} for every ${block} on the water.`, 'For how many hours did you rent the kayak?'],
+    [`A coworking space charges a ${usd(b)} day-pass fee plus ${usd(r)} for every ${block} in a meeting room.`, 'How many hours did you use the meeting room?'],
+  ]);
+  return {
+    built: { params: { a, b, c, x }, left, right: plain(0, c) },
+    prompt: `${intro} You paid ${usd(c)} in total, for a whole number of hours. ${what}`,
+    setup: [
+      setupStep(
+        'setup-units',
+        'Let $x$ be the number of hours. Write the total cost, in dollars, in terms of $x$.',
+        left,
+        `An hour has ${n} blocks of ${60 / n} minutes, so one hour costs ${n} times ${usd(r)}, which is ${usd(a)}. Put the rate in the unit of $x$ before writing the equation.`,
+      ),
+    ],
+    // Used the per-block price as if it were per hour: the answer comes out in blocks, not hours.
+    mis: [wrongNumber('unit-mismatch', () => q(c - b, r))],
+  };
+}
+
+/** L2: ages: in x years the parent is k times as old as the child (both ages grow). */
+function ages(rng: Rng): Story {
+  for (;;) {
+    const k = rng.int(2, 3);
+    const s = rng.int(1, Math.floor(20 / k));
+    const x = rng.int(1, 10);
+    const m = k * s + (k - 1) * x;
+    if (m - s < 16 || m - s > 45) continue;
+    const [parent, child] = rng.pick([
+      ['mother', 'daughter'],
+      ['father', 'son'],
+      ['aunt', 'nephew'],
+    ]);
+    const pron = parent === 'father' ? 'his' : 'her';
+    const left = plain(k, k * s);
+    const right = plain(1, m);
+    return {
+      built: { params: { a: k, b: k * s, c: 1, d: m, x }, left, right },
+      prompt: `A${parent === 'aunt' ? 'n' : ''} ${parent} is ${m} years old and ${pron} ${child} is ${s}. In how many years will the ${parent} be ${times(k)} as old as the ${child}?`,
+      setup: [
+        setupAs(
+          'setup-age',
+          `Let $x$ be the number of years from now. Write ${times(k)} the ${child}'s age at that time, in terms of $x$.`,
+          `${k}(x + ${s})`,
+          `${k}*(x + ${s})`,
+          `In $x$ years *both* people are $x$ years older: the ${child} will be $x + ${s}$ and the ${parent} $x + ${m}$. "${times(k)} as old" multiplies the ${child}'s whole future age.`,
+        ),
+        setupAs('setup-right', `Write the ${parent}'s age at that time in terms of $x$.`, `x + ${m}`, `x + ${m}`, 'The years pass for both people.'),
+      ],
+      // Added the years to only one of the two: k(s + x) = m, or k·s = m + x.
+      mis: [wrongNumber('aged-one-only', () => q(m, k).sub(s)), wrongNumber('aged-one-only', () => k * s - m)],
+    };
+  }
+}
+
+/** L2: when will A be ahead of B by a given gap (not just equal)? */
+function gap(rng: Rng): Story {
+  for (;;) {
+    const a = rng.int(3, 9);
+    const c = rng.int(1, a - 1);
+    const x = rng.int(2, 10);
+    const b = rng.int(0, 20);
+    const g = 5 * rng.int(1, 4);
+    if (g >= (a - c) * x) continue;
+    const d = b + (a - c) * x; // B's start plus the gap
+    const d0 = d - g; // B's start
+    const left = plain(a, b);
+    const right = plain(c, d);
+    const k = rng.pick([
+      {
+        prompt: `You have ${usd(b)} saved and put in ${usd(a)} a week. Your brother has ${usd(d0)} saved and puts in ${usd(c)} a week. After how many weeks will you have ${usd(g)} more than him?`,
+        a: 'your savings',
+        b: "your brother's savings",
+        gapWord: `${usd(g)} gap`,
+        unit: 'dollars',
+      },
+      {
+        prompt: `Plant A is ${b} cm tall and grows ${a} cm a week. Plant B is ${d0} cm tall and grows ${c} cm a week. After how many weeks will plant A be ${g} cm taller than plant B?`,
+        a: "plant A's height",
+        b: "plant B's height",
+        gapWord: `${g} cm gap`,
+        unit: 'cm',
+      },
+    ]);
+    return {
+      built: { params: { a, b, c, d, x }, left, right },
+      prompt: k.prompt,
+      setup: [
+        setupStep('setup-gap', `Let $x$ be the number of weeks. Write ${k.a} after $x$ weeks, in ${k.unit}.`, left, SETUP_WHY),
+        setupAs(
+          'setup-right',
+          `Write ${k.b} after $x$ weeks, plus the ${k.gapWord}.`,
+          `${linLatex(c, d0)} + ${g}`,
+          `${c}*x + ${d0} + ${g}`,
+          `"${g} more than B" means A equals B's amount *plus* ${g}. Without the gap you would find when the two are equal.`,
+        ),
+      ],
+      mis: [wrongNumber('ignored-gap', () => q(d0 - b, a - c))],
+    };
+  }
+}
+
+/** L2: a chase: the faster one starts behind by a head start. */
+function chase(rng: Rng): Story {
+  const c = rng.int(1, 6);
+  const a = rng.int(c + 1, 9);
+  const x = rng.int(1, 10);
+  const d = (a - c) * x;
+  const left = plain(a, 0);
+  const right = plain(c, d);
+  const k = rng.pick([
+    { slow: 'a walker', fast: 'a runner', slowS: 'walker', fastS: 'runner', place: 'trail' },
+    { slow: 'a raft', fast: 'a motorboat', slowS: 'raft', fastS: 'boat', place: 'river' },
+  ]);
+  return {
+    built: { params: { a, b: 0, c, d, x }, left, right },
+    prompt: `On a long ${k.place}, ${k.slow} moves at ${c} km/h. When ${k.fast} sets off from the same starting point at ${a} km/h in the same direction, the ${k.slowS} is already ${d} km ahead. How many hours after setting off does the ${k.fastS} catch up?`,
+    setup: [
+      setupStep('setup-chase', `Let $x$ be the hours since the ${k.fastS} set off. Write the ${k.fastS}'s distance from the start, in km, in terms of $x$.`, left, 'Distance is speed times time.'),
+      setupStep(
+        'setup-right',
+        `Write the ${k.slowS}'s distance from the start in terms of $x$.`,
+        right,
+        `The ${k.slowS} starts ${d} km out and keeps moving at ${c} km/h: the head start plus speed times time. Catching up means the two distances are equal.`,
+      ),
+    ],
+  };
+}
+
+/** L3: the per-item extra is the unknown, the base price is given: a(x + p) = d. */
+function extraUnknown(rng: Rng): Story {
+  const a = rng.int(2, 9);
+  const b = rng.int(1, 9);
+  const x = rng.int(1, 10);
+  const d = a * (x + b);
+  const left = distributed(a, b);
+  const k = rng.pick([
+    {
+      prompt: `A ${a}-night hotel stay came to ${usd(d)}. The room is ${usd(b)} a night, and the city adds the same tourist tax on top of every night. How much is the tax per night?`,
+      unknown: 'the tax per night',
+      each: 'night',
+    },
+    {
+      prompt: `A team orders ${a} jerseys at ${usd(b)} each, plus the same printing charge on every jersey. The bill is ${usd(d)}. What is the printing charge per jersey?`,
+      unknown: 'the printing charge per jersey',
+      each: 'jersey',
+    },
+  ]);
+  return {
+    built: { params: { a, b, c: 0, d, x }, left, right: plain(0, d) },
+    prompt: k.prompt,
+    setup: [setupStep('setup-extra', `Let $x$ be ${k.unknown}. Write the total in terms of $x$.`, left, `Each ${k.each} costs ${usd(b)} plus $x$, so $x + ${b}$, and there are ${a} of them: multiply the whole bracket by ${a}.`)],
+    mis: [wrongNumber('total-over-count', () => q(d, a))],
+  };
+}
+
+/** L3: the same discount off every item: a(x − e) = d. */
+function discount(rng: Rng): Story {
+  const a = rng.int(2, 9);
+  const e = rng.int(1, 9);
+  const x = rng.int(e + 1, Math.max(e + 1, 10));
+  const d = a * (x - e);
+  const left = distributed(a, -e);
+  const [item, items] = rng.pick([
+    ['book', 'books'],
+    ['plant', 'plants'],
+    ['concert T-shirt', 'concert T-shirts'],
+  ]);
+  return {
+    built: { params: { a, b: -e, c: 0, d, x }, left, right: plain(0, d) },
+    prompt: `In a sale, every ${item} is ${usd(e)} off its regular price. You buy ${a} ${items} and pay ${usd(d)}. What is the regular price of one ${item}?`,
+    setup: [setupStep('setup-discount', 'Let $x$ be the regular price. Write what you paid in terms of $x$.', left, `Each ${item} costs $x - ${e}$ in the sale, and you buy ${a}: multiply the whole bracket by ${a}.`)],
+    mis: [wrongNumber('discount-sign', () => q(d, a).sub(e)), wrongNumber('total-over-count', () => q(d, a))],
+  };
+}
+
+/** L3: two orders at the same unknown price come to the same total: a(x + b) = c·x + d. */
+function twoOrders(rng: Rng): Story {
+  for (;;) {
+    const a = rng.int(2, 9);
+    const c = rng.int(1, 9);
+    if (c === a) continue;
+    const b = rng.int(1, 9);
+    const x = rng.int(1, 10);
+    const d = a * (x + b) - c * x;
+    if (d < 1) continue;
+    const days = rng.int(2, 9);
+    const left = distributed(a, b);
+    const right = plain(c, d);
+    return {
+      built: { params: { a, b, c, d, x }, left, right },
+      prompt: `Two orders of the same mug came to the same total. Order A was ${a} mugs, each gift-wrapped for ${usd(b)} extra. Order B was ${c} mug${c === 1 ? '' : 's'} with one ${usd(d)} delivery charge. Order A arrived ${days} days sooner. What is the price of one mug?`,
+      setup: [
+        setupStep('setup-orders', 'Let $x$ be the price of one mug. Write the total of order A in terms of $x$.', left, `Each mug in order A costs $x + ${b}$: multiply the whole bracket by ${a}. The ${days} days doesn't enter the cost.`),
+        setupStep('setup-right', 'Write the total of order B in terms of $x$.', right, 'The delivery charge is paid once, so add it once.'),
+      ],
+    };
+  }
+}
+
+const NEW_PATTERNS: Record<1 | 2 | 3, ((rng: Rng) => Story)[]> = {
+  1: [rateUnknown, comparison, unitRate],
+  2: [ages, gap, chase],
+  3: [extraUnknown, discount, twoOrders],
+};

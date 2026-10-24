@@ -239,7 +239,7 @@ for (const { e } of undiagnosed) {
     const d = Number(e.input) - evalExact(p.answer.value);
     if (Number.isFinite(d)) gap = `  (off by ${+d.toFixed(4)})`;
   }
-  const working = e.working ? `\n      working: ${e.working.join('  |  ')} (first wrong line ${(e.workingFirstWrong ?? -1) + 1})` : '';
+  const working = e.working ? `\n      working: ${e.working.join('  |  ')} (${e.workingFirstWrong === undefined ? 'no line flagged' : `first wrong line ${e.workingFirstWrong + 1}`})` : '';
   console.log(`- ${e.problemId}  L${e.level}  input ${e.input}  answer ${answerText(p)}${gap}\n      ${clip(p.prompt)}${working}`);
 }
 

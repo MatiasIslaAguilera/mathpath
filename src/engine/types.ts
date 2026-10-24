@@ -134,7 +134,7 @@ export type Figure =
   | { kind: 'table'; caption: string; headers: string[]; rows: string[][] };
 
 export interface Problem {
-  /** `${skillId}:${level}:${seed}`, plus `:s` for a story variant — enough to regenerate it. */
+  /** `${skillId}:${level}:${seed}`, plus `:s` (or `:s2`, see `story.original`) for a story variant — enough to regenerate it. */
   id: string;
   /** 'story' when built by `SkillDefinition.story` (a word problem with a setup step). */
   variant?: 'story';
@@ -232,6 +232,12 @@ export interface SkillDefinition {
   story?: {
     levels: Level[];
     generate(rng: import('./rng').Rng, level: Level): Omit<Problem, 'id' | 'skillId' | 'level' | 'seed'>;
+    /**
+     * The story generator as it was before more patterns were added, frozen so ids already in the
+     * learner's history (`…:s`) regenerate the same problem. When set, new story ids end `:s2`.
+     * Add patterns by drawing them after `original` inside `generate`; never edit `original`.
+     */
+    original?(rng: import('./rng').Rng, level: Level): Omit<Problem, 'id' | 'skillId' | 'level' | 'seed'>;
   };
   /**
    * Optional custom checker. Default: engine/checker.ts by AnswerSpec kind.
