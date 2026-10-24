@@ -181,8 +181,9 @@ function level1(rng: Rng): Generated {
 
 // ---------- level 2: the rule of 70 ----------
 
-const G_TENTHS = [10, 20, 35, 50, 70, 100, 140]; // 1, 2, 3.5, 5, 7, 10, 14 percent
-const T_YEARS = [7, 10, 14, 20, 35];
+// Rates and years with clean rule-of-70 answers (70/g and 70/T end in at most one decimal).
+const G_TENTHS = [10, 14, 20, 25, 28, 35, 40, 50, 70, 100, 140]; // 1, 1.4, 2, 2.5, 2.8, 3.5, 4, 5, 7, 10, 14 percent
+const T_YEARS = [7, 10, 14, 20, 25, 28, 35];
 
 const RULE_CHOICE = (rng: Rng) =>
   choice(rng, 'Years to double is about 70 divided by the growth rate (in percent)', [
