@@ -31,16 +31,30 @@ describe('gre-ratios-rates', () => {
   });
 
   it('level 2: the combined time satisfies 1/a + 1/b = 1/t (exact, by cross-multiplying)', () => {
-    for (let seed = 1; seed <= 300; seed++) {
-      const p = makeProblem(skill, 2, seed);
-      const { form, a, b, t } = p.params;
-      const x = ans(p);
-      if (form === 0) expect(x * (a + b), p.id).toBe(a * b); // t = ab/(a+b)
-      else {
-        expect(x * (a - t), p.id).toBe(a * t); // 1/t = 1/a + 1/x  =>  x = at/(a - t)
-        expect(x * a * t * 0 + (x + a) * t, p.id).toBe(x * a); // and x + a over product = 1/t
+    for (const variant of [undefined, 'story'] as const)
+      for (let seed = 1; seed <= 300; seed++) {
+        const p = makeProblem(skill, 2, seed, variant);
+        const { form, m, n, a, b, t } = p.params;
+        const x = ans(p);
+        if (form === 0) expect(x * (a + b), p.id).toBe(a * b); // t = ab/(a+b)
+        else {
+          expect(x * (a - t), p.id).toBe(a * t); // 1/t = 1/a + 1/x  =>  x = at/(a - t)
+          expect(x * a * t * 0 + (x + a) * t, p.id).toBe(x * a); // and x + a over product = 1/t
+        }
+        if (variant === 'story') {
+          // The prompt states A's time (as hours or as a fraction per hour) and never the answer's time for B in 'faster' stories.
+          expect(p.prompt, p.id).toContain(String(a));
+          const fast = p.prompt.match(/(twice|three times|four times) as fast/);
+          if (fast) {
+            // "B is k times as fast as A": B's time is a / k, so the together-time is a / (k + 1).
+            expect(form, p.id).toBe(0);
+            expect(n, p.id).toBe(1);
+            expect({ twice: 2, 'three times': 3, 'four times': 4 }[fast[1]], p.id).toBe(m);
+            expect(b * m, p.id).toBe(a);
+            expect(x * (m + 1), p.id).toBe(a);
+          }
+        }
       }
-    }
   });
 
   it('level 3: average speed from total distance/total time; QC by direct evaluation', () => {
@@ -65,15 +79,21 @@ describe('gre-ratios-rates', () => {
   });
 
   it('level 4: rate x time with the right unit conversions', () => {
-    for (let seed = 1; seed <= 300; seed++) {
-      const p = makeProblem(skill, 4, seed);
-      const { form, s, t, d, x, h, v } = p.params;
-      const got = ans(p);
-      if (form === 0) expect(got, p.id).toBe((s * (t / 60)));
-      else if (form === 1) expect(got / 60 * s, p.id).toBeCloseTo(d, 9); // minutes -> hours times speed = distance
-      else if (form === 2) expect(got, p.id).toBe(x * h * 60);
-      else expect(got * 1000, p.id).toBe(v * 3600); // km/h * 1000 m = m/s * 3600 s
-    }
+    for (const variant of [undefined, 'story'] as const)
+      for (let seed = 1; seed <= 300; seed++) {
+        const p = makeProblem(skill, 4, seed, variant);
+        const { form, s, t, d, x, h, v } = p.params;
+        const got = ans(p);
+        if (form === 0) expect(got, p.id).toBe((s * (t / 60)));
+        else if (form === 1) expect(got / 60 * s, p.id).toBeCloseTo(d, 9); // minutes -> hours times speed = distance
+        else if (form === 2) expect(got, p.id).toBe(x * h * 60);
+        else expect(got * 1000, p.id).toBe(v * 3600); // km/h * 1000 m = m/s * 3600 s
+        if (variant === 'story') {
+          expect(form, p.id).toBeLessThan(3);
+          expect(p.prompt, p.id).toContain(String(form === 2 ? x : s));
+          expect(p.prompt, p.id).toContain(String(form === 0 ? t : form === 1 ? d : h));
+        }
+      }
   });
 
   it('level 5: mixtures conserve the solute; QC checked on a grid', () => {

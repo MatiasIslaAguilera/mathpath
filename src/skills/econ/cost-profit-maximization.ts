@@ -23,11 +23,19 @@ const coef = (c: number, v = 'q') => (c === 1 ? v : `${c}${v}`);
 const tcLatex = (F: number, v: number, w: number) => `TC(q) = ${F} + ${coef(v)} + ${coef(w)}^2`.replace('+ 1q', '+ q');
 const tcExpr = (F: number, v: number, w: number, at = 'q') => `(${F} + ${v}*(${at}) + ${w}*(${at})^2)`;
 
-function level1(rng: Rng): Body {
+function drawL1(rng: Rng) {
   const F = rng.int(20, 500);
   const v = rng.int(2, 20);
   const w = rng.int(1, 5);
   const q0 = rng.int(3, 30);
+  return { F, v, w, q0 };
+}
+
+function level1(rng: Rng): Body {
+  return buildL1(rng, drawL1(rng));
+}
+
+function buildL1(rng: Rng, { F, v, w, q0 }: { F: number; v: number; w: number; q0: number }): Body {
   const mc = v + 2 * w * q0;
   const answer = numberAnswer(mc);
   const tc = F + v * q0 + w * q0 * q0;
@@ -108,7 +116,7 @@ function level2(rng: Rng): Body {
   };
 }
 
-function level3(rng: Rng): Body {
+function drawL3(rng: Rng) {
   let w: number, k: number, F: number;
   do {
     w = rng.int(1, 5);
@@ -116,6 +124,14 @@ function level3(rng: Rng): Body {
     F = rng.int(10, 300);
   } while (w * k * k <= F);
   const v = rng.int(2, 30);
+  return { w, k, F, v };
+}
+
+function level3(rng: Rng): Body {
+  return buildL3(rng, drawL3(rng));
+}
+
+function buildL3(rng: Rng, { w, k, F, v }: { w: number; k: number; F: number; v: number }): Body {
   const p = v + 2 * w * k;
   const profit = p * k - (F + v * k + w * k * k);
   const labels = ['Quantity', 'Profit'];
@@ -259,6 +275,128 @@ function level5(rng: Rng): Body {
   }
 }
 
+// ---------- story variants: the cost function from a description ----------
+
+interface Setting {
+  firm: string;
+  many: string;
+  one: string;
+  mat: string;
+  place: string;
+}
+const SETTINGS: Setting[] = [
+  { firm: 'A print shop', many: 'posters', one: 'poster', mat: 'Paper and ink', place: 'shop' },
+  { firm: 'A pottery studio', many: 'mugs', one: 'mug', mat: 'Clay and glaze', place: 'studio' },
+  { firm: 'A small bakery', many: 'loaves', one: 'loaf', mat: 'Flour and yeast', place: 'kitchen' },
+];
+
+/** The cost function in words: rent, materials per unit, a crowding cost on the square of output. */
+const costWords = (s: Setting, F: number, v: number, w: number) =>
+  `${s.firm} pays ${money(F)} a month in rent whatever it makes. ${s.mat} cost ${money(v)} per ${s.one}, and crowding the ${s.place} adds ${money(w)} times the square of the number of ${s.many} made.`;
+
+/** The cost function when the story gives rent and average variable cost. */
+const avgWords = (s: Setting, F: number, v: number, w: number) =>
+  `${s.firm} pays ${money(F)} a month in rent whatever it makes. Its average variable cost is $${v} + ${coef(w)}$ dollars per ${s.one} when $q$ ${s.many} are made in a month.`;
+
+function setupQ(key: string, prompt: string, math: string, display: string, value: string, why: string): Step {
+  return {
+    key,
+    instruction: prompt,
+    math,
+    why,
+    ask: { prompt, answer: { kind: 'expression', value, variables: ['q'], display }, verify: { type: 'equivalent', expr: value, variables: ['q'] } },
+  };
+}
+
+/** A story's setup steps, then the level's own steps; misreadings go before the body's. */
+function tell(body: Body, prompt: string, setup: Step[], mis: (MisconceptionInstance | null)[]): Body {
+  return {
+    ...body,
+    prompt,
+    steps: [...setup, ...body.steps],
+    misconceptions: distinctMisconceptions(body.answer, [...mis, ...body.misconceptions]),
+  };
+}
+
+const TC_WHY = 'Total cost adds the fixed cost, the cost per unit times $q$, and the crowding term: $w$ times $q^2$.';
+
+function storyL1(rng: Rng): Body {
+  const pattern = rng.int(0, 2);
+  const d = drawL1(rng);
+  const { F, v, w, q0 } = d;
+  const s = rng.pick(SETTINGS);
+  const body = buildL1(rng, d);
+  const tcRhs = `${F} + ${coef(v)} + ${coef(w)}^2`;
+  const tcValue = `${F} + ${v}*q + ${w}*q^2`;
+  const letQ = `Let $q$ be the number of ${s.many} made in a month.`;
+  if (pattern === 2) {
+    const value = `${F} + q*(${v} + ${w}*q)`;
+    const display = `${F} + q(${v} + ${coef(w)})`;
+    return tell(
+      body,
+      `${avgWords(s, F, v, w)} What is the marginal cost when ${q0} ${s.many} are made in a month?`,
+      [setupQ('setup-average', `${letQ} Write the total cost, in dollars, in terms of $q$.`, `TC(q) = ${display}`, display, value, 'Total variable cost is the average variable cost times the quantity, $q(v + wq)$. Add the fixed rent. The result is the same cost function, so marginal cost is its derivative.')],
+      [wrongNumber('avc-as-tvc', () => w)],
+    );
+  }
+  if (pattern === 1) {
+    return tell(
+      body,
+      `${costWords(s, F, v, w)} The ${s.place} now makes ${q0} ${s.many} a month. About how much does it cost to make one more ${s.one}?`,
+      [setupQ('setup-next', `${letQ} Write the total cost, in dollars, in terms of $q$.`, `TC(q) = ${tcRhs}`, tcRhs, tcValue, TC_WHY)],
+      [],
+    );
+  }
+  return tell(
+    body,
+    `${costWords(s, F, v, w)} What is the marginal cost when ${q0} ${s.many} are made in a month?`,
+    [setupQ('setup-words', `${letQ} Write the total cost, in dollars, in terms of $q$.`, `TC(q) = ${tcRhs}`, tcRhs, tcValue, TC_WHY)],
+    [],
+  );
+}
+
+function storyL3(rng: Rng): Body {
+  const pattern = rng.int(0, 2);
+  const d = drawL3(rng);
+  const { w, k, F, v } = d;
+  const p = v + 2 * w * k;
+  const s = rng.pick(SETTINGS);
+  const S = rng.int(40, 400);
+  const body = buildL3(rng, d);
+  const tcRhs = `${F} + ${coef(v)} + ${coef(w)}^2`;
+  const tcValue = `${F} + ${v}*q + ${w}*q^2`;
+  const letQ = `Let $q$ be the number of ${s.many} made in a month.`;
+  const sell = `It can sell any number of ${s.many} at ${money(p)} each.`;
+  const ask = 'Find the profit-maximizing output and the profit.';
+  if (pattern === 2) {
+    const profit = p * k - (F + v * k + w * k * k);
+    const labels = ['Quantity', 'Profit'];
+    const disp = ['q^*', '\\pi^*'];
+    const value = `${p}*q - (${F} + ${v}*q + ${w}*q^2)`;
+    const display = `${p}q - (${tcRhs})`;
+    return tell(
+      body,
+      `${costWords(s, F, v, w)} ${sell} Last year it spent ${money(S)} on a market study. ${ask}`,
+      [setupQ('setup-sunk', `${letQ} Write this month's profit, in dollars, in terms of $q$.`, `\\pi(q) = ${display}`, display, value, `Profit is revenue minus cost. The ${money(S)} market study was paid last year and cannot be undone, so it does not enter this month's profit or the choice of $q$.`)],
+      [{ id: 'sunk-cost-counted', wrong: tupleAnswer(labels, [k, profit - S], disp) }],
+    );
+  }
+  if (pattern === 1) {
+    return tell(
+      body,
+      `${avgWords(s, F, v, w)} ${sell} ${ask}`,
+      [setupQ('setup-average', `${letQ} Write the total cost, in dollars, in terms of $q$.`, `TC(q) = ${F} + q(${v} + ${coef(w)})`, `${F} + q(${v} + ${coef(w)})`, `${F} + q*(${v} + ${w}*q)`, 'Total variable cost is the average variable cost times the quantity, $q(v + wq)$. Add the fixed rent.')],
+      [],
+    );
+  }
+  return tell(
+    body,
+    `${costWords(s, F, v, w)} ${sell} ${ask}`,
+    [setupQ('setup-words', `${letQ} Write the total cost, in dollars, in terms of $q$.`, `TC(q) = ${tcRhs}`, tcRhs, tcValue, TC_WHY)],
+    [],
+  );
+}
+
 export const costProfitMaximization: SkillDefinition = {
   id: ID,
   title: 'Costs & profit maximization',
@@ -281,6 +419,8 @@ export const costProfitMaximization: SkillDefinition = {
     'fixed-in-avc': { name: 'Included the fixed cost in AVC', explanation: 'Average VARIABLE cost leaves out the fixed cost. AC = AVC + F/q.' },
     'profit-forgot-fixed': { name: 'Left the fixed cost out of profit', explanation: "The fixed cost doesn't change the best quantity (its derivative is zero), but profit = revenue − ALL costs." },
     'forgot-sqrt-scale': { name: 'Forgot the square root', explanation: '$wq = \\frac{F}{q}$ gives $q^2 = F/w$, so $q = \\sqrt{F/w}$.' },
+    'avc-as-tvc': { name: 'Treated average variable cost as total variable cost', explanation: 'An average is per unit. If average variable cost is $v + wq$ dollars per unit, total variable cost is that times $q$: $q(v + wq)$. Differentiate the total, not the average.' },
+    'sunk-cost-counted': { name: 'Subtracted a sunk cost from profit', explanation: 'Money already spent on the market study is gone whatever the firm does now. It is not a cost of producing this month, so it does not change profit or the best quantity.' },
     'min-mc-instead': { name: 'Used the minimum of MC instead of the minimum of AVC', explanation: 'The shutdown point is the bottom of the AVC curve, where MC crosses AVC from below. MC bottoms out earlier, at a lower output and a lower cost.' },
   },
   stepLabels: {
@@ -293,6 +433,10 @@ export const costProfitMaximization: SkillDefinition = {
     'mc-equals-ac': 'MC = AC at the bottom of AC',
     'min-ac': 'Evaluate minimum AC',
     'min-avc': 'Find minimum AVC',
+    'setup-words': 'Write the cost function from the description',
+    'setup-next': 'Write the cost function from the description',
+    'setup-average': 'Write total cost from average variable cost',
+    'setup-sunk': 'Write profit (leaving out the sunk cost)',
   },
   learn: {
     whyItMatters:
@@ -307,6 +451,12 @@ export const costProfitMaximization: SkillDefinition = {
     ],
     example: { seed: 6, level: 3 },
     tips: ['Fixed cost never appears in marginal cost and never changes the optimal quantity.'],
+  },
+  story: {
+    levels: [1, 3],
+    generate(rng, level) {
+      return level === 1 ? storyL1(rng) : storyL3(rng);
+    },
   },
   generate(rng, level: Level) {
     switch (level) {

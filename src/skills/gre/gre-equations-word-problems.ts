@@ -7,7 +7,7 @@ import { coefLatex, joinTerms } from '../../engine/format';
 import { distinctMisconceptions } from '../../engine/misconceptions';
 import { Q } from '../../engine/rational';
 import type { Rng } from '../../engine/rng';
-import type { ChoiceOption, Level, SkillDefinition, Step, VerifySpec } from '../../engine/types';
+import type { ChoiceOption, Level, MisconceptionInstance, SkillDefinition, Step, VerifySpec } from '../../engine/types';
 
 const ID = 'gre-equations-word-problems';
 type Body = ReturnType<SkillDefinition['generate']>;
@@ -31,6 +31,11 @@ function level1(rng: Rng): Body {
   const m = rng.int(2, 6);
   const x = rng.int(1, 15);
   const k = rng.int(1, form === 1 ? Math.min(15, m * x - 1) : 15); // keeps "k less than mx" positive
+  return translateBody(rng, form, m, x, k);
+}
+
+/** L1's body for a picked sentence (shared by plain and story problems). */
+function translateBody(rng: Rng, form: number, m: number, x: number, k: number): Body {
   const r = form === 0 ? m * x + k : form === 1 ? m * x - k : m * (x + k);
   const phrase = [
     `${k} more than ${m} times a number is ${r}`,
@@ -151,46 +156,73 @@ function level2(rng: Rng): Body {
 // ---------- level 3: systems from words ----------
 
 function level3(rng: Rng): Body {
+  const { p, q, x, y } = pickSystem(rng);
+  const form = rng.int(0, 1);
+  return ticketSystem(form, p, q, x, y);
+}
+
+function pickSystem(rng: Rng) {
   for (;;) {
     const p = rng.int(6, 20);
     const q = rng.int(2, p - 2);
     const x = rng.int(5, 40);
     const y = rng.int(5, 40);
     if (x === y) continue;
-    const N = x + y;
-    const R = p * x + q * y;
-    const form = rng.int(0, 1);
-    const base = `Tickets to a concert cost \\$${p} for adults and \\$${q} for children. A total of ${N} tickets were sold for \\$${R}.`;
-    const stepA: Step = {
-      key: 'substitute',
-      instruction: `Let a = adults and c = children. Then c = ${N} − a. Substitute into the money equation.`,
-      math: `${p}a + ${q}(${N} - a) = ${R} \\;\\Rightarrow\\; ${p - q}a = ${R - q * N}`,
-      why: 'Two unknowns need two equations: one for the count, one for the money.',
-      ask: { prompt: `What is $${R} - ${q} \\cdot ${N}$?`, answer: numberAnswer(R - q * N), verify: { type: 'evaluate', expr: `${R}-${q}*${N}` } },
-    };
-    if (form === 0) {
-      const answer = numberAnswer(x);
-      const verify: VerifySpec = { type: 'solve', equations: [`${p}*a + ${q}*(${N} - a) = ${R}`], unknowns: ['a'] };
-      return {
-        params: { form, p, q, x, y },
-        prompt: `${base} How many adult tickets were sold?`,
-        answer,
-        steps: [stepA, { key: 'solve', instruction: 'Divide to find a.', math: `a = \\frac{${R - q * N}}{${p - q}} = ${x}`, why: 'Check: the adult and child counts must sum to the total.', ask: { prompt: 'Adult tickets?', answer, verify } }],
-        misconceptions: distinctMisconceptions(answer, [wrongNumber('solved-for-wrong-variable', () => y)]),
-        verify,
-      };
-    }
-    const answer = tupleAnswer(['a', 'c'], [x, y]);
-    const verify: VerifySpec = { type: 'solve', equations: [`a + c = ${N}`, `${p}*a + ${q}*c = ${R}`], unknowns: ['a', 'c'] };
+    return { p, q, x, y };
+  }
+}
+
+/** What the two unknowns are called in the steps; the plain problem is about tickets. */
+interface Words {
+  names: [string, string];
+  askA: string;
+  base: string;
+  ask: string;
+  askBoth: string;
+  check: string;
+}
+
+/** L3's body for a picked system (shared by plain and story problems). */
+function ticketSystem(form: number, p: number, q: number, x: number, y: number, w?: Words): Body {
+  const N = x + y;
+  const R = p * x + q * y;
+  const words: Words = w ?? {
+    names: ['adults', 'children'],
+    askA: 'Adult tickets?',
+    base: `Tickets to a concert cost \\$${p} for adults and \\$${q} for children. A total of ${N} tickets were sold for \\$${R}.`,
+    ask: 'How many adult tickets were sold?',
+    askBoth: 'How many adult tickets (a) and how many child tickets (c) were sold?',
+    check: 'Check: the adult and child counts must sum to the total.',
+  };
+  const stepA: Step = {
+    key: 'substitute',
+    instruction: `Let a = ${words.names[0]} and c = ${words.names[1]}. Then c = ${N} − a. Substitute into the money equation.`,
+    math: `${p}a + ${q}(${N} - a) = ${R} \\;\\Rightarrow\\; ${p - q}a = ${R - q * N}`,
+    why: 'Two unknowns need two equations: one for the count, one for the money.',
+    ask: { prompt: `What is $${R} - ${q} \\cdot ${N}$?`, answer: numberAnswer(R - q * N), verify: { type: 'evaluate', expr: `${R}-${q}*${N}` } },
+  };
+  if (form === 0) {
+    const answer = numberAnswer(x);
+    const verify: VerifySpec = { type: 'solve', equations: [`${p}*a + ${q}*(${N} - a) = ${R}`], unknowns: ['a'] };
     return {
       params: { form, p, q, x, y },
-      prompt: `${base} How many adult tickets (a) and how many child tickets (c) were sold?`,
+      prompt: `${words.base} ${words.ask}`,
       answer,
-      steps: [stepA, { key: 'solve', instruction: 'Find a, then c = total − a.', math: `a = ${x}, \\quad c = ${N} - ${x} = ${y}`, why: 'Check: the money equation should give the total.', ask: { prompt: 'Enter a and c.', answer, verify } }],
-      misconceptions: distinctMisconceptions(answer, [{ id: 'solved-for-wrong-variable', wrong: tupleAnswer(['a', 'c'], [y, x]) }]),
+      steps: [stepA, { key: 'solve', instruction: 'Divide to find a.', math: `a = \\frac{${R - q * N}}{${p - q}} = ${x}`, why: words.check, ask: { prompt: words.askA, answer, verify } }],
+      misconceptions: distinctMisconceptions(answer, [wrongNumber('solved-for-wrong-variable', () => y)]),
       verify,
     };
   }
+  const answer = tupleAnswer(['a', 'c'], [x, y]);
+  const verify: VerifySpec = { type: 'solve', equations: [`a + c = ${N}`, `${p}*a + ${q}*c = ${R}`], unknowns: ['a', 'c'] };
+  return {
+    params: { form, p, q, x, y },
+    prompt: `${words.base} ${words.askBoth}`,
+    answer,
+    steps: [stepA, { key: 'solve', instruction: 'Find a, then c = total − a.', math: `a = ${x}, \\quad c = ${N} - ${x} = ${y}`, why: 'Check: the money equation should give the total.', ask: { prompt: 'Enter a and c.', answer, verify } }],
+    misconceptions: distinctMisconceptions(answer, [{ id: 'solved-for-wrong-variable', wrong: tupleAnswer(['a', 'c'], [y, x]) }]),
+    verify,
+  };
 }
 
 // ---------- level 4: QC from a solved system ----------
@@ -305,6 +337,180 @@ function level5(rng: Rng): Body {
   }
 }
 
+// ---------- Story variants (docs/skill-specs/batch-s3-stories.md) ----------
+
+/** A setup step: write the situation in terms of the unknown(s) (checked by equivalence). */
+function setupStep(key: string, prompt: string, latex: string, expr: string, why: string, variables: string[] = ['x']): Step {
+  return {
+    key,
+    instruction: prompt,
+    math: latex,
+    why,
+    ask: {
+      prompt,
+      answer: { kind: 'expression', value: expr, variables, display: latex },
+      verify: { type: 'equivalent', expr, variables },
+    },
+  };
+}
+
+/** Setup steps first, then the level's own steps; story readings come before the body's. */
+function tell(body: Body, prompt: string, setup: Step[], mis: (MisconceptionInstance | null)[] = []): Body {
+  return {
+    ...body,
+    prompt,
+    steps: [...setup, ...body.steps],
+    misconceptions: distinctMisconceptions(body.answer, [...mis, ...body.misconceptions]),
+  };
+}
+
+const usd = (v: number) => `\\$${v}`;
+const times = (m: number) => (m === 2 ? 'twice' : m === 3 ? 'three times' : `${m} times`);
+
+/** L1 stories: the sentence told as a situation, with "less than" order, or with a grouping. */
+function storyLevel1(rng: Rng): Body {
+  const form = rng.int(0, 2); // pattern i is form i: situation, "less than", grouping
+  const m = rng.int(2, 6);
+  const x = rng.int(1, 15);
+  const k = rng.int(1, form === 1 ? Math.min(15, m * x - 1) : 15);
+  const body = translateBody(rng, form, m, x, k);
+  const r = body.params.r;
+  if (form === 0) {
+    const s = rng.pick([
+      { prompt: `A bakery bakes ${k} more than ${times(m)} as many rolls on a Saturday as on a weekday. On Saturday it bakes ${r} rolls. How many rolls does it bake on a weekday?`, unit: 'rolls baked on a weekday', ask: "Saturday's rolls" },
+      { prompt: `A library has ${k} more than ${times(m)} as many fiction books as poetry books. It has ${r} fiction books. How many poetry books does it have?`, unit: 'poetry books', ask: 'the number of fiction books' },
+      { prompt: `A plumber's busy month had ${k} more than ${times(m)} the call-outs of a quiet month. The busy month had ${r} call-outs. How many call-outs did the quiet month have?`, unit: 'call-outs in the quiet month', ask: "the busy month's call-outs" },
+    ]);
+    return tell(body, s.prompt, [
+      setupStep('setup-situation', `Let $x$ be the number of ${s.unit}. Write ${s.ask} in terms of $x$.`, `${m}x + ${k}`, `${m}*x + ${k}`, `"${times(m)} as many" multiplies $x$ by ${m}, and "${k} more than" that adds ${k} AFTER multiplying: $${m}x + ${k}$.`),
+    ]);
+  }
+  if (form === 1) {
+    const s = rng.pick([
+      { prompt: `Sam's score on a quiz was ${k} less than ${times(m)} Lee's score. Sam scored ${r}. What did Lee score?`, unit: "Lee's score", ask: "Sam's score" },
+      { prompt: `A choir has ${k} less than ${times(m)} the number of players in the band. The choir has ${r} singer${r === 1 ? '' : 's'}. How many players are in the band?`, unit: 'the number of players in the band', ask: 'the number of singers in the choir' },
+      { prompt: `A farm sold ${k} less than ${times(m)} as many eggs on Tuesday as on Monday. On Tuesday it sold ${r} egg${r === 1 ? '' : 's'}. How many eggs did it sell on Monday?`, unit: "Monday's egg sales", ask: "Tuesday's egg sales" },
+    ]);
+    return tell(body, s.prompt, [
+      setupStep('setup-order', `Let $x$ be ${s.unit}. Write ${s.ask} in terms of $x$.`, `${m}x - ${k}`, `${m}*x - ${k}`, `"${k} less than $y$" means $y - ${k}$: start from ${times(m)} the quantity, $${m}x$, and take ${k} away. It is not $${k} - ${m}x$.`),
+    ]);
+  }
+  const s = rng.pick([
+    { prompt: `Think of a number, add ${k} to it, then multiply the result by ${m}. You get ${r}. What was the number?`, unit: 'the number you thought of', ask: 'the result' },
+    { prompt: `A caterer takes the guests already booked, adds ${k} walk-ins, and orders ${m} portions for each of them. She orders ${r} portions in all. How many guests were booked?`, unit: 'the number of booked guests', ask: 'the total number of portions' },
+    { prompt: `A school adds ${k} students to this year's class list and buys ${m} notebooks for every student on the new list. It buys ${r} notebooks. How many students were on the old list?`, unit: 'the number of students on the old list', ask: 'the total number of notebooks' },
+  ]);
+  return tell(body, s.prompt, [
+    setupStep('setup-group', `Let $x$ be ${s.unit}. Write ${s.ask} in terms of $x$.`, `${m}(x + ${k})`, `${m}*(x + ${k})`, `The ${k} is added BEFORE multiplying, so the whole sum is multiplied by ${m}: $${m}(x + ${k})$, not $${m}x + ${k}$.`),
+  ]);
+}
+
+/** L3 stories: a system from coins, from a nut mix, or from theater seats. */
+function storyLevel3(rng: Rng): Body {
+  const pattern = rng.int(0, 2);
+  const { p, q, x, y } = pickSystem(rng);
+  const form = rng.int(0, 1);
+  const N = x + y;
+  const R = p * x + q * y;
+  if (pattern === 0) {
+    const s = rng.pick([
+      {
+        names: ['gold coins', 'silver coins'] as [string, string],
+        base: `A treasure chest holds ${N} coins, all gold or silver. Each gold coin is worth ${p} points and each silver coin ${q} points, ${R} points in all.`,
+        one: 'gold coins',
+        both: 'gold coins (a) and how many silver coins (c)',
+        askA: 'Gold coins?',
+      },
+      {
+        names: ['red tokens', 'blue tokens'] as [string, string],
+        base: `In an arcade game a red token is worth ${p} points and a blue token ${q} points. A player collected ${N} tokens worth ${R} points in total.`,
+        one: 'red tokens',
+        both: 'red tokens (a) and how many blue tokens (c)',
+        askA: 'Red tokens?',
+      },
+    ]);
+    const words: Words = {
+      names: s.names,
+      askA: s.askA,
+      base: s.base,
+      ask: `How many ${s.one} are there?`,
+      askBoth: `How many ${s.both} are there?`,
+      check: 'Check: the two counts must sum to the total.',
+    };
+    return tell(
+      ticketSystem(form, p, q, x, y, words),
+      `${s.base} ${form === 0 ? words.ask : words.askBoth}`,
+      [
+        setupStep(
+          'setup-coins',
+          `Let $a$ be the number of ${s.names[0]} and $c$ the number of ${s.names[1]}. Write the total value, in points, in terms of $a$ and $c$.`,
+          `${p}a + ${q}c`,
+          `${p}*a + ${q}*c`,
+          `Value = (points per item) × (number of items), added over the two kinds: ${p} points for each of the $a$ ${s.names[0]} and ${q} for each of the $c$ ${s.names[1]}. Put each price with ITS OWN count.`,
+          ['a', 'c'],
+        ),
+      ],
+      [],
+    );
+  }
+  if (pattern === 1) {
+    const s = rng.pick([
+      { hi: 'pecans', lo: 'peanuts' },
+      { hi: 'cashews', lo: 'sunflower seeds' },
+      { hi: 'almonds', lo: 'peanuts' },
+    ]);
+    const base = `A shop blends ${s.hi} at ${usd(p)} a pound with ${s.lo} at ${usd(q)} a pound to make ${N} pounds of mix that costs ${usd(R)} in all.`;
+    const words: Words = {
+      names: [`pounds of ${s.hi}`, `pounds of ${s.lo}`],
+      askA: `Pounds of ${s.hi}?`,
+      base,
+      ask: `How many pounds of ${s.hi} are in the mix?`,
+      askBoth: `How many pounds of ${s.hi} (a) and how many pounds of ${s.lo} (c) are in the mix?`,
+      check: 'Check: the two weights must sum to the total weight.',
+    };
+    return tell(
+      ticketSystem(form, p, q, x, y, words),
+      `${base} ${form === 0 ? words.ask : words.askBoth}`,
+      [
+        setupStep(
+          'setup-mixture',
+          `Let $a$ be the pounds of ${s.hi} and $c$ the pounds of ${s.lo}. Write the total cost of the mix, in dollars, in terms of $a$ and $c$.`,
+          `${p}a + ${q}c`,
+          `${p}*a + ${q}*c`,
+          `Cost = (price per pound) × (pounds), added over the two nuts: ${usd(p)} on each of the $a$ pounds of ${s.hi} and ${usd(q)} on each of the $c$ pounds of ${s.lo}. Put each price with ITS OWN weight.`,
+          ['a', 'c'],
+        ),
+      ],
+      [],
+    );
+  }
+  const len = rng.int(90, 170);
+  const s = rng.pick([
+    { place: 'A theater', hi: 'orchestra', lo: 'balcony' },
+    { place: 'A school hall', hi: 'front-row', lo: 'back-row' },
+  ]);
+  const base = `${s.place} sold ${N} seats for a show that runs ${len} minutes. ${s.hi[0].toUpperCase()}${s.hi.slice(1)} seats cost ${usd(p)} and ${s.lo} seats ${usd(q)}, and ticket sales came to ${usd(R)}.`;
+  const words: Words = {
+    names: [`${s.hi} seats`, `${s.lo} seats`],
+    askA: `${s.hi[0].toUpperCase()}${s.hi.slice(1)} seats?`,
+    base,
+    ask: `How many ${s.hi} seats were sold?`,
+    askBoth: `How many ${s.hi} seats (a) and how many ${s.lo} seats (c) were sold?`,
+    check: 'Check: the two seat counts must sum to the total.',
+  };
+  return tell(ticketSystem(form, p, q, x, y, words), `${base} ${form === 0 ? words.ask : words.askBoth}`, [
+    setupStep(
+      'setup-seats',
+      `Let $a$ be the number of ${s.hi} seats sold. Write the number of ${s.lo} seats sold in terms of $a$.`,
+      `${N} - a`,
+      `${N} - a`,
+      `${N} seats were sold in all, and $a$ of them are ${s.hi}, so the rest, $${N} - a$, are ${s.lo}. The ${len}-minute running time doesn't enter.`,
+      ['a'],
+    ),
+    setupStep('setup-right', 'Write the total ticket sales, in dollars, in terms of $a$.', `${p}a + ${q}(${N} - a)`, `${p}*a + ${q}*(${N} - a)`, 'Each seat type earns its price times its count; the two amounts add to the total sales.', ['a']),
+  ]);
+}
+
 export const greEquationsWordProblems: SkillDefinition = {
   id: ID,
   title: 'Equations & word problems',
@@ -339,6 +545,13 @@ export const greEquationsWordProblems: SkillDefinition = {
     decide: 'Decide the relationship',
     condition: 'State the condition on n',
     'test-each': 'Test each option',
+    'setup-situation': 'Set up: "k more than m times" in a situation',
+    'setup-order': 'Set up: "k less than" starts from the other quantity',
+    'setup-group': 'Set up: add first, then multiply the whole sum',
+    'setup-coins': 'Set up: total value of two kinds of coin',
+    'setup-mixture': 'Set up: total cost of a two-nut mix',
+    'setup-seats': 'Set up: the other seat count from the total',
+    'setup-right': 'Set up: the total sales',
   },
   learn: {
     whyItMatters:
@@ -366,5 +579,12 @@ export const greEquationsWordProblems: SkillDefinition = {
       case 5:
         return level5(rng);
     }
+  },
+
+  story: {
+    levels: [1, 3],
+    generate(rng, level) {
+      return level === 1 ? storyLevel1(rng) : storyLevel3(rng);
+    },
   },
 };

@@ -239,8 +239,27 @@ export const supplyDemandEquilibrium: SkillDefinition = {
       explanation:
         'With the tax, there are two prices: buyers pay $P_b$ and sellers keep $P_b - t$. The question asks for the price buyers pay.',
     },
+    'slope-dropped': {
+      name: 'Left the per-dollar change out of demand',
+      explanation:
+        '"Each \\$1 on the price cuts the quantity by $b$" means demand is $a - bP$, not $a - P$. The number of units lost per dollar is the slope, so it multiplies $P$.',
+    },
+    'slope-inverted': {
+      name: 'Turned the slope upside down',
+      explanation:
+        'The slope of demand in $Q = a - bP$ is units per dollar: $\\Delta Q / \\Delta P$, from the two observations. Dividing the other way ($\\Delta P / \\Delta Q$) gives dollars per unit, the slope of the inverse curve. Then find the intercept from either point.',
+    },
+    'shift-ignored': {
+      name: 'Ignored the shift in demand',
+      explanation:
+        'Extra demand "at every price" adds a constant to the demand curve: the new intercept is the old one plus the shift. Solve with the new curve, not the normal one.',
+    },
   },
   stepLabels: {
+    'setup-words': 'Write demand from the description',
+    'setup-points': 'Write demand from two observations',
+    'setup-shift': 'Write demand after the shift',
+    'setup-right': 'Write supply from the description',
     'tax-supply': 'Rewrite supply with the tax',
     'equilibrium-condition': 'Set up the equilibrium condition',
     collect: 'Collect the P (or Q) terms',
@@ -263,7 +282,19 @@ export const supplyDemandEquilibrium: SkillDefinition = {
   },
 
   generate(rng, level) {
-    const m = pick(rng, level);
+    return build(rng, pick(rng, level));
+  },
+
+  story: {
+    levels: [1, 4],
+    generate: (rng, level) => tellStory(rng, level),
+  },
+};
+
+type Body = ReturnType<SkillDefinition['generate']>;
+
+/** Steps, answer and misconceptions for a picked market (shared by plain and story problems). */
+function build(rng: Rng, m: Market): Body {
     const { a, b, c, d, t, P, Qty } = m;
     const steps: Step[] = [];
     const sum = b.add(d);
@@ -427,5 +458,137 @@ export const supplyDemandEquilibrium: SkillDefinition = {
         },
       },
     };
-  },
-};
+}
+
+// ---------- story variants: the same market told in words, from data, or after a shift ----------
+
+interface Setting {
+  market: string;
+  items: string;
+  per: string;
+  time: string;
+}
+const SETTINGS: Setting[] = [
+  { market: 'the market for bread in a small town', items: 'loaves', per: 'loaf', time: 'day' },
+  { market: 'the tomato market of a small city', items: 'kilograms of tomatoes', per: 'kilogram', time: 'week' },
+  { market: 'a campus concert hall', items: 'tickets', per: 'ticket', time: 'night' },
+];
+const EVENTS = ['A street festival', 'A heat wave', 'A viral video about the product'];
+
+/** A setup step: write a curve as an expression in one variable (checked by equivalence). */
+function setupCurve(key: string, prompt: string, latex: string, expr: string, v: string, why: string): Step {
+  return {
+    key,
+    instruction: prompt,
+    math: latex,
+    why,
+    ask: { prompt, answer: { kind: 'expression', value: expr, variables: [v], display: latex }, verify: { type: 'equivalent', expr, variables: [v] } },
+  };
+}
+
+function tellStory(rng: Rng, level: Level): Body {
+  const pattern = rng.int(0, 2); // 0 words, 1 two observations, 2 shift
+  const isTax = level === 4;
+  let m = pick(rng, level);
+  // Supply is told in words ("brings c even at a price of zero"), so its intercept is not negative.
+  while (m.c.sign() < 0) m = pick(rng, level);
+  const s = rng.pick(SETTINGS);
+  const { a, b, c, d, t } = m;
+  const cEff = c.sub(d.mul(t));
+  const sum = b.add(d);
+  const labels = isTax ? ['Price buyers pay', 'Quantity'] : ['Price', 'Quantity'];
+  const displayLabels = isTax ? ['P_b', 'Q^*'] : ['P^*', 'Q^*'];
+  const reading = (id: string, p: () => Q, qq: (p: Q) => Q): MisconceptionInstance | null => {
+    try {
+      const pv = p();
+      return { id, wrong: tupleAnswer(labels, [pv, qq(pv)], displayLabels) };
+    } catch {
+      return null;
+    }
+  };
+
+  // Supply in words (plain: at a price of zero; taxed: at a zero price the seller keeps).
+  const supplyWords = isTax
+    ? c.isZero()
+      ? `Sellers would bring nothing if the price they keep were zero, and ${num(d)} ${s.items} per ${s.time} for every \\$1 they keep.`
+      : `Sellers would bring ${num(c)} ${s.items} per ${s.time} if the price they keep were zero, and ${num(d)} more for every \\$1 they keep.`
+    : c.isZero()
+      ? `Sellers bring nothing at a price of zero, and ${num(d)} ${s.items} per ${s.time} for every \\$1 on the price.`
+      : `Sellers bring ${num(c)} ${s.items} per ${s.time} even at a price of zero, and ${num(d)} more for every \\$1 on the price.`;
+  const taxWords = isTax ? ` For every ${s.per} sold, the seller sends \\$${num(t)} to the government.` : '';
+  const closing = isTax
+    ? ` Let $P$ be the price buyers pay, in dollars per ${s.per}, and $Q$ the ${s.items} traded per ${s.time}. Find the price buyers pay, $P_b$, and the quantity traded, $Q^*$.`
+    : ` Let $P$ be the price in dollars per ${s.per} and $Q$ the ${s.items} traded per ${s.time}. Find the equilibrium price $P^*$ and quantity $Q^*$.`;
+
+  // The supply setup step: plain in P, or (taxed) in the price the seller keeps, s.
+  const supplyStep = isTax
+    ? setupCurve(
+        'setup-right',
+        'Let $s$ be the price a seller keeps, in dollars per unit. Write the quantity supplied in terms of $s$.',
+        upLatex(c, d, 's'),
+        c.isZero() ? `${d.toExpr()}*s` : `${c.toExpr()} + ${d.toExpr()}*s`,
+        's',
+        'Supply is the quantity at a zero price plus the extra per dollar times the price: the intercept is where sellers start, the slope is the extra per \\$1.',
+      )
+    : setupCurve(
+        'setup-right',
+        'Write the quantity supplied, $Q_s$, in terms of the price $P$.',
+        upLatex(c, d, 'P'),
+        c.isZero() ? `${d.toExpr()}*P` : `${c.toExpr()} + ${d.toExpr()}*P`,
+        'P',
+        'Supply is the quantity at a zero price plus the extra per dollar times the price: the intercept is where sellers start, the slope is the extra per \\$1.',
+      );
+  const demandStep = (key: string, prompt: string, why: string) =>
+    setupCurve(key, prompt, downLatex(a, b, 'P'), `${a.toExpr()} - ${b.toExpr()}*P`, 'P', why);
+
+  let prompt: string;
+  let setup: Step[];
+  let mis: (MisconceptionInstance | null)[];
+
+  if (pattern === 0) {
+    prompt = `In ${s.market}, buyers would take ${num(a)} ${s.items} per ${s.time} if the price were zero, and each \\$1 on the price cuts that by ${num(b)}. ${supplyWords}${taxWords}${closing}`;
+    setup = [
+      demandStep('setup-words', 'Write the quantity demanded, $Q_d$, in terms of the price $P$.', 'The quantity at a zero price is the intercept, and each \\$1 on the price subtracts the same amount: the slope is negative.'),
+      supplyStep,
+    ];
+    mis = [reading('slope-dropped', () => a.sub(cEff).div(q(1).add(d)), (p) => a.sub(p))];
+  } else if (pattern === 1) {
+    // Two observations on the demand line a − bP, both with positive quantity, at prices unlike each other.
+    const pMax = Math.floor((a.valueOf() - 1) / b.valueOf());
+    const p1 = rng.int(1, pMax);
+    let p2 = rng.int(1, pMax - 1);
+    if (p2 >= p1) p2 += 1;
+    const q1 = a.sub(b.mul(p1));
+    const q2 = a.sub(b.mul(p2));
+    prompt = `In ${s.market}, buyers' demand is a straight line in the price. At \\$${p1} buyers took ${num(q1)} ${s.items} per ${s.time}; at \\$${p2} they took ${num(q2)}. ${supplyWords}${taxWords}${closing}`;
+    setup = [
+      demandStep('setup-points', 'Write the quantity demanded, $Q_d$, in terms of the price $P$, from the two observations.', 'The slope is the change in quantity over the change in price, $(Q_2 - Q_1)/(P_2 - P_1)$, and it is negative. Then the line through a point gives the intercept.'),
+      supplyStep,
+    ];
+    mis = [reading('slope-inverted', () => q1.add(q(p1).div(b)).sub(cEff).div(d.add(q(1).div(b))), (p) => q1.add(q(p1).sub(p).div(b)))];
+  } else {
+    const k = rng.int(5, Math.min(30, a.n - 1));
+    const a0 = a.sub(k);
+    const event = rng.pick(EVENTS);
+    const days = rng.int(2, 9);
+    const lasts = isTax ? ` It lasts ${days} days.` : '';
+    prompt = `In ${s.market}, buyers' demand is normally $Q_d = ${downLatex(a0, b, 'P')}$. ${event} adds ${k} ${s.items} per ${s.time} to demand at every price.${lasts} ${supplyWords}${taxWords}${closing}`;
+    setup = [
+      demandStep(
+        'setup-shift',
+        'Write the new quantity demanded, $Q_d$, in terms of the price $P$.',
+        `Extra demand at every price lifts the intercept by ${k}, to ${num(a)}; the slope is unchanged.${isTax ? ' How long the event lasts does not enter.' : ''}`,
+      ),
+      supplyStep,
+    ];
+    mis = [reading('shift-ignored', () => a0.sub(cEff).div(sum), (p) => a0.sub(b.mul(p)))];
+  }
+
+  const body = build(rng, m);
+  return {
+    ...body,
+    prompt,
+    steps: [...setup, ...body.steps],
+    misconceptions: distinctMisconceptions(body.answer, [...mis, ...body.misconceptions]),
+  };
+}

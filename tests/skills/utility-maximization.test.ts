@@ -74,31 +74,60 @@ describe('utility-maximization: demands', () => {
 });
 
 describe('utility-maximization: L1 choice', () => {
-  it('form 2 correct option has the right verdict and cost', () => {
-    let seen = 0;
-    for (let seed = 1; seed <= 300; seed++) {
-      const p = makeProblem(skill, 1, seed);
-      if (p.params.form !== 2) continue;
-      seen++;
-      const { px, py, m, qx, qy } = p.params;
-      const cost = px * qx + py * qy;
-      expect(p.answer.kind).toBe('choice');
-      if (p.answer.kind !== 'choice') continue;
-      const label = p.answer.options.find((o) => o.id === (p.answer as { correct: string }).correct)!.label;
-      const mt = label.match(/^(Not affordable|Affordable): it costs \\\$(\d+)$/)!;
-      expect(Number(mt[2]), p.id).toBe(cost);
-      expect(mt[1] === 'Affordable', p.id).toBe(cost <= m);
-    }
-    expect(seen).toBeGreaterThan(20);
-  });
+  // Plain problems, and story problems (dollars or hours; the story tells the same budget line).
+  for (const variant of [undefined, 'story'] as const) {
+    const tag = variant ? 'story ' : '';
+    it(`${tag}form 2 correct option has the right verdict and cost`, () => {
+      let seen = 0;
+      for (let seed = 1; seed <= 300; seed++) {
+        const p = makeProblem(skill, 1, seed, variant);
+        if (p.params.form !== 2) continue;
+        seen++;
+        const { px, py, m, qx, qy } = p.params;
+        const cost = px * qx + py * qy;
+        expect(p.answer.kind).toBe('choice');
+        if (p.answer.kind !== 'choice') continue;
+        const label = p.answer.options.find((o) => o.id === (p.answer as { correct: string }).correct)!.label;
+        const mt = label.match(/^(Not affordable|Affordable|Does not fit|Fits): it (?:costs|takes) (?:\\\$)?(\d+)(?: hours?)?$/)!;
+        expect(Number(mt[2]), p.id).toBe(cost);
+        expect(mt[1] === 'Affordable' || mt[1] === 'Fits', p.id).toBe(cost <= m);
+        // the story prompt states the same bundle
+        expect(p.prompt, p.id).toContain(`(${qx}, ${qy})`);
+      }
+      expect(seen).toBeGreaterThan(variant ? 8 : 20);
+    });
 
-  it('form 0 and 1 answers', () => {
-    for (let seed = 1; seed <= 200; seed++) {
-      const p = makeProblem(skill, 1, seed);
-      const { px, py, m, form } = p.params;
-      if (form === 0) expect(vals(p)[0]).toBeCloseTo(m / px, 9);
-      if (form === 1) expect(vals(p)[0]).toBeCloseTo(-px / py, 9);
+    it(`${tag}form 0 and 1 answers`, () => {
+      for (let seed = 1; seed <= 200; seed++) {
+        const p = makeProblem(skill, 1, seed, variant);
+        const { px, py, m, form } = p.params;
+        if (form === 0) expect(vals(p)[0], p.id).toBeCloseTo(m / px, 9);
+        if (form === 1) expect(vals(p)[0], p.id).toBeCloseTo(-px / py, 9);
+      }
+    });
+  }
+
+  it('story budgets: the stated income, wage and hours multiply to m; time budgets stay believable', () => {
+    let income = 0;
+    let time = 0;
+    for (let seed = 1; seed <= 300; seed++) {
+      const p = makeProblem(skill, 1, seed, 'story');
+      const { m } = p.params;
+      const wage = p.prompt.match(/earns \\\$(\d+) an hour and works (\d+) hours/);
+      if (wage) {
+        income++;
+        expect(Number(wage[1]) * Number(wage[2]), p.id).toBe(m);
+        expect(p.steps[0].key).toBe('setup-income');
+      } else if (/free hours/.test(p.prompt)) {
+        time++;
+        expect(p.prompt, p.id).toContain(`${m} free hours`);
+        expect(m).toBeLessThanOrEqual(72);
+      } else {
+        expect(p.prompt, p.id).toContain(`\\$${m} a month`);
+      }
     }
+    expect(income).toBeGreaterThan(20);
+    expect(time).toBeGreaterThan(20);
   });
 });
 

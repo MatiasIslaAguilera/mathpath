@@ -24,6 +24,38 @@ describe('cost-profit-maximization', () => {
     }
   });
 
+  it('level 1 stories: MC from the cost function the story describes', () => {
+    for (let seed = 1; seed <= 200; seed++) {
+      const p = makeProblem(skill, 1, seed, 'story');
+      const { F, v, w, q0 } = p.params;
+      const tc = (x: number) => F + v * x + w * x * x;
+      const h = 1e-6;
+      expect(vals(p)[0], p.id).toBeCloseTo((tc(q0 + h) - tc(q0)) / h, 3);
+      // the prompt names the same numbers
+      expect(p.prompt, p.id).toContain(`\\$${F} a month in rent`);
+      expect(p.prompt, p.id).toContain(`${q0} `);
+      if (p.steps[0].key === 'setup-average') expect(p.prompt, p.id).toContain(`$${v} + ${w === 1 ? '' : w}q$`);
+      else expect(p.prompt, p.id).toContain(`\\$${v} per`);
+    }
+  });
+
+  it('level 3 stories: grid-search profit maximum, sunk cost left out', () => {
+    for (let seed = 1; seed <= 100; seed++) {
+      const p = makeProblem(skill, 3, seed, 'story');
+      const { p: price, v, w, F } = p.params;
+      const pi = (x: number) => price * x - (F + v * x + w * x * x);
+      const [qStar, profit] = vals(p);
+      expect(Math.abs(argBest(pi, 80, true) - qStar), p.id).toBeLessThan(0.01);
+      expect(pi(qStar), p.id).toBeCloseTo(profit, 6);
+      expect(p.prompt, p.id).toContain(`\\$${price} each`);
+      if (p.steps[0].key === 'setup-sunk') {
+        const S = Number(p.prompt.match(/spent \\\$(\d+) on a market study/)![1]);
+        const wrong = p.misconceptions.find((m) => m.id === 'sunk-cost-counted')!;
+        expect(wrong.wrong.kind === 'tuple' && Number(wrong.wrong.values[1]), p.id).toBe(profit - S);
+      }
+    }
+  });
+
   it('level 2: AC and AVC from the definitions', () => {
     for (let seed = 1; seed <= 200; seed++) {
       const p = makeProblem(skill, 2, seed);

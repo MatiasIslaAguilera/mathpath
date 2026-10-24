@@ -34,10 +34,14 @@ function level1(rng: Rng): Body {
   const old = 20 * rng.int(1, 12);
   const up = rng.chance(0.5);
   const p = up ? 5 * rng.int(1, 20) : 5 * rng.int(1, 16);
+  return percentChange(old, up, p, rng.int(0, 2));
+}
+
+/** L1's body for a picked change (shared by plain and story problems). */
+function percentChange(old: number, up: boolean, p: number, ctxIdx: number): Body {
   const nw = (old * (up ? 100 + p : 100 - p)) / 100;
   const answer = numberAnswer(p);
   const verify = { type: 'evaluate', expr: `abs(${nw}-${old})/${old}*100` } as const;
-  const ctxIdx = rng.int(0, 2);
   const verb = up ? 'rose' : 'fell';
   const ctx = [
     `The price of a share ${verb} from \\$${old} to \\$${nw}.`,
@@ -332,6 +336,11 @@ function level4(rng: Rng): Body {
   const ds = [10, 20, 25, 30, 40, 50];
   const d = rng.pick(ds);
   const orig = 20 * rng.int(2, 20);
+  return reversePercent(rng, form, d, orig) ?? level4(rng); // rare collision: redraw (deterministic given the rng state)
+}
+
+/** L4's reverse-percent body (form 0: discount, choice; form 1: increase, number), or null when two options collide. */
+function reversePercent(rng: Rng, form: number, d: number, orig: number): Body | null {
   const disc = form === 0;
   const price = (orig * (disc ? 100 - d : 100 + d)) / 100;
   const origQ = Q.of(orig);
@@ -377,7 +386,7 @@ function level4(rng: Rng): Body {
     { v: Q.of(price).mul(100).div(100 + d), tag: 'inc' },
   ];
   const distinct = new Set(cand.map((c) => c.v.toString()));
-  if (distinct.size < 5) return level4(rng); // rare collision: redraw (deterministic given the rng state)
+  if (distinct.size < 5) return null;
   const shuffled = rng.shuffle(cand);
   const options: ChoiceOption[] = shuffled.map((c, i) => ({ id: `o${i}`, label: `$\\$${num(c.v)}$` }));
   const idOf = (tag: string) => options[shuffled.findIndex((c) => c.tag === tag)].id;
@@ -478,6 +487,149 @@ function level5(rng: Rng): Body {
   };
 }
 
+// ---------- Story variants (docs/skill-specs/batch-s3-stories.md) ----------
+
+/** A setup step: write the situation in terms of the unknown x (checked by equivalence). */
+function setupStep(key: string, prompt: string, latex: string, expr: string, why: string): Step {
+  return {
+    key,
+    instruction: prompt,
+    math: latex,
+    why,
+    ask: {
+      prompt,
+      answer: { kind: 'expression', value: expr, variables: ['x'], display: latex },
+      verify: { type: 'equivalent', expr, variables: ['x'] },
+    },
+  };
+}
+
+/** Setup steps first, then the level's own steps; story readings come before the body's. */
+function tell(body: Body, prompt: string, setup: Step[], mis: (MisconceptionInstance | null)[] = []): Body {
+  return {
+    ...body,
+    prompt,
+    steps: [...setup, ...body.steps],
+    misconceptions: distinctMisconceptions(body.answer, [...mis, ...body.misconceptions]),
+  };
+}
+
+const usd = (v: number) => `\\$${v}`;
+
+/** L1 stories: the same percent change, three different readings of the sentence. */
+function storyLevel1(rng: Rng): Body {
+  const pattern = rng.int(0, 2);
+  const old = 20 * rng.int(1, 12);
+  const up = rng.chance(0.5);
+  const p = up ? 5 * rng.int(1, 20) : 5 * rng.int(1, 16);
+  const body = percentChange(old, up, p, 0);
+  const nw = body.params.nw;
+  const change = Math.abs(nw - old);
+  const inc = up ? 'increase' : 'decrease';
+  const sign = up ? '+' : '-';
+  const latex = `${old}\\left(1 ${sign} \\frac{x}{100}\\right)`;
+  const expr = `${old}*(1${sign}x/100)`;
+  const ask = (thing: string) => `Let $x$ be the percent ${inc}. Write the new ${thing} in terms of $x$.`;
+  const multiplierWhy = `A percent change is a multiplier on the OLD value: ${up ? 'an increase of' : 'a decrease of'} $x\\%$ gives $\\text{old}\\left(1 ${sign} \\frac{x}{100}\\right)$.`;
+
+  if (pattern === 0) {
+    const s = rng.pick([
+      { prompt: `A share was worth ${usd(old)} at the start of the year and is worth ${usd(nw)} now. What was the percent ${inc} in its price?`, thing: 'share price, in dollars' },
+      { prompt: `A town had ${old} thousand people ten years ago and has ${nw} thousand today. What was the percent ${inc} in its population?`, thing: 'population, in thousands' },
+      { prompt: `A salary went from ${usd(old)} thousand a year to ${usd(nw)} thousand a year. What was the percent ${inc}?`, thing: 'salary, in thousands of dollars' },
+    ]);
+    return tell(body, s.prompt, [setupStep('setup-multiplier', ask(s.thing), latex, expr, `${multiplierWhy} Then the plain steps: divide the change by the old value.`)]);
+  }
+  if (pattern === 1) {
+    const s = rng.pick([
+      { prompt: `A share cost ${usd(old)} a year ago. Since then its price has ${up ? 'risen' : 'fallen'} by ${usd(change)}. What was the percent ${inc}?`, thing: 'share price, in dollars' },
+      { prompt: `A shop sold ${old} units in March. In April its sales ${up ? 'rose' : 'fell'} by ${change} units. What was the percent ${inc} in sales?`, thing: 'number of units sold' },
+      { prompt: `A town of ${old} thousand people ${up ? 'grew' : 'shrank'} by ${change} thousand over ten years. What was the percent ${inc} in its population?`, thing: 'population, in thousands' },
+    ]);
+    return tell(
+      body,
+      s.prompt,
+      [setupStep('setup-by', ask(s.thing), latex, expr, `"${up ? 'rose' : 'fell'} by ${change}" is the CHANGE, not the new value: the new value is ${old} ${sign} ${change} = ${nw}. ${multiplierWhy}`)],
+      // Took the change as if it were the new value: |change - old| / old.
+      [wrongNumber('by-as-to', () => Q.of(change - old).abs().div(old).mul(100))],
+    );
+  }
+  const s = rng.pick([
+    { prompt: `Today a share costs ${usd(nw)}; a year ago it cost ${usd(old)}. What was the percent ${inc} in its price?`, thing: 'share price today, in dollars' },
+    { prompt: `This month a shop sold ${nw} units; last month it sold ${old}. What was the percent ${inc} in sales?`, thing: 'number of units sold this month' },
+    { prompt: `Today a town has ${nw} thousand people; ten years ago it had ${old} thousand. What was the percent ${inc} in its population?`, thing: 'population today, in thousands' },
+  ]);
+  return tell(body, s.prompt, [
+    setupStep('setup-order', ask(s.thing), latex, expr, `The new value is mentioned first, but the percent is measured against the OLDER value (${old}), the one that comes second in the sentence. ${multiplierWhy}`),
+  ]);
+}
+
+/** L4 stories: a reverse percent told as a discount, a tax, or a comparison. */
+function storyLevel4(rng: Rng): Body {
+  const pattern = rng.int(0, 2);
+  if (pattern === 0) {
+    for (;;) {
+      const d = rng.pick([10, 20, 25, 30, 40, 50]);
+      const orig = 20 * rng.int(2, 20);
+      const body = reversePercent(rng, 0, d, orig);
+      if (!body) continue;
+      const price = body.params.price;
+      const prompt = rng.pick([
+        `A bookshop takes ${d}% off every title. Maya paid ${usd(price)} for an atlas after the discount. What was the atlas's price before the discount?`,
+        `At a clearance sale all bikes are marked down ${d}%. Ravi pays ${usd(price)} for one. What was its original price?`,
+        `A concert venue ran a ${d}%-off promotion on tickets. A fan paid ${usd(price)}. What was the regular ticket price?`,
+      ]);
+      return tell(body, prompt, [
+        setupStep(
+          'setup-discount',
+          `Let $x$ be the original price. Write the price after the ${d}% discount in terms of $x$.`,
+          `\\left(1 - \\frac{${d}}{100}\\right)x`,
+          `(1-${d}/100)*x`,
+          `A ${d}% discount leaves ${100 - d}% of the original, so the price paid is $(1 - \\frac{${d}}{100})x$. To go back from it you divide by ${(100 - d) / 100}, not add ${d}% back.`,
+        ),
+      ]);
+    }
+  }
+  if (pattern === 1) {
+    const d = rng.pick([10, 20, 25]);
+    const orig = 20 * rng.int(2, 20);
+    const body = reversePercent(rng, 1, d, orig)!;
+    const price = body.params.price;
+    const prompt = rng.pick([
+      `A restaurant bill came to ${usd(price)} including ${d}% sales tax. What was the bill before tax?`,
+      `A laptop costs ${usd(price)} at the till after ${d}% tax is added. What is the shelf price, before tax?`,
+      `Including ${d}% VAT, a phone is sold for ${usd(price)}. What is its price without VAT?`,
+    ]);
+    return tell(body, prompt, [
+      setupStep(
+        'setup-tax',
+        `Let $x$ be the price before tax. Write the amount paid with ${d}% tax in terms of $x$.`,
+        `\\left(1 + \\frac{${d}}{100}\\right)x`,
+        `(1+${d}/100)*x`,
+        `The tax is ${d}% of the price BEFORE tax, so the total is $x + \\frac{${d}}{100}x = (1 + \\frac{${d}}{100})x$. Undo it by dividing by ${(100 + d) / 100}, not by taking ${d}% off the total.`,
+      ),
+    ]);
+  }
+  const d = rng.pick([10, 20, 25, 30, 40, 50]);
+  const orig = 20 * rng.int(2, 20);
+  const body = reversePercent(rng, 1, d, orig)!;
+  const price = body.params.price;
+  const extra = rng.int(3, 12);
+  const s = rng.pick([
+    { prompt: `Dana earns ${d}% more than Sam. Dana earns ${usd(price)} a week and has worked at the firm for ${extra} years. How much does Sam earn a week?`, who: 'Sam earns', other: 'Dana earns', unit: 'in dollars', years: `The ${extra} years don't enter.` },
+    { prompt: `Room A has ${extra} doors and seats ${price} people, which is ${d}% more than Room B seats. How many people does Room B seat?`, who: 'Room B seats', other: 'Room A seats', unit: 'in people', years: `The ${extra} doors don't enter.` },
+  ]);
+  return tell(body, s.prompt, [
+    setupStep(
+      'setup-more',
+      `Let $x$ be what ${s.who} (${s.unit}). Write what ${s.other} in terms of $x$.`,
+      `\\left(1 + \\frac{${d}}{100}\\right)x`,
+      `(1+${d}/100)*x`,
+      `"${d}% more than" B means B's amount plus ${d}% OF B's amount: $(1 + \\frac{${d}}{100})x$. The percent is taken of the smaller, base amount. ${s.years}`,
+    ),
+  ]);
+}
+
 export const greFractionsPercents: SkillDefinition = {
   id: ID,
   title: 'Fractions & percents',
@@ -509,6 +661,7 @@ export const greFractionsPercents: SkillDefinition = {
     'fraction-compare-by-numerator': { name: 'Compared fractions by their numerators', explanation: 'A bigger numerator does not make a bigger fraction when the denominators differ. Cross-multiply: $\\frac{a}{b} > \\frac{c}{d}$ exactly when $ad > bc$.' },
     'percent-of-percent-added': { name: 'Added the two percents', explanation: '"$a\\%$ of $b\\%$ of $N$" multiplies: $N \\cdot \\frac{a}{100} \\cdot \\frac{b}{100}$. Adding the percents is wrong.' },
     'percent-of-variable-d': { name: 'Thought a variable means "cannot be determined"', explanation: 'Check the algebra before choosing D: $x\\%$ of $k$ is $\\frac{xk}{100}$ and $k\\%$ of $x$ is $\\frac{kx}{100}$, which are identical for every $x$.' },
+    'by-as-to': { name: 'Took "fell by" as the new value', explanation: '"Fell by \\$36" is the CHANGE, not the new price. The change is already given, so the percent is $\\frac{36}{\\text{old}} \\times 100$. Do not subtract the old value from 36 as if 36 were the new price.' },
     'bigger-percent-bigger': { name: 'Assumed the bigger percent is always bigger', explanation: 'A bigger percent of a positive number is bigger, but of a negative number it is SMALLER (more negative). Check the sign of the variable, and test 0.' },
   },
   stepLabels: {
@@ -527,6 +680,12 @@ export const greFractionsPercents: SkillDefinition = {
     'pick-option': 'Pick the matching option',
     'inner-percent': 'Take the inner percent',
     'outer-percent': 'Take the outer percent',
+    'setup-multiplier': 'Set up: the new value as a multiplier',
+    'setup-by': 'Set up: "fell by" is the change, not the new value',
+    'setup-order': 'Set up: the new value comes first, the base is the old one',
+    'setup-discount': 'Set up: the price after a discount',
+    'setup-tax': 'Set up: the price with tax added',
+    'setup-more': 'Set up: "% more than" another amount',
   },
   learn: {
     whyItMatters:
@@ -558,5 +717,12 @@ export const greFractionsPercents: SkillDefinition = {
       case 5:
         return level5(rng);
     }
+  },
+
+  story: {
+    levels: [1, 4],
+    generate(rng, level) {
+      return level === 1 ? storyLevel1(rng) : storyLevel4(rng);
+    },
   },
 };

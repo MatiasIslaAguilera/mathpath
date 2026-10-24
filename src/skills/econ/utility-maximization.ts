@@ -170,7 +170,41 @@ function level1(rng: Rng): Body {
     const { a, b, px, py, k } = drawBase(rng);
     const m = k * (a + b) * px * py;
     const form = rng.int(0, 2);
-    const intro = `A consumer has income \\$${m}. Good $x$ costs \\$${px} per unit and good $y$ costs \\$${py} per unit.`;
+    const body = buildL1(rng, { a, b, px, py, m, form });
+    if (body) return body;
+  }
+}
+
+/** How a story tells the budget problem: its own wording, units and setup steps. */
+interface L1Skin {
+  intro: string;
+  askMost: string;
+  askSlope: string;
+  askBundle: (qx: number, qy: number) => string;
+  /** Money (or hours) as text. */
+  fmt: (v: number) => string;
+  /** The verdict words for an affordable / unaffordable bundle. */
+  words: [string, string];
+  /** "her income of $60", "her 24 free hours" */
+  budgetPhrase: string;
+  /** ['costs', 'cost'] for money, ['takes', 'take'] for hours. */
+  verbs: [string, string];
+  unit: string;
+  setup: Step[];
+  /** Misreadings of the situation, computed with this story's numbers. */
+  readings?: (c: { form: number; xInt: Q; cost: number; options: ChoiceOption[]; idOf: (key: string) => string }) => (MisconceptionInstance | null)[];
+}
+
+/** One draw of the budget-line problem; null when the bundle draw is rejected (redraw). */
+function buildL1(
+  rng: Rng,
+  { a, b, px, py, m, form }: { a: number; b: number; px: number; py: number; m: number; form: number },
+  skin?: L1Skin,
+): Body | null {
+  {
+    const intro = skin?.intro ?? `A consumer has income \\$${m}. Good $x$ costs \\$${px} per unit and good $y$ costs \\$${py} per unit.`;
+    const fmt = skin?.fmt ?? ((v: number) => `\\$${v}`);
+    const setup = skin?.setup ?? [];
     const budgetLine = `${px}x + ${py}y = ${m}`;
     const yInt = q(m, py);
     if (form === 0) {
@@ -179,9 +213,10 @@ function level1(rng: Rng): Body {
       const verify = { type: 'solve' as const, equations: [`${px}*x = ${m}`], unknowns: ['x'] };
       return {
         params: { a, b, px, py, m, form, qx: 0, qy: 0 },
-        prompt: `${intro} What is the most $x$ she can buy?`,
+        prompt: `${intro} ${skin?.askMost ?? 'What is the most $x$ she can buy?'}`,
         answer,
         steps: [
+          ...setup,
           {
             key: 'budget-line',
             instruction: 'Write the budget line and find how much $y$ she could buy if she bought no $x$.',
@@ -201,7 +236,7 @@ function level1(rng: Rng): Body {
             ask: { prompt: 'What is the most $x$ she can buy?', answer, verify },
           },
         ],
-        misconceptions: [],
+        misconceptions: distinctMisconceptions(answer, skin?.readings?.({ form, xInt, cost: 0, options: [], idOf: () => '' }) ?? []),
         verify,
       };
     }
@@ -212,9 +247,10 @@ function level1(rng: Rng): Body {
       const verify = { type: 'solve' as const, equations: [`${py}*s = -${px}`], unknowns: ['s'] };
       return {
         params: { a, b, px, py, m, form, qx: 0, qy: 0 },
-        prompt: `${intro} Draw the budget line with $x$ on the horizontal axis and $y$ on the vertical axis. What is its slope?`,
+        prompt: `${intro} ${skin?.askSlope ?? 'Draw the budget line with $x$ on the horizontal axis and $y$ on the vertical axis. What is its slope?'}`,
         answer,
         steps: [
+          ...setup,
           {
             key: 'budget-line',
             instruction: 'Write the budget line and solve it for $y$.',
@@ -234,7 +270,7 @@ function level1(rng: Rng): Body {
             ask: { prompt: 'What is the slope?', answer, verify },
           },
         ],
-        misconceptions: distinctMisconceptions(answer, [wrong]),
+        misconceptions: distinctMisconceptions(answer, [...(skin?.readings?.({ form, xInt: q(m, px), cost: 0, options: [], idOf: () => '' }) ?? []), wrong]),
         verify,
       };
     }
@@ -244,14 +280,17 @@ function level1(rng: Rng): Body {
     const qy = Math.max(1, Math.floor(rem / py) + rng.int(-1, 1));
     const cost = px * qx + py * qy;
     const swapped = px * qy + py * qx;
-    if (cost === m || swapped === cost || swapped === m) continue;
-    const verdict = (c: number) => (c <= m ? 'Affordable' : 'Not affordable');
-    const flip = (c: number) => (c <= m ? 'Not affordable' : 'Affordable');
+    if (cost === m || swapped === cost || swapped === m) return null;
+    const cv = skin?.verbs ?? ['costs', 'cost'];
+    const unit = skin?.unit ?? 'dollars';
+    const [yes, no] = skin?.words ?? ['Affordable', 'Not affordable'];
+    const verdict = (c: number) => (c <= m ? yes : no);
+    const flip = (c: number) => (c <= m ? no : yes);
     const rows = [
-      { label: `${verdict(cost)}: it costs \\$${cost}`, key: 'ok' },
-      { label: `${flip(cost)}: it costs \\$${cost}`, key: 'verdict' },
-      { label: `${verdict(swapped)}: it costs \\$${swapped}`, key: 'swap' },
-      { label: `${flip(swapped)}: it costs \\$${swapped}`, key: 'both' },
+      { label: `${verdict(cost)}: it ${cv[0]} ${fmt(cost)}`, key: 'ok' },
+      { label: `${flip(cost)}: it ${cv[0]} ${fmt(cost)}`, key: 'verdict' },
+      { label: `${verdict(swapped)}: it ${cv[0]} ${fmt(swapped)}`, key: 'swap' },
+      { label: `${flip(swapped)}: it ${cv[0]} ${fmt(swapped)}`, key: 'both' },
     ];
     const sh = rng.shuffle(rows.map((r, i) => ({ ...r, id: `o${i}` })));
     const options = sh.map(({ id, label }) => ({ id, label }));
@@ -260,27 +299,145 @@ function level1(rng: Rng): Body {
     const wrong: MisconceptionInstance = { id: 'swapped-prices', wrong: choiceAnswer(options, idOf('swap')) };
     return {
       params: { a, b, px, py, m, form, qx, qy },
-      prompt: `${intro} She is considering the bundle $(x, y) = (${qx}, ${qy})$. Is it affordable, and what does it cost?`,
+      prompt: `${intro} ${skin?.askBundle(qx, qy) ?? `She is considering the bundle $(x, y) = (${qx}, ${qy})$. Is it affordable, and what does it cost?`}`,
       answer,
       steps: [
+        ...setup,
         {
           key: 'cost',
           instruction: 'Add the cost of each part of the bundle: price times quantity.',
           math: `${px}\\cdot ${qx} + ${py}\\cdot ${qy} = ${px * qx} + ${py * qy} = ${cost}`,
           why: 'A bundle costs $p_x x + p_y y$. Each price goes with its own good.',
-          ask: { prompt: 'What does the bundle cost, in dollars?', answer: numberAnswer(cost), verify: { type: 'evaluate', expr: `${px}*${qx} + ${py}*${qy}` } },
+          ask: { prompt: `What does the bundle ${cv[1]}, in ${unit}?`, answer: numberAnswer(cost), verify: { type: 'evaluate', expr: `${px}*${qx} + ${py}*${qy}` } },
         },
         {
           key: 'compare',
-          instruction: `Compare the cost with her income of \\$${m}.`,
+          instruction: `Compare the cost with ${skin?.budgetPhrase ?? `her income of \\$${m}`}.`,
           math: `${cost} ${cost <= m ? '\\le' : '>'} ${m}`,
           why: 'A bundle is affordable when it costs no more than income.',
           ask: { prompt: 'Is it affordable, and what does it cost?', answer },
         },
       ],
-      misconceptions: distinctMisconceptions(answer, [wrong]),
+      misconceptions: distinctMisconceptions(answer, [...(skin?.readings?.({ form, xInt: q(m, px), cost, options, idOf }) ?? []), wrong]),
       verify: { type: 'choice', note: `cost = ${px}*${qx} + ${py}*${qy} = ${cost}; affordable iff cost <= ${m}` },
     };
+  }
+}
+
+// ---------- level 1 stories: the budget line from a situation ----------
+
+const usd = (n: number) => `\\$${n}`;
+const hrs = (n: number) => `${n} hour${n === 1 ? '' : 's'}`;
+const GOODS: [string, string][] = [
+  ['cups of coffee', 'paperbacks'],
+  ['bus rides', 'snack bars'],
+  ['music downloads', 'movie rentals'],
+];
+const ACTIVITIES: [string, string][] = [
+  ['films', 'hikes'],
+  ['museum visits', 'bike rides'],
+  ['concerts', 'long walks'],
+];
+const term = (c: number, v: string) => (c === 1 ? v : `${c}${v}`);
+
+/** Spending on x and y as an expression in both. */
+function spendingStep(key: string, prompt: string, px: number, py: number, why: string): Step {
+  const display = `${term(px, 'x')} + ${term(py, 'y')}`;
+  const expr = `${px}*x + ${py}*y`;
+  return {
+    key,
+    instruction: prompt,
+    math: display,
+    why,
+    ask: {
+      prompt,
+      answer: { kind: 'expression', value: expr, variables: ['x', 'y'], display },
+      verify: { type: 'equivalent', expr, variables: ['x', 'y'] },
+    },
+  };
+}
+
+const SPEND_WHY = 'Spending on a good is its price times the quantity bought. Add the two; the budget line sets that total equal to what she has.';
+
+function storyL1(rng: Rng): Body {
+  const pattern = rng.int(0, 2);
+  for (;;) {
+    const { a, b, px, py, k } = drawBase(rng);
+    const m = k * (a + b) * px * py;
+    const form = rng.int(0, 2);
+    const base = { a, b, px, py, m, form };
+    let skin: L1Skin;
+    if (pattern === 2) {
+      // Time budget: hours in a break, so keep m believable.
+      if (m > 72) continue;
+      const [xn, yn] = rng.pick(ACTIVITIES);
+      skin = {
+        intro: `A student has ${m} free hours this break to fill with ${xn} ($x$, ${hrs(px)} each) and ${yn} ($y$, ${hrs(py)} each).`,
+        askMost: `What is the most ${xn} she can fit in?`,
+        askSlope: `Draw her time budget line with ${xn} ($x$) on the horizontal axis and ${yn} ($y$) on the vertical axis. What is its slope?`,
+        askBundle: (qx, qy) => `She is planning ${qx} ${xn} and ${qy} ${yn}, the bundle $(x, y) = (${qx}, ${qy})$. Does it fit in her free hours, and how many hours does it take?`,
+        fmt: hrs,
+        words: ['Fits', 'Does not fit'],
+        budgetPhrase: `her ${m} free hours`,
+        verbs: ['takes', 'take'],
+        unit: 'hours',
+        setup: [spendingStep('setup-time', 'Write the total hours she uses on $x$ and $y$, in terms of $x$ and $y$.', px, py, 'Hours used on an activity are the time per activity times the number of activities. Add the two; the time budget sets that total equal to her free hours.')],
+      };
+    } else if (pattern === 1) {
+      // Income from work: m = wage x hours, both whole and believable.
+      const pairs: [number, number][] = [];
+      for (let h = 4; h <= 40; h++) if (m % h === 0 && m / h >= 4 && m / h <= 60) pairs.push([m / h, h]);
+      if (!pairs.length) continue;
+      const [w, h] = rng.pick(pairs);
+      const months = rng.int(2, 18);
+      const [xn, yn] = rng.pick(GOODS);
+      skin = {
+        intro: `A student earns ${usd(w)} an hour and works ${h} hours this month (she started the job ${months} months ago). She spends all of her pay on ${xn} ($x$, ${usd(px)} each) and ${yn} ($y$, ${usd(py)} each).`,
+        askMost: `What is the most ${xn} she can buy?`,
+        askSlope: `Draw her budget line with ${xn} ($x$) on the horizontal axis and ${yn} ($y$) on the vertical axis. What is its slope?`,
+        askBundle: (qx, qy) => `She is thinking of buying ${qx} ${xn} and ${qy} ${yn}, the bundle $(x, y) = (${qx}, ${qy})$. Is it affordable, and what does it cost?`,
+        fmt: usd,
+        words: ['Affordable', 'Not affordable'],
+        budgetPhrase: `her pay of ${usd(m)}`,
+        verbs: ['costs', 'cost'],
+        unit: 'dollars',
+        setup: [
+          {
+            key: 'setup-income',
+            instruction: 'Let $t$ be the number of hours she works. Write her pay, in dollars, in terms of $t$.',
+            math: `\\text{pay} = ${w}t`,
+            why: `Pay is the hourly wage times the hours worked. The ${months} months since she started the job do not enter: only this month's pay is spent this month.`,
+            ask: {
+              prompt: 'Let $t$ be the number of hours she works. Write her pay, in dollars, in terms of $t$.',
+              answer: { kind: 'expression', value: `${w}*t`, variables: ['t'], display: `${w}t` },
+              verify: { type: 'equivalent', expr: `${w}*t`, variables: ['t'] },
+            },
+          },
+          spendingStep('setup-spend', `Her pay is $${w}\\cdot ${h} = ${m}$ dollars. Write her total spending, in dollars, on $x$ and $y$, in terms of $x$ and $y$.`, px, py, SPEND_WHY),
+        ],
+        readings: ({ form: f, cost, options, idOf }) => {
+          if (f === 0) return [{ id: 'hourly-as-income', wrong: numberAnswer(q(w, px)) }];
+          if (f === 2 && (cost <= m) !== (cost <= w)) return [{ id: 'hourly-as-income', wrong: choiceAnswer(options, idOf('verdict')) }];
+          return [];
+        },
+      };
+    } else {
+      const [xn, yn] = rng.pick(GOODS);
+      skin = {
+        intro: `A student has ${usd(m)} a month to spend on ${xn} ($x$, ${usd(px)} each) and ${yn} ($y$, ${usd(py)} each).`,
+        askMost: `What is the most ${xn} she can buy?`,
+        askSlope: `Draw her budget line with ${xn} ($x$) on the horizontal axis and ${yn} ($y$) on the vertical axis. What is its slope?`,
+        askBundle: (qx, qy) => `She is thinking of buying ${qx} ${xn} and ${qy} ${yn}, the bundle $(x, y) = (${qx}, ${qy})$. Is it affordable, and what does it cost?`,
+        fmt: usd,
+        words: ['Affordable', 'Not affordable'],
+        budgetPhrase: `her budget of ${usd(m)}`,
+        verbs: ['costs', 'cost'],
+        unit: 'dollars',
+        setup: [spendingStep('setup-budget', 'Write her total spending, in dollars, on $x$ and $y$, in terms of $x$ and $y$.', px, py, SPEND_WHY)],
+      };
+    }
+    const body = buildL1(rng, base, skin);
+    if (body) return body;
   }
 }
 
@@ -570,6 +727,10 @@ export const utilityMaximization: SkillDefinition = {
       name: 'Divided spending by the wrong price',
       explanation: 'Dollars spent on $x$ are divided by $p_x$ to get units of $x$, and dollars spent on $y$ by $p_y$. Check which good you are counting.',
     },
+    'hourly-as-income': {
+      name: 'Used the hourly wage as her income',
+      explanation: 'Her income is the hourly wage times the hours she works. The wage alone is only what she earns in one hour, so it gives the wrong budget.',
+    },
     'old-income': {
       name: 'Used the old income',
       explanation: 'Shares apply to the income she has now. After the raise, use the new income when you work out the dollars spent on each good.',
@@ -588,6 +749,10 @@ export const utilityMaximization: SkillDefinition = {
     share: 'Find the budget share',
     spend: 'Dollars spent on the good',
     demand: 'Divide spending by price',
+    'setup-budget': 'Write total spending on the two goods',
+    'setup-income': 'Write pay from the hourly wage',
+    'setup-spend': 'Write total spending on the two goods',
+    'setup-time': 'Write total hours used on the two activities',
   },
   learn: {
     whyItMatters:
@@ -605,6 +770,12 @@ export const utilityMaximization: SkillDefinition = {
       'Check every answer: $p_x x^* + p_y y^*$ must equal $m$, and $ay\\,p_y = bx\\,p_x$.',
       'The utility $\\alpha\\ln x + \\beta\\ln y$ gives the same demands as $x^{\\alpha}y^{\\beta}$.',
     ],
+  },
+  story: {
+    levels: [1],
+    generate(rng) {
+      return storyL1(rng);
+    },
   },
   generate(rng, level: Level) {
     switch (level) {

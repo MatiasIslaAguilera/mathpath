@@ -6,7 +6,7 @@ import { multiAnswer, numberAnswer, qcAnswer, wrongNumber, type QcRelation } fro
 import { distinctMisconceptions } from '../../engine/misconceptions';
 import { Q } from '../../engine/rational';
 import type { Rng } from '../../engine/rng';
-import type { ChoiceOption, Level, SkillDefinition, Step } from '../../engine/types';
+import type { ChoiceOption, Level, MisconceptionInstance, SkillDefinition, Step } from '../../engine/types';
 
 /** "a 45%" / "an 85%" / "an 8-kilometer": the article as the number is spoken. */
 const a = (n: number) => (n === 8 || n === 11 || n === 18 || (n >= 80 && n < 90) ? 'an' : 'a');
@@ -120,6 +120,11 @@ function level1(rng: Rng): Body {
 // ---------- level 2: combined work ----------
 
 function level2(rng: Rng): Body {
+  const { form, k, m, n } = pickWork(rng);
+  return combinedWork(form, k, m, n);
+}
+
+function pickWork(rng: Rng) {
   for (;;) {
     const m = rng.int(1, 4);
     const n = rng.int(1, 4);
@@ -130,38 +135,46 @@ function level2(rng: Rng): Body {
     const t = k * m * n; // = ab/(a+b)
     const form = rng.chance(0.65) ? 0 : 1;
     if (form === 1 && a === t) continue;
-    const together = form === 0;
-    const answer = numberAnswer(together ? t : b);
-    const verify = { type: 'evaluate', expr: together ? `${a}*${b}/(${a}+${b})` : `${a}*${t}/(${a}-${t})` } as const;
-    const prompt = together
-      ? `Machine A alone can finish a job in ${a} hours, and Machine B alone can finish it in ${b} hours. Working together at these rates, how many hours do they need?`
-      : `Pump A alone can fill a tank in ${a} hours. Pumps A and B working together fill it in ${t} hours. How many hours would Pump B take alone?`;
-    return {
-      params: { form, k, m, n, a, b, t },
-      prompt,
-      answer,
-      steps: [
-        {
-          key: 'rates',
-          instruction: 'Turn times into rates: jobs per hour.',
-          math: together ? `\\frac{1}{${a}} + \\frac{1}{${b}} = \\frac{${a + b}}{${a * b}}` : `\\frac{1}{${t}} - \\frac{1}{${a}} = \\text{rate of B}`,
-          why: 'Rates add; times do not.',
-          ask: together
-            ? { prompt: `What is the combined rate in jobs per hour ($\\frac{1}{${a}} + \\frac{1}{${b}}$)?`, answer: numberAnswer(Q.of(1).div(t)), verify: { type: 'evaluate', expr: `1/${a}+1/${b}` } }
-            : { prompt: `What is B's rate, $\\frac{1}{${t}} - \\frac{1}{${a}}$?`, answer: numberAnswer(Q.of(1).div(b)), verify: { type: 'evaluate', expr: `1/${t}-1/${a}` } },
-        },
-        {
-          key: 'invert',
-          instruction: 'Invert the rate to get the time for one job.',
-          math: together ? `\\frac{${a * b}}{${a + b}} = ${t}` : `\\frac{1}{1/${b}} = ${b}`,
-          why: 'Time = 1 ÷ rate.',
-          ask: { prompt: 'So the time is?', answer, verify },
-        },
-      ],
-      misconceptions: distinctMisconceptions(answer, [wrongNumber('work-rates-added-times', () => (together ? a + b : t - a))]),
-      verify,
-    };
+    return { form, k, m, n };
   }
+}
+
+/** L2's body for picked work rates (shared by plain and story problems). */
+function combinedWork(form: number, k: number, m: number, n: number): Body {
+  const a = k * m * (m + n);
+  const b = k * n * (m + n);
+  const t = k * m * n; // = ab/(a+b)
+  const together = form === 0;
+  const answer = numberAnswer(together ? t : b);
+  const verify = { type: 'evaluate', expr: together ? `${a}*${b}/(${a}+${b})` : `${a}*${t}/(${a}-${t})` } as const;
+  const prompt = together
+    ? `Machine A alone can finish a job in ${a} hours, and Machine B alone can finish it in ${b} hours. Working together at these rates, how many hours do they need?`
+    : `Pump A alone can fill a tank in ${a} hours. Pumps A and B working together fill it in ${t} hours. How many hours would Pump B take alone?`;
+  return {
+    params: { form, k, m, n, a, b, t },
+    prompt,
+    answer,
+    steps: [
+      {
+        key: 'rates',
+        instruction: 'Turn times into rates: jobs per hour.',
+        math: together ? `\\frac{1}{${a}} + \\frac{1}{${b}} = \\frac{${a + b}}{${a * b}}` : `\\frac{1}{${t}} - \\frac{1}{${a}} = \\text{rate of B}`,
+        why: 'Rates add; times do not.',
+        ask: together
+          ? { prompt: `What is the combined rate in jobs per hour ($\\frac{1}{${a}} + \\frac{1}{${b}}$)?`, answer: numberAnswer(Q.of(1).div(t)), verify: { type: 'evaluate', expr: `1/${a}+1/${b}` } }
+          : { prompt: `What is B's rate, $\\frac{1}{${t}} - \\frac{1}{${a}}$?`, answer: numberAnswer(Q.of(1).div(b)), verify: { type: 'evaluate', expr: `1/${t}-1/${a}` } },
+      },
+      {
+        key: 'invert',
+        instruction: 'Invert the rate to get the time for one job.',
+        math: together ? `\\frac{${a * b}}{${a + b}} = ${t}` : `\\frac{1}{1/${b}} = ${b}`,
+        why: 'Time = 1 ÷ rate.',
+        ask: { prompt: 'So the time is?', answer, verify },
+      },
+    ],
+    misconceptions: distinctMisconceptions(answer, [wrongNumber('work-rates-added-times', () => (together ? a + b : t - a))]),
+    verify,
+  };
 }
 
 // ---------- level 3: average speed (harmonic mean) ----------
@@ -272,56 +285,18 @@ function level4(rng: Rng): Body {
     const t = rng.pick([10, 12, 15, 20, 30, 40, 45, 50]);
     const unit = 60 / gcd(60, t);
     const s = unit * rng.int(1, Math.floor(120 / unit));
-    const dist = (s * t) / 60;
-    const answer = numberAnswer(dist);
-    const verify = { type: 'evaluate', expr: `${s}*${t}/60` } as const;
-    return {
-      params: { ...P, s, t },
-      prompt: `A train travels at a constant ${s} kilometers per hour. How many kilometers does it travel in ${t} minutes?`,
-      answer,
-      steps: [
-        { key: 'convert-units', instruction: 'The speed is per HOUR, so convert the minutes to hours.', math: `${t}\\text{ min} = \\frac{${t}}{60}\\text{ h}`, why: 'Units must match before multiplying rate by time.', ask: { prompt: `How many hours is ${t} minutes? (as a fraction or decimal)`, answer: numberAnswer(Q.of(t).div(60)), verify: { type: 'evaluate', expr: `${t}/60` } } },
-        { key: 'rate-times-time', instruction: 'Distance = rate × time.', math: `${s} \\times \\frac{${t}}{60} = ${dist}`, why: 'distance = rate × time', ask: { prompt: 'Distance in km?', answer, verify } },
-      ],
-      misconceptions: distinctMisconceptions(answer, [wrongNumber('unit-conversion-missed', () => s * t)]),
-      verify,
-    };
+    return speedTimeBody(P, s, t);
   }
   if (form === 1) {
     const s = 5 * rng.int(4, 18);
     const unit = 60 / gcd(60, s);
     const mins = unit * rng.int(1, Math.floor(90 / unit));
-    const d = (s * mins) / 60;
-    const answer = numberAnswer(mins);
-    const verify = { type: 'evaluate', expr: `60*${d}/${s}` } as const;
-    return {
-      params: { ...P, s, d },
-      prompt: `A cyclist rides at ${s} kilometers per hour. How many MINUTES does ${a(d)} ${d}-kilometer ride take?`,
-      answer,
-      steps: [
-        { key: 'time-hours', instruction: 'Time = distance ÷ rate, which comes out in hours.', math: `\\frac{${d}}{${s}} \\text{ hours}`, why: 'The rate is per hour, so this time is in hours.', ask: { prompt: 'How many hours (fraction or decimal)?', answer: numberAnswer(Q.of(d).div(s)), verify: { type: 'evaluate', expr: `${d}/${s}` } } },
-        { key: 'to-minutes', instruction: 'Convert hours to minutes: multiply by 60.', math: `\\frac{${d}}{${s}} \\times 60 = ${mins}`, why: 'The question asks for minutes.', ask: { prompt: 'Minutes?', answer, verify } },
-      ],
-      misconceptions: distinctMisconceptions(answer, [wrongNumber('unit-conversion-missed', () => Q.of(d).div(s))]),
-      verify,
-    };
+    return minutesBody(P, s, (s * mins) / 60);
   }
   if (form === 2) {
     const x = rng.int(2, 40);
     const h = rng.int(2, 6);
-    const answer = numberAnswer(x * 60 * h);
-    const verify = { type: 'evaluate', expr: `${x}*60*${h}` } as const;
-    return {
-      params: { ...P, x, h },
-      prompt: `A pump moves ${x} liters of water per minute. How many liters does it move in ${h} hours?`,
-      answer,
-      steps: [
-        { key: 'convert-units', instruction: 'The rate is per MINUTE, so convert the hours to minutes.', math: `${h}\\text{ h} = ${60 * h}\\text{ min}`, why: 'Units must match before multiplying rate by time.', ask: { prompt: `How many minutes is ${h} hours?`, answer: numberAnswer(60 * h), verify: { type: 'evaluate', expr: `60*${h}` } } },
-        { key: 'rate-times-time', instruction: 'Amount = rate × time.', math: `${x} \\times ${60 * h} = ${x * 60 * h}`, why: 'amount = rate × time', ask: { prompt: 'Liters?', answer, verify } },
-      ],
-      misconceptions: distinctMisconceptions(answer, [wrongNumber('unit-conversion-missed', () => x * h)]),
-      verify,
-    };
+    return perMinuteBody(P, x, h);
   }
   const v = 5 * rng.int(1, 6);
   const answer = numberAnswer((v * 3600) / 1000);
@@ -335,6 +310,61 @@ function level4(rng: Rng): Body {
       { key: 'to-km', instruction: 'Divide by 1000 to get kilometers.', math: `\\frac{${v * 3600}}{1000} = ${(v * 3600) / 1000}`, why: '1 km = 1000 m', ask: { prompt: 'Kilometers per hour?', answer, verify } },
     ],
     misconceptions: distinctMisconceptions(answer, [wrongNumber('unit-conversion-missed', () => v * 3600)]),
+    verify,
+  };
+}
+
+type L4Params = { form: number; s: number; t: number; d: number; x: number; h: number; v: number };
+
+/** Form 0: a speed per hour, a time in minutes. */
+function speedTimeBody(P: L4Params, s: number, t: number): Body {
+  const dist = (s * t) / 60;
+  const answer = numberAnswer(dist);
+  const verify = { type: 'evaluate', expr: `${s}*${t}/60` } as const;
+  return {
+    params: { ...P, s, t },
+    prompt: `A train travels at a constant ${s} kilometers per hour. How many kilometers does it travel in ${t} minutes?`,
+    answer,
+    steps: [
+      { key: 'convert-units', instruction: 'The speed is per HOUR, so convert the minutes to hours.', math: `${t}\\text{ min} = \\frac{${t}}{60}\\text{ h}`, why: 'Units must match before multiplying rate by time.', ask: { prompt: `How many hours is ${t} minutes? (as a fraction or decimal)`, answer: numberAnswer(Q.of(t).div(60)), verify: { type: 'evaluate', expr: `${t}/60` } } },
+      { key: 'rate-times-time', instruction: 'Distance = rate × time.', math: `${s} \\times \\frac{${t}}{60} = ${dist}`, why: 'distance = rate × time', ask: { prompt: 'Distance in km?', answer, verify } },
+    ],
+    misconceptions: distinctMisconceptions(answer, [wrongNumber('unit-conversion-missed', () => s * t)]),
+    verify,
+  };
+}
+
+/** Form 1: a speed per hour, a distance, the time asked in minutes. */
+function minutesBody(P: L4Params, s: number, d: number): Body {
+  const mins = (60 * d) / s;
+  const answer = numberAnswer(mins);
+  const verify = { type: 'evaluate', expr: `60*${d}/${s}` } as const;
+  return {
+    params: { ...P, s, d },
+    prompt: `A cyclist rides at ${s} kilometers per hour. How many MINUTES does ${a(d)} ${d}-kilometer ride take?`,
+    answer,
+    steps: [
+      { key: 'time-hours', instruction: 'Time = distance ÷ rate, which comes out in hours.', math: `\\frac{${d}}{${s}} \\text{ hours}`, why: 'The rate is per hour, so this time is in hours.', ask: { prompt: 'How many hours (fraction or decimal)?', answer: numberAnswer(Q.of(d).div(s)), verify: { type: 'evaluate', expr: `${d}/${s}` } } },
+      { key: 'to-minutes', instruction: 'Convert hours to minutes: multiply by 60.', math: `\\frac{${d}}{${s}} \\times 60 = ${mins}`, why: 'The question asks for minutes.', ask: { prompt: 'Minutes?', answer, verify } },
+    ],
+    misconceptions: distinctMisconceptions(answer, [wrongNumber('unit-conversion-missed', () => Q.of(d).div(s))]),
+    verify,
+  };
+}
+
+/** Form 2: a rate per minute, a time in hours. */
+function perMinuteBody(P: L4Params, x: number, h: number): Body {
+  const answer = numberAnswer(x * 60 * h);
+  const verify = { type: 'evaluate', expr: `${x}*60*${h}` } as const;
+  return {
+    params: { ...P, x, h },
+    prompt: `A pump moves ${x} liters of water per minute. How many liters does it move in ${h} hours?`,
+    answer,
+    steps: [
+      { key: 'convert-units', instruction: 'The rate is per MINUTE, so convert the hours to minutes.', math: `${h}\\text{ h} = ${60 * h}\\text{ min}`, why: 'Units must match before multiplying rate by time.', ask: { prompt: `How many minutes is ${h} hours?`, answer: numberAnswer(60 * h), verify: { type: 'evaluate', expr: `60*${h}` } } },
+      { key: 'rate-times-time', instruction: 'Amount = rate × time.', math: `${x} \\times ${60 * h} = ${x * 60 * h}`, why: 'amount = rate × time', ask: { prompt: 'Liters?', answer, verify } },
+    ],
+    misconceptions: distinctMisconceptions(answer, [wrongNumber('unit-conversion-missed', () => x * h)]),
     verify,
   };
 }
@@ -438,6 +468,193 @@ function level5(rng: Rng): Body {
   };
 }
 
+// ---------- Story variants (docs/skill-specs/batch-s3-stories.md) ----------
+
+/** A setup step: write the situation in terms of the unknown x (checked by equivalence). */
+function setupStep(key: string, prompt: string, latex: string, expr: string, why: string): Step {
+  return {
+    key,
+    instruction: prompt,
+    math: latex,
+    why,
+    ask: {
+      prompt,
+      answer: { kind: 'expression', value: expr, variables: ['x'], display: latex },
+      verify: { type: 'equivalent', expr, variables: ['x'] },
+    },
+  };
+}
+
+/** Setup steps first, then the level's own steps; story readings come before the body's. */
+function tell(body: Body, prompt: string, setup: Step[], mis: (MisconceptionInstance | null)[] = []): Body {
+  return {
+    ...body,
+    prompt,
+    steps: [...setup, ...body.steps],
+    misconceptions: distinctMisconceptions(body.answer, [...mis, ...body.misconceptions]),
+  };
+}
+
+/** L2 stories: combined work told as fractions done, as "k times as fast", or as parts per hour. */
+function storyLevel2(rng: Rng): Body {
+  const pattern = rng.int(0, 2);
+  if (pattern === 1) {
+    // B is m times as fast as A (n = 1), so B's time is exactly a / m.
+    const m = rng.int(2, 4);
+    const k = rng.int(1, Math.min(6, Math.floor(60 / (m * (m + 1)))));
+    const body = combinedWork(0, k, m, 1);
+    const { a } = body.params;
+    const fast = ['', '', 'twice', 'three times', 'four times'][m];
+    const prompt = rng.pick([
+      `Painter A alone can paint a fence in ${a} hours. Painter B works ${fast} as fast as Painter A. Working together, how many hours do they need?`,
+      `Printer A alone can print a batch of flyers in ${a} hours. Printer B prints ${fast} as fast as Printer A. How many hours do the two take together?`,
+      `Pump A alone can fill a tank in ${a} hours, and Pump B pumps ${fast} as fast as Pump A. How long do the two pumps take to fill the tank together?`,
+    ]);
+    // The plain first ask quotes B's time, which this story must not hand over.
+    const first = body.steps[0];
+    const steps = [{ ...first, ask: { ...first.ask!, prompt: 'What is the combined rate in jobs per hour?' } }, ...body.steps.slice(1)];
+    return tell(
+      { ...body, steps },
+      prompt,
+      [
+        setupStep(
+          'setup-faster',
+          `Let $x$ be the hours they work together. B works ${fast} as fast as A. Write the fraction of the job B finishes in $x$ hours.`,
+          `\\frac{${m}x}{${a}}`,
+          `${m}*x/${a}`,
+          `A is ${a} hours alone, so A does $\\frac{1}{${a}}$ of the job per hour. "${fast} as fast" means ${m} times the RATE, so B does $\\frac{${m}}{${a}}$ per hour (B alone takes ${a}/${m} hours, less time, not ${a}\\cdot${m}).`,
+        ),
+        setupStep('setup-right', 'Write the fraction of the job A finishes in $x$ hours.', `\\frac{x}{${a}}`, `x/${a}`, 'The two fractions must add to one whole job.'),
+      ],
+      // Read "m times as fast" as "m times as long": B's time a·m, so the pair takes a·(a·m)/(a + a·m).
+      [wrongNumber('faster-means-longer', () => Q.of(a * a * m).div(a + a * m))],
+    );
+  }
+  const { form, k, m, n } = pickWork(rng);
+  const body = combinedWork(form, k, m, n);
+  const { a, b, t } = body.params;
+  if (pattern === 0) {
+    const prompt =
+      form === 0
+        ? rng.pick([
+            `Printer A alone can print the school's flyers in ${a} hours, and Printer B alone takes ${b} hours. Running together, how many hours do they need?`,
+            `Painter A alone can paint a fence in ${a} hours; Painter B alone takes ${b} hours. Working together, how many hours do they take?`,
+            `Pump A alone can drain a pool in ${a} hours and Pump B alone in ${b} hours. How many hours do they need to drain it together?`,
+          ])
+        : rng.pick([
+            `Printer A alone can print a batch in ${a} hours. Printers A and B together do it in ${t} hours. How many hours would Printer B take alone?`,
+            `Painter A alone can paint a room in ${a} hours. Painters A and B together take ${t} hours. How long would Painter B take alone?`,
+            `Pump A alone can drain a pool in ${a} hours. With Pump B also running, it drains in ${t} hours. How many hours would Pump B take alone?`,
+          ]);
+    const setup =
+      form === 0
+        ? setupStep(
+            'setup-work',
+            'Let $x$ be the hours they work together. Write the fraction of the job both finish in $x$ hours.',
+            `\\frac{x}{${a}} + \\frac{x}{${b}}`,
+            `x/${a} + x/${b}`,
+            `In one hour A does $\\frac{1}{${a}}$ of the job and B does $\\frac{1}{${b}}$, so in $x$ hours they do $\\frac{x}{${a}}$ and $\\frac{x}{${b}}$. Together they finish the whole job, which is 1. You add fractions of the job, never the hours.`,
+          )
+        : setupStep(
+            'setup-work',
+            `Let $x$ be the hours B takes alone. Write the fraction of the job A and B finish together in ${t} hours.`,
+            `\\frac{${t}}{${a}} + \\frac{${t}}{x}`,
+            `${t}/${a} + ${t}/x`,
+            `In ${t} hours A does $\\frac{${t}}{${a}}$ of the job and B does $\\frac{${t}}{x}$. Together they finish the whole job, so the two fractions add to 1.`,
+          );
+    return tell(body, prompt, [setup]);
+  }
+  // pattern 2: the rates are given as parts of the job per hour.
+  if (form === 0) {
+    const prompt = rng.pick([
+      `Each hour, Printer A completes $\\frac{1}{${a}}$ of a print run and Printer B completes $\\frac{1}{${b}}$ of it. Running together, how many hours do they need for one run?`,
+      `A painter finishes $\\frac{1}{${a}}$ of a fence per hour, and her partner finishes $\\frac{1}{${b}}$ of it per hour. How many hours do they need to paint the fence together?`,
+      `In one hour Pump A moves $\\frac{1}{${a}}$ of a tank's water and Pump B moves $\\frac{1}{${b}}$ of it. How many hours do both pumps need to fill the tank?`,
+    ]);
+    return tell(body, prompt, [
+      setupStep('setup-part', 'Let $x$ be the hours they work together. Write the fraction of the job A finishes in $x$ hours.', `\\frac{x}{${a}}`, `x/${a}`, `A does $\\frac{1}{${a}}$ of the job per hour, so in $x$ hours A does $x \\cdot \\frac{1}{${a}}$.`),
+      setupStep('setup-right', 'Write the fraction of the job B finishes in $x$ hours.', `\\frac{x}{${b}}`, `x/${b}`, 'The same for B. Together the two fractions make one whole job.'),
+    ]);
+  }
+  const prompt = rng.pick([
+    `Pump A fills $\\frac{1}{${a}}$ of a tank each hour. With Pump B also running, the tank fills in ${t} hours. How many hours would Pump B take alone?`,
+    `A painter finishes $\\frac{1}{${a}}$ of a fence each hour. Working with a second painter, she gets the fence done in ${t} hours. How many hours would the second painter take alone?`,
+  ]);
+  return tell(body, prompt, [
+    setupStep(
+      'setup-part',
+      'Let $x$ be the hours B takes alone. Write the fraction of the job both finish in one hour.',
+      `\\frac{1}{${a}} + \\frac{1}{x}`,
+      `1/${a} + 1/x`,
+      `A does $\\frac{1}{${a}}$ per hour and B does $\\frac{1}{x}$ per hour. Together they do $\\frac{1}{${t}}$ per hour, so $\\frac{1}{${a}} + \\frac{1}{x} = \\frac{1}{${t}}$.`,
+    ),
+  ]);
+}
+
+/** L4 stories: write the amount in terms of the unknown time, then convert the time asked for. */
+function storyLevel4(rng: Rng): Body {
+  const P = { form: 0, s: 0, t: 0, d: 0, x: 0, h: 0, v: 0 };
+  if (rng.int(0, 1) === 0) {
+    // A rate per minute, the time given in hours (form 2), with one number that doesn't matter.
+    const rate = rng.int(2, 40);
+    const h = rng.int(2, 6);
+    const extra = rng.int(2, 9);
+    const body = perMinuteBody({ ...P, form: 2 }, rate, h);
+    const s = rng.pick([
+      { prompt: `A typist types ${rate} words per minute without stopping. The report is due in ${extra} days. How many words does she type in ${h} hours?`, unit: 'words typed', what: `${extra} days` },
+      { prompt: `A printer produces ${rate} pages every minute. It was bought ${extra} years ago. How many pages does it print in ${h} hours of continuous work?`, unit: 'pages printed', what: `${extra} years` },
+      { prompt: `A garden pump moves ${rate} liters of water every minute, through a hose ${extra} meters long. How many liters does it move in ${h} hours?`, unit: 'liters moved', what: `${extra}-meter hose length` },
+    ]);
+    return tell(body, s.prompt, [
+      setupStep(
+        'setup-convert',
+        `Let $x$ be the time in minutes. Write the ${s.unit} in terms of $x$.`,
+        `${rate}x`,
+        `${rate}*x`,
+        `At ${rate} per minute, $x$ minutes give $${rate}x$. The time in the question is in HOURS, so turn ${h} hours into ${60 * h} minutes before you put it in for $x$. The ${s.what} doesn't enter.`,
+      ),
+    ]);
+  }
+  // A speed per hour (km/h), the time in minutes or asked in minutes (forms 0 and 1).
+  let body: Body;
+  let prompt: string;
+  let ask: string;
+  let s: number;
+  if (rng.chance(0.5)) {
+    const t = rng.pick([10, 12, 15, 20, 30, 40, 45, 50]);
+    const unit = 60 / gcd(60, t);
+    s = unit * rng.int(1, Math.floor(120 / unit));
+    body = speedTimeBody(P, s, t);
+    prompt = rng.pick([
+      `A train moves at a constant ${s} kilometers per hour. How many kilometers does it cover in ${t} minutes?`,
+      `A car on a long highway holds ${s} kilometers per hour. How far does it go in ${t} minutes?`,
+      `A coach on a motorway cruises at ${s} kilometers per hour. How many kilometers does it travel in ${t} minutes?`,
+    ]);
+    ask = `Let $x$ be the time in minutes. Write the distance, in kilometers, in terms of $x$.`;
+  } else {
+    s = 5 * rng.int(4, 18);
+    const unit = 60 / gcd(60, s);
+    const mins = unit * rng.int(1, Math.floor(90 / unit));
+    const d = (s * mins) / 60;
+    body = minutesBody({ ...P, form: 1 }, s, d);
+    prompt = rng.pick([
+      `A courier on a motorbike rides at ${s} kilometers per hour. How many minutes does ${a(d)} ${d}-kilometer delivery take?`,
+      `A delivery van drives at ${s} kilometers per hour. How many minutes does it need for ${a(d)} ${d}-kilometer trip?`,
+      `A regional train runs at ${s} kilometers per hour. How many minutes does a ${d}-kilometer stretch take?`,
+    ]);
+    ask = `Let $x$ be the trip time in minutes. Write the distance covered, in kilometers, in terms of $x$.`;
+  }
+  return tell(body, prompt, [
+    setupStep(
+      'setup-convert-back',
+      ask,
+      `\\frac{${s}x}{60}`,
+      `${s}*x/60`,
+      `The speed is ${s} km per HOUR and $x$ is in minutes, so each minute is $\\frac{1}{60}$ of an hour: the distance in $x$ minutes is $${s} \\cdot \\frac{x}{60}$.`,
+    ),
+  ]);
+}
+
 export const greRatiosRates: SkillDefinition = {
   id: ID,
   title: 'Ratios, rates & work',
@@ -456,6 +673,7 @@ export const greRatiosRates: SkillDefinition = {
   misconceptions: {
     'ratio-part-vs-whole': { name: 'Read a:b as a/b of the total', explanation: 'In a ratio $a:b$ the whole is $a + b$ shares, so the first part is $\\frac{a}{a+b}$ of the total. $\\frac{a}{b}$ compares the parts to each other.' },
     'work-rates-added-times': { name: 'Added the times instead of the rates', explanation: 'Times do not add when people work together; RATES do: $\\frac{1}{a} + \\frac{1}{b} = \\frac{1}{t}$. Together they must be faster than either alone.' },
+    'faster-means-longer': { name: 'Read "k times as fast" as "k times as long"', explanation: 'A worker who is $k$ times as fast has $k$ times the RATE, so the job takes $\\frac{1}{k}$ of the time, not $k$ times the time. If A needs 6 hours and B is twice as fast, B needs 3 hours (not 12), and together they need 2.' },
     'average-speed-arithmetic-mean': { name: 'Averaged the two speeds', explanation: 'Average speed = total distance ÷ total time. You spend longer at the slower speed, so the average is below $\\frac{u+v}{2}$ unless $u = v$. For equal distances it is $\\frac{2uv}{u+v}$.' },
     'unit-conversion-missed': { name: 'Mixed minutes and hours', explanation: 'Make the units agree BEFORE multiplying or dividing: a rate per hour needs time in hours, a rate per minute needs time in minutes.' },
     'mixture-simple-average': { name: 'Averaged the two concentrations', explanation: 'A mixture\'s concentration is a WEIGHTED average: each concentration counts in proportion to its volume. Only equal volumes give the plain average.' },
@@ -482,6 +700,12 @@ export const greRatiosRates: SkillDefinition = {
     'weighted-average': 'Weighted average of concentrations',
     'salt-constant': 'Find the amount that stays constant',
     'solve-total': 'Solve for the new total',
+    'setup-work': 'Set up: the fraction of the job done together',
+    'setup-faster': 'Set up: "k times as fast" multiplies the rate',
+    'setup-part': 'Set up: the part of the job done per hour',
+    'setup-right': 'Set up the other worker',
+    'setup-convert': 'Set up: the amount in minutes, then convert the time',
+    'setup-convert-back': 'Set up: a rate per hour, the time in minutes',
   },
   learn: {
     whyItMatters:
@@ -510,5 +734,12 @@ export const greRatiosRates: SkillDefinition = {
       case 5:
         return level5(rng);
     }
+  },
+
+  story: {
+    levels: [2, 4],
+    generate(rng, level) {
+      return level === 2 ? storyLevel2(rng) : storyLevel4(rng);
+    },
   },
 };

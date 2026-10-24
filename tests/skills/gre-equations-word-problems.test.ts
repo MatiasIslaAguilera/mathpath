@@ -13,13 +13,24 @@ const num = (p: ReturnType<typeof makeProblem>) => {
 
 describe('gre-equations-word-problems', () => {
   it('level 1: the answer satisfies the equation written from the sentence', () => {
-    for (let seed = 1; seed <= 300; seed++) {
-      const p = makeProblem(skill, 1, seed);
-      const { form, m, k, r } = p.params;
-      const x = num(p);
-      const lhs = form === 0 ? m * x + k : form === 1 ? m * x - k : m * (x + k);
-      expect(lhs, p.id).toBe(r);
-    }
+    for (const variant of [undefined, 'story'] as const)
+      for (let seed = 1; seed <= 300; seed++) {
+        const p = makeProblem(skill, 1, seed, variant);
+        const { form, m, k, r } = p.params;
+        const x = num(p);
+        const lhs = form === 0 ? m * x + k : form === 1 ? m * x - k : m * (x + k);
+        expect(lhs, p.id).toBe(r);
+        if (variant === 'story') {
+          // The story states m (as a word or a number), k and r, and the setup step is the left-hand side.
+          expect(p.prompt, p.id).toMatch(new RegExp(`\\b${k}\\b`));
+          expect(p.prompt, p.id).toMatch(new RegExp(`\\b${r}\\b`));
+          const setup = p.steps[0].ask!.answer;
+          if (setup.kind !== 'expression') throw new Error('setup should be an expression');
+          const at = (v: number) => Function('x', `return ${setup.value}`)(v) as number;
+          expect(at(x), p.id).toBe(r);
+          expect(at(x + 1) - at(x), p.id).toBe(m); // slope m in every form
+        }
+      }
   });
 
   it('level 2: consecutive integers, ages and coins by brute force', () => {
@@ -66,6 +77,30 @@ describe('gre-equations-word-problems', () => {
       if (p.answer.kind === 'number') expect(num(p), p.id).toBe(sols[0][0]);
       else if (p.answer.kind === 'tuple') expect(p.answer.values.map(Number), p.id).toEqual(sols[0]);
       else throw new Error('unexpected answer kind');
+    }
+  });
+
+  it('level 3 stories: the prompt\'s own totals have exactly one solution, and the setup steps describe it', () => {
+    for (let seed = 1; seed <= 300; seed++) {
+      const p = makeProblem(skill, 3, seed, 'story');
+      const nums = (p.prompt.match(/\d+/g) ?? []).map(Number);
+      const { p: pa, q: pc } = p.params;
+      // The prompt states both prices, the total count N and the total R (from the params x, y).
+      const [N, R] = [p.params.x + p.params.y, pa * p.params.x + pc * p.params.y];
+      expect(nums, p.id).toEqual(expect.arrayContaining([N, R, pa, pc]));
+      // Brute force the integer solution of the stated totals.
+      const sols: [number, number][] = [];
+      for (let a = 0; a <= N; a++) if (pa * a + pc * (N - a) === R) sols.push([a, N - a]);
+      expect(sols, p.id).toEqual([[p.params.x, p.params.y]]);
+      if (p.answer.kind === 'number') expect(num(p), p.id).toBe(sols[0][0]);
+      else if (p.answer.kind === 'tuple') expect(p.answer.values.map(Number), p.id).toEqual(sols[0]);
+      else throw new Error('unexpected answer kind');
+      // The first setup step is an expression that the solution satisfies: value of the stated pieces, or the other seat count.
+      const setup = p.steps[0].ask!.answer;
+      if (setup.kind !== 'expression') throw new Error('setup should be an expression');
+      const [x, y] = sols[0];
+      const val = Function('a', 'c', `return ${setup.value}`)(x, y) as number;
+      expect(val, p.id).toBe(setup.variables.includes('c') ? R : y);
     }
   });
 

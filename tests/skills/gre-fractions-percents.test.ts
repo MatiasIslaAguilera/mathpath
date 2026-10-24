@@ -12,12 +12,18 @@ const frac = (label: string): [number, number] => {
 
 describe('gre-fractions-percents', () => {
   it('level 1: percent change relative to the original', () => {
-    for (let seed = 1; seed <= 300; seed++) {
-      const p = makeProblem(skill, 1, seed);
-      const { old, nw, up } = p.params;
-      expect(up === 1 ? nw > old : nw < old, p.id).toBe(true);
-      expect(p.answer.kind === 'number' && Number(p.answer.value) * old, p.id).toBeCloseTo(Math.abs(nw - old) * 100, 9);
-    }
+    for (const variant of [undefined, 'story'] as const)
+      for (let seed = 1; seed <= 300; seed++) {
+        const p = makeProblem(skill, 1, seed, variant);
+        const { old, nw, up } = p.params;
+        expect(up === 1 ? nw > old : nw < old, p.id).toBe(true);
+        expect(p.answer.kind === 'number' && Number(p.answer.value) * old, p.id).toBeCloseTo(Math.abs(nw - old) * 100, 9);
+        if (variant === 'story') {
+          // The story names the old value, and either the new value or the change (never neither).
+          expect(p.prompt, p.id).toContain(String(old));
+          expect(p.prompt.includes(String(nw)) || p.prompt.includes(String(Math.abs(nw - old))), p.id).toBe(true);
+        }
+      }
   });
 
   it('level 2: net change by direct multiplication; QC cases by plug-in', () => {
@@ -61,9 +67,16 @@ describe('gre-fractions-percents', () => {
   });
 
   it('level 4: the correct original, reduced/increased by the percent, gives the stated price', () => {
+    for (const variant of [undefined, 'story'] as const)
     for (let seed = 1; seed <= 300; seed++) {
-      const p = makeProblem(skill, 4, seed);
+      const p = makeProblem(skill, 4, seed, variant);
       const { form, d, orig, price, a, b, n } = p.params;
+      if (variant === 'story') {
+        // Reverse percents only; the prompt states the percent and the final price.
+        expect(form, p.id).toBeLessThan(2);
+        expect(p.prompt, p.id).toContain(`${d}%`);
+        expect(p.prompt, p.id).toContain(String(price));
+      }
       if (form === 2) {
         expect(p.answer.kind === 'number' && Number(p.answer.value), p.id).toBeCloseTo((n * (a / 100) * (b / 100)), 9);
       } else if (p.answer.kind === 'choice') {

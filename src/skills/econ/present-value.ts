@@ -116,33 +116,48 @@ function higherRateQuestion(rng: Rng, noun: string, rPct: number, valueNow: numb
 
 // ---------- level 1: one future sum ----------
 
+/** Rate, years and present value, with the future sum a whole number of cents. */
+function drawSingle(rng: Rng) {
+  for (;;) {
+    const r = rng.pick(RATES);
+    const n = rng.int(1, nMax(r));
+    const PV = 100 * rng.int(1, 50);
+    const fac = factorOf(r, n);
+    const FV = fac.mul(PV);
+    if (!FV.mul(100).isInt()) continue; // a given with more than 2 decimals
+    return { r, n, PV, fac, FV };
+  }
+}
+
 function singleSum(rng: Rng): Generated {
   const form = rng.int(0, 1);
-  let r = 0;
-  let n = 0;
-  let PV = 0;
-  let fac = q(1);
-  let FV = q(0);
-  for (;;) {
-    r = rng.pick(RATES);
-    n = rng.int(1, nMax(r));
-    PV = 100 * rng.int(1, 50);
-    fac = factorOf(r, n);
-    FV = fac.mul(PV);
-    if (!FV.mul(100).isInt()) continue; // a given with more than 2 decimals
-    break;
-  }
+  return buildSingle(rng, { form, ...drawSingle(rng) });
+}
+
+/** A story's own prompt and its setup step (the plain problem has neither). */
+interface SingleStory {
+  prompt: string;
+  setup: Step;
+}
+
+function buildSingle(
+  rng: Rng,
+  { form, r, n, PV, fac, FV }: { form: number; r: number; n: number; PV: number; fac: Q; FV: Q },
+  story?: SingleStory,
+): Generated {
   const rDec = decimal(rate(r));
   const fDec = decimal(fac);
   const answer = moneyAnswer(q(PV));
   const verify = { type: 'solve' as const, equations: [`PV*(1+${rExpr(r)})^${n} = ${FV.toString()}`], unknowns: ['PV'] };
 
   const prompt =
-    form === 0
+    story?.prompt ??
+    (form === 0
       ? `What is the present value of ${money(FV)} to be received in ${years(n)}, if the interest rate is ${r}% per year, compounded annually?`
-      : `You will need ${money(FV)} in ${years(n)}. An account pays ${r}% per year, compounded annually. How many dollars must you invest now to have exactly that?`;
+      : `You will need ${money(FV)} in ${years(n)}. An account pays ${r}% per year, compounded annually. How many dollars must you invest now to have exactly that?`);
 
   const steps: Step[] = [
+    ...(story ? [story.setup] : []),
     {
       key: 'factor',
       instruction: `Find the discount factor: ${years(n)} of growth at $r = ${rDec}$ is $(1 + r)^{${n}}$.`,
@@ -223,6 +238,69 @@ function singleSum(rng: Rng): Generated {
     interpretation,
     verify,
   };
+}
+
+// ---------- level 1 stories: write what a payment today grows to ----------
+
+function storySingle(rng: Rng): Generated {
+  const pattern = rng.int(0, 2);
+  const d = drawSingle(rng);
+  const { r, n, FV } = d;
+  const setting = rng.int(0, 2);
+  const tickets = 250 * rng.int(4, 20);
+  const rDec = decimal(rate(r));
+  const per = `${r}% per year, compounded annually`;
+  const growth = `x(1 + ${rDec})^{${n}}`;
+  const mk = (key: string, prompt: string, why: string, text: string): SingleStory => ({
+    prompt: text,
+    setup: {
+      key,
+      instruction: prompt,
+      math: `\\text{value after ${years(n)}} = ${growth}`,
+      why,
+      ask: {
+        prompt,
+        answer: { kind: 'expression', value: `x*(1+${rExpr(r)})^${n}`, variables: ['x'], display: growth },
+        verify: { type: 'equivalent', expr: `x*(1+${rExpr(r)})^${n}`, variables: ['x'] },
+      },
+    },
+  });
+  const GROWS_WHY = `Each year the balance is multiplied by $(1 + r)$, so ${years(n)} multiply it by $(1 + r)^{${n}}$. Setting that equal to ${money(FV)} gives the equation to solve.`;
+  if (pattern === 1) {
+    const noun = ['prize draw', 'raffle', 'lottery'][setting];
+    return buildSingle(
+      rng,
+      { form: 0, ...d },
+      mk(
+        'setup-prize',
+        `Let $x$ be what a buyer pays for the winning ticket today. Write what $x$ dollars would grow to if invested for ${years(n)}.`,
+        `${GROWS_WHY} The ${tickets} tickets sold do not enter: the winning ticket is already known, so only the prize and the wait matter.`,
+        `A ${noun} sold ${tickets} tickets, and the winning ticket pays ${money(FV)} in ${years(n)}. The interest rate is ${per}. What is the most a buyer should pay for the winning ticket today, in dollars?`,
+      ),
+    );
+  }
+  if (pattern === 2) {
+    const text = [
+      `An employer offers you a bonus of ${money(FV)}, paid in ${years(n)}. The interest rate is ${per}. What payment today is worth the same to you, in dollars?`,
+      `A client offers to settle an invoice with ${money(FV)} paid in ${years(n)}, or with a smaller payment today. The interest rate is ${per}. What payment today is worth the same, in dollars?`,
+      `A landlord will refund your deposit of ${money(FV)} in ${years(n)}, or pay you a lump sum today instead. The interest rate is ${per}. What lump sum today is worth the same, in dollars?`,
+    ][setting];
+    return buildSingle(
+      rng,
+      { form: 0, ...d },
+      mk('setup-offers', `Let $x$ be the payment today. Write what $x$ dollars would grow to if invested for ${years(n)}.`, GROWS_WHY, text),
+    );
+  }
+  const text = [
+    `You need ${money(FV)} in ${years(n)} to pay for a course. A savings account pays ${per}. How many dollars should you put in now to have exactly that?`,
+    `A neighbourhood club wants ${money(FV)} in ${years(n)} to replace its minibus. Its fund earns ${per}. How many dollars must the club deposit today?`,
+    `You are saving for a trip that will cost ${money(FV)} in ${years(n)}. A deposit earns ${per}. How many dollars do you need to deposit now?`,
+  ][setting];
+  return buildSingle(
+    rng,
+    { form: 1, ...d },
+    mk('setup-grows', `Let $x$ be the dollars put in now. Write what $x$ grows to in ${years(n)}.`, GROWS_WHY, text),
+  );
 }
 
 // ---------- level 2: net present value of a project ----------
@@ -769,6 +847,9 @@ export const presentValue: SkillDefinition = {
     perpetuity: 'Divide the payment by r (or r - g)',
     defer: 'Discount back to today',
     'solve-payment': 'Divide the loan (or target) by the factor sum',
+    'setup-grows': 'Write what the amount today grows to',
+    'setup-prize': 'Write what the amount today grows to',
+    'setup-offers': 'Write what the amount today grows to',
   },
   learn: {
     whyItMatters:
@@ -787,6 +868,13 @@ export const presentValue: SkillDefinition = {
       'Sanity check: a present value is always smaller than the future amount (for r > 0), and a bigger rate or a longer wait makes it smaller.',
       'Payments "at the end of each year" are discounted once for year 1, twice for year 2, and so on.',
     ],
+  },
+
+  story: {
+    levels: [1],
+    generate(rng) {
+      return storySingle(rng);
+    },
   },
 
   generate(rng, level) {

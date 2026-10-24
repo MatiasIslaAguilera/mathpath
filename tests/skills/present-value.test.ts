@@ -35,6 +35,21 @@ describe('present value answers match the definitions', () => {
     }
   });
 
+  it('level 1 stories: the answer grows to the future sum the story states', () => {
+    const keys = new Set<string>();
+    for (let seed = 1; seed <= N; seed++) {
+      const p = makeProblem(skill, 1, seed, 'story');
+      const { n } = p.params;
+      const FV = amounts(p.prompt)[0];
+      const r = rateOf(p.prompt);
+      expect(value(p) * Math.pow(1 + r, n), p.id).toBeCloseTo(FV, 6);
+      expect(Number.isInteger(value(p))).toBe(true);
+      expect(p.prompt, p.id).toContain(n === 1 ? '1 year' : `${n} years`);
+      keys.add(p.steps[0].key);
+    }
+    expect([...keys].sort()).toEqual(['setup-grows', 'setup-offers', 'setup-prize']);
+  });
+
   it('level 2: NPV = discounted returns minus the outlay', () => {
     let neg = 0;
     let pos = 0;

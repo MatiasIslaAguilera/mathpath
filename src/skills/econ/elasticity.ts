@@ -108,8 +108,8 @@ const linearMisconceptions = (L: Linear): (MisconceptionInstance | null)[] => [
   wrongNumber('sign-dropped', () => L.e.abs()),
 ];
 
-function level1(rng: Rng): Body {
-  const L = pickLinear(rng);
+function level1(rng: Rng, picked?: Linear): Body {
+  const L = picked ?? pickLinear(rng);
   const answer = numberAnswer(L.e);
   const verify = pointLimit((P) => `(${L.a} - ${L.b}*${P})`, L.P0);
   return {
@@ -124,17 +124,23 @@ function level1(rng: Rng): Body {
 }
 
 const CLASSES: Record<Kind, string> = { elastic: 'Elastic (|ε| > 1)', inelastic: 'Inelastic (|ε| < 1)', unit: 'Unit elastic (|ε| = 1)' };
+const CLASS_OPTIONS: ChoiceOption[] = (['elastic', 'inelastic', 'unit'] as Kind[]).map((id) => ({ id, label: CLASSES[id] }));
 
-function level2(rng: Rng): Body {
-  // Mix the three cases on purpose, including unit elasticity.
+/** Mix the three cases on purpose, including unit elasticity. */
+function pickLevel2(rng: Rng): Linear {
   let L = pickLinear(rng);
   if (rng.chance(0.2)) {
     const b = rng.int(1, 6);
     const P0 = rng.int(1, 20);
     L = { a: 2 * b * P0, b, P0, Q0: b * P0, e: q(-1) };
   }
+  return L;
+}
+
+function level2(rng: Rng, picked?: Linear): Body {
+  const L = picked ?? pickLevel2(rng);
   const k = kindOf(L.e);
-  const options: ChoiceOption[] = (['elastic', 'inelastic', 'unit'] as Kind[]).map((id) => ({ id, label: CLASSES[id] }));
+  const options = CLASS_OPTIONS;
   const answer = choiceAnswer(options, k);
   // The classic slip: judging by the slope's size instead of |ε|.
   const bySlope: Kind = L.b > 1 ? 'elastic' : L.b < 1 ? 'inelastic' : 'unit';
@@ -289,6 +295,102 @@ function level5(rng: Rng): Body {
   };
 }
 
+// ---------- story variants: the same demand line told in words, from data, or from today's price ----------
+
+interface Setting {
+  seller: string;
+  items: string;
+  per: string;
+  time: string;
+}
+const SETTINGS: Setting[] = [
+  { seller: 'A cinema', items: 'tickets', per: 'ticket', time: 'night' },
+  { seller: 'A bakery', items: 'loaves', per: 'loaf', time: 'day' },
+  { seller: 'A bike-hire stand', items: 'rentals', per: 'rental', time: 'day' },
+];
+
+/** A setup step: write demand as an expression in P (checked by equivalence). */
+function setupDemand(key: string, prompt: string, latex: string, expr: string, why: string): Step {
+  return {
+    key,
+    instruction: prompt,
+    math: latex,
+    why,
+    ask: { prompt, answer: { kind: 'expression', value: expr, variables: ['P'], display: latex }, verify: { type: 'equivalent', expr, variables: ['P'] } },
+  };
+}
+
+function tellStory(rng: Rng, level: Level): Body {
+  const pattern = rng.int(0, 2); // 0 words, 1 two observations, 2 from today
+  // Two observations need two prices (other than today's) with positive sales on the line.
+  let L = level === 2 ? pickLevel2(rng) : pickLinear(rng);
+  while (pattern === 1 && Math.floor((L.a - 1) / L.b) < 3) L = level === 2 ? pickLevel2(rng) : pickLinear(rng);
+  const s = rng.pick(SETTINGS);
+  const { a, b, P0, Q0 } = L;
+  const closing = ` Let $P$ be the price in dollars per ${s.per} and $Q$ the number of ${s.items} per ${s.time}.`;
+  const tail =
+    level === 1
+      ? `Find the price elasticity of demand at $P = ${P0}$.`
+      : `At $P = ${P0}$, is demand elastic, inelastic, or unit elastic?`;
+  const demandLatex = `${a} - ${b === 1 ? '' : b}P`;
+  const demandExpr = `${a} - ${b}*P`;
+
+  let lead: string;
+  let setup: Step;
+  const mis: (MisconceptionInstance | null)[] = [];
+  if (pattern === 0) {
+    // At the top story level the shop's age is a number that does not enter.
+    const years = rng.int(2, 15);
+    const aside = level === 2 ? ` The ${s.seller.slice(2)} has been open ${years} years.` : '';
+    lead = `${s.seller} finds that at a price of zero buyers would take ${a} ${s.items} per ${s.time}, and each \\$1 on the price loses ${b === 1 ? 'one' : b} of them.${aside}`;
+    setup = setupDemand(
+      'setup-words',
+      'Write the quantity demanded, $Q$, in terms of the price $P$.',
+      demandLatex,
+      demandExpr,
+      `The quantity at a zero price is the intercept, and each \\$1 on the price takes away the same number: the slope is $-${b}$.${level === 2 ? ' How long the shop has been open does not enter.' : ''}`,
+    );
+  } else if (pattern === 1) {
+    const pMax = Math.floor((a - 1) / b);
+    const options = Array.from({ length: pMax }, (_, i) => i + 1).filter((v) => v !== P0);
+    const p1 = rng.pick(options);
+    const p2 = rng.pick(options.filter((v) => v !== p1));
+    lead = `${s.seller} recorded its sales at two prices: at \\$${p1} it sold ${a - b * p1} ${s.items} per ${s.time}, and at \\$${p2} it sold ${a - b * p2}. Assume demand is a straight line in the price.`;
+    setup = setupDemand(
+      'setup-points',
+      'Write the quantity demanded, $Q$, in terms of the price $P$, from the two observations.',
+      demandLatex,
+      demandExpr,
+      'The slope is the change in quantity over the change in price, $\\Delta Q / \\Delta P$, and it is negative. The line through either point then gives the intercept.',
+    );
+    mis.push(
+      level === 1
+        ? wrongNumber('slope-inverted', () => q(-P0, b * Q0))
+        : (() => {
+            const wrongKind = kindOf(q(-P0, b * Q0));
+            return wrongKind !== kindOf(L.e) ? { id: 'slope-inverted', wrong: choiceAnswer(CLASS_OPTIONS, wrongKind) } : null;
+          })(),
+    );
+  } else {
+    lead = `At today's price of \\$${P0}, ${s.seller.toLowerCase()} sells ${Q0} ${s.items} per ${s.time}. Every \\$1 rise in the price loses ${b === 1 ? 'one' : b} of them, and every \\$1 cut gains ${b === 1 ? 'one' : b}.`;
+    setup = setupDemand(
+      'setup-anchor',
+      'Write the quantity demanded, $Q$, in terms of the price $P$, starting from the sales at today\'s price.',
+      `${Q0} - ${b === 1 ? '' : b}(P - ${P0}) = ${demandLatex}`,
+      `${Q0} - ${b}*(P - ${P0})`,
+      `Start from today's $Q_0 = ${Q0}$ and subtract ${b === 1 ? 'one' : b} for every dollar the price is above $${P0}$ (add when below): $Q_0 - b(P - P_0)$.`,
+    );
+  }
+
+  const body = level === 1 ? level1(rng, L) : level2(rng, L);
+  return {
+    ...body,
+    prompt: `${lead}${closing} ${tail}`,
+    steps: [setup, ...body.steps],
+    misconceptions: distinctMisconceptions(body.answer, [...mis, ...body.misconceptions]),
+  };
+}
+
 export const elasticity: SkillDefinition = {
   id: ID,
   title: 'Elasticity',
@@ -312,8 +414,12 @@ export const elasticity: SkillDefinition = {
     'elastic-means-steep': { name: 'Judged elasticity by the slope', explanation: 'A steep or flat slope does not decide it: on the same straight line, demand is elastic at high prices and inelastic at low prices. Compare |ε| = |slope × P/Q| with 1.' },
     'arc-endpoint-base': { name: 'Used an endpoint instead of the midpoint', explanation: 'The midpoint method divides each change by the AVERAGE of the two values, so going up or down gives the same elasticity.' },
     'revenue-max-at-intercept': { name: 'Set quantity to zero', explanation: 'At the price where Q = 0, revenue is 0. Revenue P·Q peaks halfway, where $R\'(P) = 0$ (and |ε| = 1).' },
+    'slope-inverted': { name: 'Turned the slope upside down', explanation: 'The slope in $Q = a - bP$ is units per dollar, $\\Delta Q / \\Delta P$ from the two observations. Using $\\Delta P / \\Delta Q$ (dollars per unit) gives $1/b$ instead of $b$ in $\\varepsilon = -b\\cdot P/Q$.' },
   },
   stepLabels: {
+    'setup-words': 'Write demand from the description',
+    'setup-points': 'Write demand from two observations',
+    'setup-anchor': "Write demand from today's sales",
     quantity: 'Find Q at the price',
     slope: 'Find dQ/dP',
     formula: 'ε = (dQ/dP)·(P/Q)',
@@ -335,6 +441,7 @@ export const elasticity: SkillDefinition = {
     example: { seed: 3, level: 1 },
     tips: ['Same straight demand line: elastic at the top (high P, low Q), inelastic at the bottom.'],
   },
+  story: { levels: [1, 2], generate: tellStory },
   generate(rng, level: Level) {
     switch (level) {
       case 1:
