@@ -346,6 +346,8 @@ function level2Body(P: L2Params, prompt: string): Body {
     // a x + b m x + k = c: the constant k is not multiplied by b.
     const xw = q(c - k, K);
     cand.push({ id: 'substitute-distribute', wrong: tupleAnswer(['x', 'y'], [xw, xw.mul(m).add(k)], ['x', 'y']) });
+    // Right size, wrong sign for x (review 8: -20 + 252 written as -232); y then from the first equation.
+    if (x !== 0) cand.push({ id: 'sign-answer', wrong: tupleAnswer(['x', 'y'], [-x, -x * m + k], ['x', 'y']) });
     // Set mx + k = (c − ax)/b, then moved an x-term across without changing its sign:
     // (bm − a)x = c − bk (moving −(a/b)x left) or (a − bm)x = c − bk (moving mx right).
     // y then comes from either equation.
@@ -549,6 +551,11 @@ export const systemsOfEquations: SkillDefinition = {
       name: 'Counted each side of the rectangle once',
       explanation:
         'A rectangle has two widths and two lengths, so the perimeter is $2x + 2y$. Writing $x + y$ for the perimeter goes round only half of it.',
+    },
+    'sign-answer': {
+      name: 'Got the sign of x wrong',
+      explanation:
+        'Your $x$ has the right size but the wrong sign, so $y$ came out wrong too. Watch the signs when you combine the numbers: $-20 + 252 = +232$, because the larger number is positive. Check your pair in *both* equations before you answer.',
     },
     'sign-x-term': {
       name: 'Moved an x-term without changing its sign',

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { makeProblem } from '../src/engine/registry';
+import { getSkill, makeProblem } from '../src/engine/registry';
 import { linearEquations } from '../src/skills/math/linear-equations';
 import { prefilledSteps } from '../src/learning/fading';
 import { HOLD_P, INITIAL_RATING, heldLevel, nextLevel, pCorrect, skillStatus, updateRating } from '../src/learning/mastery';
@@ -107,6 +107,20 @@ describe('session builder', () => {
     const follow = nextProblem(s, p)!;
     expect(follow.next.kind).toBe('followup');
     expect(follow.next.problem.skillId).toBe(first.next.problem.skillId);
+  });
+
+  it('a follow-up after a diagnosed misconception sets the same trap', () => {
+    // neg-c-sign only exists on discriminant items with c < 0 (about 1 in 6 at level 1).
+    const p = emptyProgress();
+    p.skills['quadratic-formula'] = { ...emptySkill(), attempts: 3, lastPracticed: '2026-01-01' };
+    const problem = makeProblem(getSkill('quadratic-formula'), 1, 1);
+    for (let i = 0; i < 20; i++) {
+      const s = afterProblem(startSession(p, 10), problem, false, true, 0, [], 'neg-c-sign');
+      const follow = nextProblem(s, p)!.next.problem;
+      expect(follow.skillId).toBe('quadratic-formula');
+      expect(follow.params.c).toBeLessThan(0);
+      expect(follow.misconceptions.map((m) => m.id)).toContain('neg-c-sign');
+    }
   });
 
   it('terminates', () => {

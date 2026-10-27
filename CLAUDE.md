@@ -153,7 +153,9 @@ Checklist:
 - **Location and tree:** skills live in `src/skills/gre/` (`track: 'gre'`), with their own
   tree section (prerequisites stay inside the GRE track). Reference skill:
   `gre-integers.ts`. Specs are in `docs/skill-specs/batch-g-gre.md`.
-- **Sessions:** every session has exactly one `gre` slot, mid-session. GRE is excluded from
+- **Sessions:** every session has one `gre` slot mid-session, or two (at 1/3 and 2/3) when the
+  goal is ≥ 8 items; the second is a stretch one level up once the GRE skill has ≥ 5 attempts.
+  GRE is excluded from
   the placement test and from "master's progress". There is no timer by design.
 - **Formats:** numeric entry; multiple choice; select-all (`multi` answer + `choice`
   verify + a required skill test); quantitative comparison (`qcAnswer` + `qc` verify).

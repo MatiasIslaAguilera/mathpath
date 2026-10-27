@@ -38,6 +38,11 @@
       "date": "2026-10-24",
       "through": 1792850604657,
       "summary": "Systems L2: sign-x-term misconception (story 2+3x=10-x -> 2x=8); L1 y=41 slip; GRE percent 60 for 70 slip; plan-choice interpretation self-corrected (8/8 after 2 misses)"
+    },
+    {
+      "date": "2026-10-27",
+      "through": 1793062061210,
+      "summary": "Quadratic formula L1 negative c 1/5 vs 27/30: neg-c-sign split from disc-sign, 4ac step, no-sqrt; systems sign-answer; follow-ups re-set the matched trap; second GRE slot (stretch) from 8 items"
     }
   ]
 }

@@ -141,13 +141,19 @@ describe('skill-tree map', () => {
 });
 
 describe('daily GRE question', () => {
-  it('every session has exactly one GRE slot, mid-session, and it serves a GRE skill', async () => {
+  it('one GRE slot (two from 8 items), mid-session, serving a GRE skill', async () => {
     const { startSession, nextProblem } = await import('../src/learning/session');
     const { getSkill } = await import('../src/engine/registry');
-    for (const goal of [3, 5, 10, 15]) {
+    for (const goal of [3, 5, 7, 8, 10, 15]) {
       const s = startSession(emptyProgress(), goal);
       const kinds = s.slots.map((x) => x.kind);
-      expect(kinds.filter((k) => k === 'gre'), `goal ${goal}`).toHaveLength(1);
+      const gre = s.slots.flatMap((x, i) => (x.kind === 'gre' ? [i] : []));
+      expect(gre, `goal ${goal}`).toHaveLength(goal >= 8 ? 2 : 1);
+      if (gre.length === 2) {
+        expect(s.slots[gre[0]].stretch).toBeFalsy();
+        expect(s.slots[gre[1]].stretch).toBe(true);
+        expect(gre[1] - gre[0], `goal ${goal}: spread out`).toBeGreaterThan(1);
+      }
       expect(kinds[0]).toBe('warmup');
       expect(kinds.at(-1)).toBe('finisher');
       expect(s.slots).toHaveLength(Math.max(3, goal));
@@ -164,5 +170,19 @@ describe('daily GRE question', () => {
       }
       expect(sawGre).toBe(true);
     }
+  });
+
+  it('the second GRE item is one level up once the GRE skill has settled', async () => {
+    const { startSession, nextProblem } = await import('../src/learning/session');
+    const p = emptyProgress();
+    p.skills['gre-integers'] = { ...emptySkill(), attempts: 10, lastPracticed: '2026-01-01' };
+    let r = nextProblem(startSession(p, 10), p);
+    const levels: number[] = [];
+    while (r) {
+      if (r.next.kind === 'gre') levels.push(r.next.problem.level);
+      r = nextProblem(r.session, p);
+    }
+    expect(levels).toHaveLength(2);
+    expect(levels[1]).toBe(levels[0] + 1);
   });
 });

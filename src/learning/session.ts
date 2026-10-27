@@ -3,13 +3,15 @@
 //   → retention checks (cold: the first attempt of the day on that skill, unassisted, at the
 //     level that earned it — 3 with a strong record, otherwise 4)
 //   → ~70% current skill / ~30% review, interleaved; every 5th current item is a stretch, one
-//     level up (every 3rd once recent solo accuracy is above the 75–85% band)
+//     level up (every 3rd once recent solo accuracy is above the 75–85% band); one GRE item
+//     mid-session, or two (the second a stretch) in sessions of 8+
 //   → finisher (likely success)
 // Reviews are FSRS-due skills (most-forgotten first), plus rusty and fragile skills. Until there
 // are due reviews, the 30% explores other available skills. Once ≥ 3 skills are solid, review
 // items hide which skill they are, so you have to recognize the method yourself.
-// After a wrong answer or any help, a same-skill follow-up comes next. Problems are generated
-// lazily so difficulty adapts within the session.
+// After a wrong answer or any help, a same-skill follow-up comes next; after a diagnosed
+// misconception, one whose numbers set the same trap. Problems are generated lazily so
+// difficulty adapts within the session.
 
 import { getSkill, makeProblem, SKILLS, storyVariant } from '../engine/registry';
 import { randomSeed } from '../engine/rng';
@@ -28,7 +30,7 @@ export interface Slot {
   kind: Exclude<SlotKind, 'followup' | 'stretch'>;
   /** Fixed skill for retention slots. */
   skillId?: string;
-  /** A current-skill item served one level above the working level. */
+  /** A current-skill (or GRE) item served one level above the working level. */
   stretch?: boolean;
 }
 
@@ -46,6 +48,8 @@ export interface Session {
   only?: string;
   index: number;
   pendingFollowUp?: string;
+  /** The misconception the miss matched: the follow-up should give it a chance to recur. */
+  pendingTrap?: string;
   followUpsUsed: number;
   answered: number;
   correct: number;
@@ -54,6 +58,8 @@ export interface Session {
 }
 
 const MAX_FOLLOWUPS = 4;
+/** Seeds tried for a follow-up that sets the same trap, before settling for any problem. */
+const TRAP_TRIES = 100;
 const MAX_RETENTION_CHECKS = 2;
 /** Every STRETCH_EVERY-th current item (starting with the 3rd) is a stretch. */
 const STRETCH_EVERY = 5;
@@ -61,6 +67,11 @@ const STRETCH_EVERY = 5;
 const STRETCH_EVERY_ABOVE_BAND = 3;
 /** No stretches until the rating has settled a little. */
 const STRETCH_MIN_ATTEMPTS = 5;
+/**
+ * Sessions this long get a second GRE item, served as a stretch. Review 8: one GRE item a day
+ * left gre-fractions-percents at level 1 after 32 attempts at 78-92% solo.
+ */
+const SECOND_GRE_FROM = 8;
 
 /**
  * Turn slot kinds into slots, marking stretch items. A stretch lets the rating climb faster
@@ -151,7 +162,8 @@ export function startSession(p: Progress, goal: number, options: { only?: string
 
   const available = coreSkills(p);
   const agenda = todaysAgenda(p, now);
-  // One GRE question in every session (when any GRE skill is open), placed mid-session.
+  // One GRE question in every session (when any GRE skill is open), placed mid-session; two in a
+  // session of SECOND_GRE_FROM or more (not on a gentle day), the second one a stretch.
   const greSlots: Slot[] = greSkills(p).length ? [{ kind: 'gre' }] : [];
 
   // After a long break: an all-review session one level easier, so coming back starts with wins.
@@ -163,6 +175,7 @@ export function startSession(p: Progress, goal: number, options: { only?: string
     const slots: Slot[] = [{ kind: 'warmup' }, ...reviews.slice(0, 1), ...greSlots, ...reviews.slice(1), { kind: 'finisher' }];
     return { ...base, slots, currentSkill: undefined, reviewQueue: queue, interleaved: false, gentle: true };
   }
+  if (greSlots.length && n >= SECOND_GRE_FROM) greSlots.push({ kind: 'gre', stretch: true });
   const retention = agenda.retentionChecks.slice(0, MAX_RETENTION_CHECKS);
   const currentSkill = pickCurrentSkill(
     p,
@@ -182,14 +195,16 @@ export function startSession(p: Progress, goal: number, options: { only?: string
     [mid[i], mid[j]] = [mid[j], mid[i]];
   }
   const midSlots = toSlots(mid, cadenceFor(currentSkill ? skillOf(p, currentSkill) : emptySkill()));
+  // GRE items spread evenly through the middle: at 1/2, or at 1/3 and 2/3.
+  const cuts = greSlots.map((_, i) => Math.ceil((midSlots.length * (i + 1)) / (greSlots.length + 1)));
+  const middleWithGre = [...midSlots];
+  for (let g = greSlots.length - 1; g >= 0; g--) middleWithGre.splice(cuts[g], 0, greSlots[g]);
   return {
     ...base,
     slots: [
       { kind: 'warmup' },
       ...retention.map((skillId) => ({ kind: 'retention' as const, skillId })),
-      ...midSlots.slice(0, Math.ceil(midSlots.length / 2)),
-      ...greSlots,
-      ...midSlots.slice(Math.ceil(midSlots.length / 2)),
+      ...middleWithGre,
       { kind: 'finisher' },
     ],
     currentSkill,
@@ -236,9 +251,9 @@ export function nextProblem(s: Session, p: Progress, now = new Date()): { sessio
   if (sessionDone(s)) return null;
   const seed = randomSeed();
   /** Practice items may be stories (about half, where the skill has them); `plain` for warm-ups, finishers, checks. */
-  const make = (id: string, level: Level, plain = false) => {
+  const make = (id: string, level: Level, plain = false, sd = seed) => {
     const skill = SKILLS.find((k) => k.id === id)!;
-    return makeProblem(skill, level, seed, plain ? undefined : storyVariant(skill, level, seed));
+    return makeProblem(skill, level, sd, plain ? undefined : storyVariant(skill, level, sd));
   };
   const today = dateKey(now);
 
@@ -247,7 +262,13 @@ export function nextProblem(s: Session, p: Progress, now = new Date()): { sessio
     const working = gentleLevel(s, workingLevel(skillOf(p, id)));
     // A follow-up after the finisher is the session's last problem: keep it gentle.
     const level = (s.index >= s.slots.length ? Math.max(1, working - 1) : working) as Level;
-    return { session: { ...s, pendingFollowUp: undefined }, next: { problem: make(id, level), kind: 'followup', hideSkill: false } };
+    // Review 8: after three "added 4ac" misses with c < 0, every follow-up drew c > 0, where the
+    // mistake can't happen, so a correct follow-up proved nothing.
+    let problem = make(id, level);
+    for (let i = 0; s.pendingTrap && i < TRAP_TRIES && !problem.misconceptions.some((m) => m.id === s.pendingTrap); i++) {
+      problem = make(id, level, false, randomSeed());
+    }
+    return { session: { ...s, pendingFollowUp: undefined, pendingTrap: undefined }, next: { problem, kind: 'followup', hideSkill: false } };
   }
 
   const slot = s.slots[s.index];
@@ -285,7 +306,10 @@ export function nextProblem(s: Session, p: Progress, now = new Date()): { sessio
     case 'gre': {
       const id = pickGreSkill(p, now);
       if (!id) return nextProblem(advanced, p, now);
-      return { session: advanced, next: { problem: make(id, gentleLevel(s, workingLevel(skillOf(p, id)))), kind: 'gre', hideSkill: false } };
+      const sp = skillOf(p, id);
+      const working = gentleLevel(s, workingLevel(sp));
+      const stretch = !!slot.stretch && !s.gentle && !sp.rusty && working < 5 && sp.attempts >= STRETCH_MIN_ATTEMPTS;
+      return { session: advanced, next: { problem: make(id, (stretch ? working + 1 : working) as Level), kind: 'gre', hideSkill: false } };
     }
     case 'review': {
       const queue = s.reviewQueue.length ? s.reviewQueue : [s.currentSkill!];
@@ -315,11 +339,23 @@ export function pickGreSkill(p: Progress, now = new Date()): string | undefined 
   return due[0] ?? pickCurrentSkill(p, ids) ?? [...ids].sort((a, b) => skillOf(p, a).rating - skillOf(p, b).rating)[0];
 }
 
-/** Call after each finished problem. Queues a same-skill follow-up after a miss or any help. */
-export function afterProblem(s: Session, problem: Problem, correct: boolean, needsFollowUp: boolean, xp: number, events: SkillEvent[] = []): Session {
+/**
+ * Call after each finished problem. Queues a same-skill follow-up after a miss or any help,
+ * aimed at `misconception` (the one the miss matched) when there is one.
+ */
+export function afterProblem(
+  s: Session,
+  problem: Problem,
+  correct: boolean,
+  needsFollowUp: boolean,
+  xp: number,
+  events: SkillEvent[] = [],
+  misconception?: string,
+): Session {
   const next = { ...s, answered: s.answered + 1, correct: s.correct + (correct ? 1 : 0), xp: s.xp + xp, events: [...s.events, ...events] };
   if (needsFollowUp && next.followUpsUsed < MAX_FOLLOWUPS) {
     next.pendingFollowUp = problem.skillId;
+    next.pendingTrap = misconception;
     next.followUpsUsed += 1;
   }
   return next;

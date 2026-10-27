@@ -129,13 +129,26 @@ function level1(rng: Rng): Body {
   const answer = numberAnswer(D);
   const verify: VerifySpec = { type: 'evaluate', expr: `${pn(b)}^2 - 4*${pn(a)}*${pn(c)}` };
   const verdict = D > 0 ? 'two real roots' : D === 0 ? 'one real root' : 'no real roots';
+  const fourAC = 4 * a * c;
   const steps: Step[] = [
     {
+      // Review 8: with c < 0 the learner got 1/5 right (27/30 with c >= 0), 3 times b^2 - 4a|c|.
+      key: 'four-ac',
+      instruction: 'Work out $4ac$ on its own first, keeping the sign of $c$.',
+      math: `4ac = 4\\cdot ${a}\\cdot ${pn(c)} = ${fourAC}`,
+      why: 'A negative $c$ makes $4ac$ negative. Find that sign now, before the subtraction.',
+      ask: {
+        prompt: `$a = ${a},\\; c = ${c}$. What is $4ac$? (Keep the sign.)`,
+        answer: numberAnswer(fourAC),
+        verify: { type: 'evaluate', expr: `4*${pn(a)}*${pn(c)}` },
+      },
+    },
+    {
       key: 'discriminant',
-      instruction: 'Substitute $a$, $b$ and $c$ into $b^2 - 4ac$.',
-      math: `D = b^2 - 4ac = ${pn(b)}^2 - 4\\cdot ${a}\\cdot ${pn(c)} = ${b * b} ${sgn(-4 * a * c)} ${Math.abs(4 * a * c)} = ${D}`,
-      why: 'Square $b$ first (a negative $b$ gives a positive square), then subtract the product $4ac$ with its sign.',
-      ask: { prompt: `$a = ${a},\\; b = ${b},\\; c = ${c}$. What is $D = b^2 - 4ac$?`, answer, verify },
+      instruction: 'Square $b$, then subtract $4ac$.',
+      math: `D = b^2 - 4ac = ${pn(b)}^2 - ${pn(fourAC)} = ${b * b} ${sgn(-fourAC)} ${Math.abs(fourAC)} = ${D}`,
+      why: 'Square $b$ first (a negative $b$ gives a positive square). Subtracting a negative $4ac$ adds it: $9 - (-16) = 25$.',
+      ask: { prompt: `$b = ${b}$ and $4ac = ${fourAC}$. What is $D = b^2 - 4ac$?`, answer, verify },
     },
     {
       key: 'answer',
@@ -146,7 +159,8 @@ function level1(rng: Rng): Body {
     },
   ];
   const misconceptions: MisconceptionInstance[] = distinctMisconceptions(answer, [
-    wrongNumber('disc-sign', () => b * b + 4 * a * c),
+    // Same wrong number either way; with c < 0 the slip is the sign of 4ac, not the formula.
+    wrongNumber(c < 0 ? 'neg-c-sign' : 'disc-sign', () => b * b + 4 * a * c),
     wrongNumber('neg-b-squared', () => -(b * b) - 4 * a * c),
   ]);
   const count = D > 0 ? 0 : D === 0 ? 1 : 2;
@@ -216,7 +230,7 @@ function formulaLevel(rng: Rng, level: 2 | 3 | 4 | 5, s: Setup): Body {
       key: 'discriminant',
       instruction: 'Compute the discriminant $D = b^2 - 4ac$.',
       math: `D = ${pn(B)}^2 - 4\\cdot ${pn(A)}\\cdot ${pn(C)} = ${B * B} ${sgn(-4 * A * C)} ${Math.abs(4 * A * C)} = ${D}`,
-      why: 'If $D > 0$ there are two real roots. Compute it first: it is reused under the square root.',
+      why: 'If $D > 0$ there are two real roots. A negative $ac$ makes $-4ac$ positive. Compute $D$ first: it is reused under the square root.',
       ask: {
         prompt: 'What is $D = b^2 - 4ac$?',
         answer: numberAnswer(D),
@@ -257,8 +271,10 @@ function formulaLevel(rng: Rng, level: 2 | 3 | 4 | 5, s: Setup): Body {
   });
 
   const candidates: (MisconceptionInstance | null)[] = [
-    D2ok(B * B + 4 * A * C) ? { id: 'disc-sign', wrong: roots(-B, B * B + 4 * A * C, 2 * A) } : null,
+    D2ok(B * B + 4 * A * C) ? { id: A * C < 0 ? 'neg-c-sign' : 'disc-sign', wrong: roots(-B, B * B + 4 * A * C, 2 * A) } : null,
     { id: 'minus-b-sign', wrong: roots(B, D, 2 * A) },
+    // (-b ± D)/2a. Review 8: 4x^2 + 11x + 6 = 0 answered as (-11 ± 25)/8.
+    { id: 'no-sqrt', wrong: roots(-B, D * D, 2 * A) },
     { id: 'divide-only-sqrt', wrong: roots(-B, D, 2 * A, 'sqrtOnly') },
     Math.abs(A) !== 1 ? { id: 'two-not-2a', wrong: roots(-B, D, 2) } : null,
   ];
@@ -380,7 +396,17 @@ export const quadraticFormula: SkillDefinition = {
     'disc-sign': {
       name: 'Added 4ac instead of subtracting',
       explanation:
-        'The discriminant is $b^2 - 4ac$, a *subtraction*. For $x^2 - 3x - 4 = 0$: $D = 9 - 4(1)(-4) = 9 + 16 = 25$. The minus sign in front of $4ac$ stays, and $ac$ itself may be negative.',
+        'The discriminant is $b^2 - 4ac$, a *subtraction*. For $x^2 + 5x + 4 = 0$: $D = 25 - 4(1)(4) = 25 - 16 = 9$, not $25 + 16$.',
+    },
+    'neg-c-sign': {
+      name: 'Lost the sign of a negative c (minus times minus)',
+      explanation:
+        'When $ac$ is negative, $-4ac$ is *positive*. For $x^2 - 3x - 4 = 0$: $4ac = 4(1)(-4) = -16$, so $D = 9 - (-16) = 9 + 16 = 25$, not $9 - 16$. Work out $4ac$ with its sign first, then subtract it.',
+    },
+    'no-sqrt': {
+      name: 'Used D instead of its square root',
+      explanation:
+        'The formula has $\\sqrt{D}$, not $D$: $x = \\dfrac{-b \\pm \\sqrt{D}}{2a}$. For $4x^2 + 11x + 6 = 0$, $D = 25$ and $\\sqrt{D} = 5$, so $x = \\dfrac{-11 \\pm 5}{8}$, giving $-2$ and $-\\tfrac{3}{4}$.',
     },
     'neg-b-squared': {
       name: 'Squared -b as -b²',
@@ -405,6 +431,7 @@ export const quadraticFormula: SkillDefinition = {
   },
   stepLabels: {
     identify: 'Read off a, b and c',
+    'four-ac': 'Work out 4ac with its sign',
     discriminant: 'Compute the discriminant',
     sqrt: 'Take the square root',
     'plug-in': 'Apply the formula',
@@ -423,6 +450,7 @@ export const quadraticFormula: SkillDefinition = {
     example: { seed: 3, level: 3 },
     tips: [
       'Put brackets around negative numbers when you substitute: $b = -5$ gives $(-5)^2 = 25$ and $-b = 5$.',
+      'With a negative $c$, find $4ac$ first: $4(1)(-12) = -48$, so $D = b^2 - (-48) = b^2 + 48$.',
       'For $-q^2 + 10q - 20$, $a = -1$ and $c = -20$, so $4ac = 80$. You can multiply the whole equation by $-1$ to make $a$ positive first.',
     ],
   },

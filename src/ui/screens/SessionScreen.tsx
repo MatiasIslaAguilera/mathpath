@@ -50,7 +50,7 @@ export function SessionScreen({ initial, progress, record, onFinish, onQuit, bac
     const { progress: next, xp, events, logged } = recordAttempt(progress, { ...r, retentionCheck: current.kind === 'retention' });
     record([logged], next);
     const needsFollowUp = !r.correct || r.help !== 'none';
-    setState((st) => ({ ...st, session: afterProblem(st.session, problem, r.correct && r.help === 'none', needsFollowUp, xp, events) }));
+    setState((st) => ({ ...st, session: afterProblem(st.session, problem, r.correct && r.help === 'none', needsFollowUp, xp, events, r.misconception) }));
     return { xp, events };
   };
 
