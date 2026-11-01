@@ -43,6 +43,11 @@
       "date": "2026-10-27",
       "through": 1793062061210,
       "summary": "Quadratic formula L1 negative c 1/5 vs 27/30: neg-c-sign split from disc-sign, 4ac step, no-sqrt; systems sign-answer; follow-ups re-set the matched trap; second GRE slot (stretch) from 8 items"
+    },
+    {
+      "date": "2026-11-01",
+      "through": 1793477257313,
+      "summary": "From attempt_log CSV: ~15/40 misses are arithmetic slips (9 in quadratic-formula final step/4ac); new misconceptions successive-second-only, work-averaged-times, work-rate-not-time, flip-without-power, skipped-divide; quadratic-formula L2 sum/product check step"
     }
   ]
 }

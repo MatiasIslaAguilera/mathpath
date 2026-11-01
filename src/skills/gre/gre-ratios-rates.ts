@@ -172,7 +172,11 @@ function combinedWork(form: number, k: number, m: number, n: number): Body {
         ask: { prompt: 'So the time is?', answer, verify },
       },
     ],
-    misconceptions: distinctMisconceptions(answer, [wrongNumber('work-rates-added-times', () => (together ? a + b : t - a))]),
+    misconceptions: distinctMisconceptions(answer, [
+      wrongNumber('work-rates-added-times', () => (together ? a + b : t - a)),
+      together ? wrongNumber('work-averaged-times', () => Q.of(a + b).div(2)) : null,
+      wrongNumber('work-rate-not-time', () => Q.of(1).div(together ? t : b)),
+    ]),
     verify,
   };
 }
@@ -673,6 +677,8 @@ export const greRatiosRates: SkillDefinition = {
   misconceptions: {
     'ratio-part-vs-whole': { name: 'Read a:b as a/b of the total', explanation: 'In a ratio $a:b$ the whole is $a + b$ shares, so the first part is $\\frac{a}{a+b}$ of the total. $\\frac{a}{b}$ compares the parts to each other.' },
     'work-rates-added-times': { name: 'Added the times instead of the rates', explanation: 'Times do not add when people work together; RATES do: $\\frac{1}{a} + \\frac{1}{b} = \\frac{1}{t}$. Together they must be faster than either alone.' },
+    'work-averaged-times': { name: 'Averaged the two times', explanation: 'Working together must be FASTER than the faster worker alone, so the answer is below both times. Add the rates instead: $\\frac{1}{a} + \\frac{1}{b} = \\frac{1}{t}$. For 40 and 10 hours: $\\frac{1}{40} + \\frac{4}{40} = \\frac{5}{40}$, so 8 hours, not 25.' },
+    'work-rate-not-time': { name: 'Gave the rate, not the time', explanation: 'A rate like $\\frac{1}{32}$ is jobs per hour. The question asks for hours, so flip it: time = 1 ÷ rate = 32 hours.' },
     'faster-means-longer': { name: 'Read "k times as fast" as "k times as long"', explanation: 'A worker who is $k$ times as fast has $k$ times the RATE, so the job takes $\\frac{1}{k}$ of the time, not $k$ times the time. If A needs 6 hours and B is twice as fast, B needs 3 hours (not 12), and together they need 2.' },
     'average-speed-arithmetic-mean': { name: 'Averaged the two speeds', explanation: 'Average speed = total distance ÷ total time. You spend longer at the slower speed, so the average is below $\\frac{u+v}{2}$ unless $u = v$. For equal distances it is $\\frac{2uv}{u+v}$.' },
     'unit-conversion-missed': { name: 'Mixed minutes and hours', explanation: 'Make the units agree BEFORE multiplying or dividing: a rate per hour needs time in hours, a rate per minute needs time in minutes.' },

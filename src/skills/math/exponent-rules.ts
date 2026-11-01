@@ -103,6 +103,11 @@ export const exponentRules: SkillDefinition = {
       explanation:
         'A negative exponent means *reciprocal*, not a negative value: $2^{-3} = \\frac{1}{2^3} = \\frac18$. The result of a positive base stays positive.',
     },
+    'flip-without-power': {
+      name: 'Flipped the fraction but dropped the power',
+      explanation:
+        'The minus sign flips the fraction, and the number still raises it: $\\left(\\frac{3}{4}\\right)^{-3} = \\left(\\frac{4}{3}\\right)^{3} = \\frac{64}{27}$, not $\\frac{4}{3}$. Cube top and bottom separately.',
+    },
     'zero-power-is-zero': {
       name: 'Thought a number to the power 0 is 0',
       explanation:
@@ -496,7 +501,10 @@ function level3(rng: Rng): Body {
         ask: { prompt: `So $\\left(\\frac{${p}}{${qq}}\\right)^{-${k2}} = \\,?$`, answer, verify: { type: 'evaluate', expr } },
       },
     ],
-    misconceptions: distinctMisconceptions(answer, [wrongNumber('negative-means-negative', () => powQ(base, k2).neg())]),
+    misconceptions: distinctMisconceptions(answer, [
+      wrongNumber('negative-means-negative', () => powQ(base, k2).neg()),
+      wrongNumber('flip-without-power', () => flipped),
+    ]),
     verify: { type: 'evaluate', expr },
   };
 }

@@ -128,7 +128,11 @@ function level2(rng: Rng): Body {
           ask: { prompt: 'Net percent change?', answer, verify },
         },
       ],
-      misconceptions: distinctMisconceptions(answer, [wrongNumber('successive-additive', () => s1 * a + s2 * b)]),
+      misconceptions: distinctMisconceptions(answer, [
+        wrongNumber('successive-additive', () => s1 * a + s2 * b),
+        // Only the second step's change, as a percent of the original: (m1/100)·(±b).
+        wrongNumber('successive-second-only', () => (s2 * b * m1) / 100),
+      ]),
       verify,
     };
   }
@@ -657,6 +661,7 @@ export const greFractionsPercents: SkillDefinition = {
   misconceptions: {
     'percent-change-base': { name: 'Divided by the new value', explanation: 'Percent change is measured against the ORIGINAL value: change ÷ original. Dividing by the new value gives a different (wrong) percent.' },
     'successive-additive': { name: 'Added successive percent changes', explanation: 'Each percent change applies to the CURRENT amount, so the multipliers multiply: $+20\\%$ then $-20\\%$ is $1.2 \\times 0.8 = 0.96$, a 4% DECREASE, not 0%.' },
+    'successive-second-only': { name: 'Gave only the second change', explanation: 'The net change counts BOTH steps. With $-50\\%$ then $-10\\%$, the second step removes $0.5 \\times 10\\% = 5\\%$ of the original, but the first already removed 50%. Multiply the multipliers, $0.5 \\times 0.9 = 0.45$, then subtract 100%: $-55\\%$.' },
     'reverse-percent-multiplied': { name: 'Applied the percent to the final amount', explanation: 'The final amount is a percent of the ORIGINAL. To go back, DIVIDE by the multiplier: $60 \\div 0.75 = 80$, not $60 \\times 1.25 = 75$.' },
     'fraction-compare-by-numerator': { name: 'Compared fractions by their numerators', explanation: 'A bigger numerator does not make a bigger fraction when the denominators differ. Cross-multiply: $\\frac{a}{b} > \\frac{c}{d}$ exactly when $ad > bc$.' },
     'percent-of-percent-added': { name: 'Added the two percents', explanation: '"$a\\%$ of $b\\%$ of $N$" multiplies: $N \\cdot \\frac{a}{100} \\cdot \\frac{b}{100}$. Adding the percents is wrong.' },

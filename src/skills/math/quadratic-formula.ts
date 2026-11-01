@@ -262,6 +262,24 @@ function formulaLevel(rng: Rng, level: 2 | 3 | 4 | 5, s: Setup): Body {
       verify: { type: 'evaluate', expr: smallerExpr },
     },
   });
+  if (level === 2) {
+    // Review 9: most L2 misses were arithmetic in the last step (8 + 14 = 20, -8/8 = 1). The
+    // sum and product of the roots catch these before the answer is submitted.
+    const sum = q(-B, A);
+    const prod = q(C, A);
+    const paren = (t: string) => (t.startsWith('-') ? `(${t})` : t);
+    steps.push({
+      key: 'check',
+      instruction: `Check your roots before you submit: they must add to $-\\frac{b}{a}$ and multiply to $\\frac{c}{a}$.`,
+      math: `${r1.tex} + ${paren(r2.tex)} = ${sum.toLatex()}, \\quad ${r1.tex} \\cdot ${paren(r2.tex)} = ${prod.toLatex()}`,
+      why: 'For $ax^2 + bx + c$ the roots always add to $-b/a$ and multiply to $c/a$. A slip like $8 + 14 = 20$ or a lost minus sign breaks one of these.',
+      ask: {
+        prompt: 'What must the two roots add to? (Compute $-\\frac{b}{a}$, then compare with your roots.)',
+        answer: numberAnswer(sum),
+        verify: { type: 'evaluate', expr: `-(${B})/(${A})` },
+      },
+    });
+  }
   steps.push({
     key: 'answer',
     instruction: 'State both roots, smaller first.',
@@ -435,6 +453,7 @@ export const quadraticFormula: SkillDefinition = {
     discriminant: 'Compute the discriminant',
     sqrt: 'Take the square root',
     'plug-in': 'Apply the formula',
+    check: 'Check the sum and product of the roots',
     answer: 'State the answer',
   },
   learn: {

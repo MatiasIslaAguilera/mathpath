@@ -79,6 +79,7 @@ function linearPoint(rng: Rng): Generated {
     wrongNumber('reciprocal', () => q(1).div(q(m * k + b))),
     wrongNumber('evaluate-instead', () => q(m * k + b)),
     wrongNumber('undo-order', () => q(k, m).sub(b)),
+    wrongNumber('skipped-divide', () => q(k - b)),
   ];
 
   // Interpretation: drawn last so the problem itself is unchanged.
@@ -530,6 +531,11 @@ export const inverseFunctions: SkillDefinition = {
       name: 'Undid the steps in the wrong order',
       explanation:
         'To undo $f(x) = mx + b$ (multiply, then add), reverse the order: subtract $b$ first, then divide by $m$. Dividing first leaves $b$ undivided: the inverse is $\\frac{x - b}{m} = \\frac{x}{m} - \\frac{b}{m}$.',
+    },
+    'skipped-divide': {
+      name: 'Stopped before dividing by m',
+      explanation:
+        'Subtracting $b$ leaves $mx = k - b$: that is $m$ times the answer, not the answer. Divide by $m$ (keep its sign) to get $x$, then check by feeding $x$ back into $f$.',
     },
     'negative-reciprocal-slope': {
       name: 'Used the perpendicular slope',
