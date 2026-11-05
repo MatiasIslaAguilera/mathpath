@@ -48,6 +48,11 @@
       "date": "2026-11-01",
       "through": 1793477257313,
       "summary": "From attempt_log CSV: ~15/40 misses are arithmetic slips (9 in quadratic-formula final step/4ac); new misconceptions successive-second-only, work-averaged-times, work-rate-not-time, flip-without-power, skipped-divide; quadratic-formula L2 sum/product check step"
+    },
+    {
+      "date": "2026-11-04",
+      "through": 1793813712468,
+      "summary": "Inverse L2 negative slope: intercept-sign (q = b/m, 2x) + fraction-first step; composition interpretation 0/9 reworded as takes/gives; factoring sign-between-roots 1/5: midpoint hint; checker accepts 4.7 for 4.70; b-not-a, hidden-one, lost-inner-sign, one-worker-time"
     }
   ]
 }

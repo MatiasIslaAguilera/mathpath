@@ -29,6 +29,15 @@ describe('number answers', () => {
     );
   });
 
+  it('accepts one place only when it is the 2-place rounding without its trailing zero', () => {
+    // Review 10: (3 + sqrt(41))/2 = 4.7016 typed as "4.7" was marked wrong.
+    expect(checkAnswer({ kind: 'number', value: '(3 + sqrt(41))/2' }, '4.7').correct).toBe(true);
+    expect(checkAnswer({ kind: 'number', value: '(3 - sqrt(41))/2' }, '-1.7').correct).toBe(true);
+    expect(checkAnswer({ kind: 'number', value: '(3 + sqrt(17))/2' }, '3.6').correct).toBe(false); // 3.5616 -> 3.56
+    expect(checkAnswer(numberAnswer(q(1, 3)), '0.3').correct).toBe(false);
+    expect(checkAnswer(numberAnswer(q(7, 4)), '1.8').correct).toBe(false);
+  });
+
   it('rejects values that are off', () => {
     fc.assert(
       fc.property(small, den, nonzero, (n, d, off) => {

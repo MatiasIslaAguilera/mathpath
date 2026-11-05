@@ -89,7 +89,7 @@ describe('function-composition interpretation', () => {
     [/Hours worked/, 'revenue', 'hours worked'],
   ];
 
-  it('the correct option names the final quantity as a function of the starting one', () => {
+  it('the correct option takes the starting quantity and gives the final one', () => {
     let seen = 0;
     for (const level of [1, 2] as const) {
       for (let seed = 1; seed <= 300; seed++) {
@@ -98,7 +98,7 @@ describe('function-composition interpretation', () => {
         const iq = p.interpretation[0];
         const [, out, start] = CONTEXT.find(([re]) => re.test(iq.prompt))!;
         const label = iq.options.find((o) => o.id === iq.correct)!.label.toLowerCase();
-        expect(label).toBe(`${out}, as a function of ${start}`);
+        expect(label).toBe(`it takes ${start} and gives ${out}`);
         seen++;
       }
     }

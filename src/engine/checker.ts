@@ -118,6 +118,8 @@ export function numbersMatch(inputText: string, user: number, expected: number):
     const d = m[1].length;
     return Math.abs(user - expected) <= 0.5 * 10 ** -d + 1e-12;
   }
+  // One place is the 2-place rounding with its trailing zero dropped: 4.7016 -> "4.70" -> "4.7".
+  if (m) return Math.abs(Math.round(expected * 100) / 100 - user) < 1e-9;
   return false;
 }
 

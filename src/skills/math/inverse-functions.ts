@@ -157,8 +157,9 @@ function linearInverse(rng: Rng): Generated {
     {
       key: 'undo-mult',
       instruction: `Then divide everything on the right by ${m}, including the constant.`,
-      math: `y = \\frac{1}{${parenIfNeg(m)}}x ${qq.sign() < 0 ? '-' : '+'} ${qq.abs().toLatex()}`,
-      why: 'Dividing both sides by $m$ divides every term on the other side, so the intercept becomes $-b/m$, not $-b$.',
+      math: `y = \\frac{x ${b < 0 ? '+' : '-'} ${Math.abs(b)}}{${m}} = \\frac{1}{${parenIfNeg(m)}}x ${qq.sign() < 0 ? '-' : '+'} ${qq.abs().toLatex()}`,
+      // Review 10: with m < 0 the learner gave q = b/m twice (-2x + 7 -> q = -7/2, not 7/2).
+      why: `Dividing by $m$ divides every term, so the intercept is $\\frac{${-b}}{${m}} = ${qq.toLatex()}$. The $-b$ from the subtraction keeps its minus, and ${m < 0 ? 'dividing by a negative flips it' : 'dividing by a positive keeps it'}.`,
       ask: { prompt: 'What is the slope $p$ of the inverse?', answer: numberAnswer(p), verify: { type: 'evaluate', expr: `1/${lit(m)}` } },
     },
     {
@@ -173,6 +174,7 @@ function linearInverse(rng: Rng): Generated {
   const candidates: (MisconceptionInstance | null)[] = [
     { id: 'undo-order', wrong: tupleAnswer(['Slope p', 'Intercept q'], [p, -b], ['p', 'q']) },
     { id: 'negative-reciprocal-slope', wrong: tupleAnswer(['Slope p', 'Intercept q'], [p.neg(), q(b, m)], ['p', 'q']) },
+    { id: 'intercept-sign', wrong: tupleAnswer(['Slope p', 'Intercept q'], [p, q(b, m)], ['p', 'q']) },
   ];
 
   return {
@@ -537,6 +539,11 @@ export const inverseFunctions: SkillDefinition = {
       explanation:
         'Subtracting $b$ leaves $mx = k - b$: that is $m$ times the answer, not the answer. Divide by $m$ (keep its sign) to get $x$, then check by feeding $x$ back into $f$.',
     },
+    'intercept-sign': {
+      name: 'Divided b by m but dropped the minus from subtracting b',
+      explanation:
+        'Subtracting $b$ leaves $x - b$, so the intercept is $\\frac{-b}{m}$, not $\\frac{b}{m}$. For $f(x) = -2x + 7$: $-2y = x - 7$, so $y = \\frac{x - 7}{-2} = -\\frac{1}{2}x + \\frac{7}{2}$. Check: $f(\\tfrac{7}{2}) = -7 + 7 = 0$, so $f^{-1}(0) = \\tfrac{7}{2}$.',
+    },
     'negative-reciprocal-slope': {
       name: 'Used the perpendicular slope',
       explanation:
@@ -568,7 +575,11 @@ export const inverseFunctions: SkillDefinition = {
       { latex: 'f^{-1}(x) \\neq \\frac{1}{f(x)}', note: 'The $-1$ is not an exponent here.' },
     ],
     example: { seed: 4, level: 2 },
-    tips: ['Undo operations in the reverse order: the last thing $f$ did is the first thing the inverse undoes.'],
+    tips: [
+      'Undo operations in the reverse order: the last thing $f$ did is the first thing the inverse undoes.',
+      'With a negative slope, write the division as one fraction first: $\\frac{x - 7}{-2} = -\\frac{x}{2} + \\frac{7}{2}$. Both signs flip.',
+      'Check the intercept: $q = f^{-1}(0)$, so $f(q)$ must be $0$.',
+    ],
   },
 
   generate(rng, level) {

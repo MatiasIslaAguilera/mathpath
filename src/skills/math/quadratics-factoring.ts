@@ -374,13 +374,16 @@ function signQuestion(rng: Rng, b: Built, level: Level): InterpretationQuestion 
   const f = poly(A, B, C, profit ? 'q' : 'x');
   const shape = A > 0 ? 'opens upward (a smile)' : 'opens downward (a frown)';
   void level;
+  // Review 10: 1/5 correct, the sign reversed both ways ("smile" read as positive between the
+  // roots). The prompt now points at a test value; the explanation separates inside from outside.
+  const v = profit ? 'q' : 'x';
   return {
     prompt: profit
-      ? `A firm's profit is $\\pi(q) = ${f}$. For quantities strictly between the two break-even quantities, profit is...`
-      : `Between the two roots, the expression $${f}$ is...`,
+      ? `A firm's profit is $\\pi(q) = ${f}$. For quantities strictly between the two break-even quantities, profit is... (Try $q = ${mid.toLatex()}$, halfway between them.)`
+      : `Between the two roots, the expression $${f}$ is... (Try $x = ${mid.toLatex()}$, halfway between them.)`,
     options,
     correct,
-    explanation: `The parabola ${shape} because the leading coefficient is $${A}$. It crosses zero at the two roots, so between them it is ${positive ? 'above' : 'below'} the axis. Check at the midpoint $x = ${mid.toLatex()}$: the value is $${val.toLatex()}$, which is ${positive ? 'positive' : 'negative'}.`,
+    explanation: `At $${v} = ${mid.toLatex()}$ the value is $${val.toLatex()}$, which is ${positive ? 'positive' : 'negative'}, and the sign cannot change between two neighbouring roots. The parabola ${shape} (leading coefficient $${A}$), so it is ${positive ? 'below' : 'above'} the axis *outside* the roots and ${positive ? 'above' : 'below'} it *between* them: ${A > 0 ? 'a smile dips below zero in the middle' : 'a frown rises above zero in the middle'}.`,
   };
 }
 

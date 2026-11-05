@@ -147,7 +147,7 @@ function level1(rng: Rng): Body {
       key: 'discriminant',
       instruction: 'Square $b$, then subtract $4ac$.',
       math: `D = b^2 - 4ac = ${pn(b)}^2 - ${pn(fourAC)} = ${b * b} ${sgn(-fourAC)} ${Math.abs(fourAC)} = ${D}`,
-      why: 'Square $b$ first (a negative $b$ gives a positive square). Subtracting a negative $4ac$ adds it: $9 - (-16) = 25$.',
+      why: `Square $b$ first (a negative $b$ gives a positive square). Subtracting a negative $4ac$ adds it: $9 - (-16) = 25$.${Math.abs(b) === 1 ? ` Here the $x$ term has no written number, so $b = ${b}$ and $b^2 = 1$.` : ''}`,
       ask: { prompt: `$b = ${b}$ and $4ac = ${fourAC}$. What is $D = b^2 - 4ac$?`, answer, verify },
     },
     {
@@ -162,6 +162,8 @@ function level1(rng: Rng): Body {
     // Same wrong number either way; with c < 0 the slip is the sign of 4ac, not the formula.
     wrongNumber(c < 0 ? 'neg-c-sign' : 'disc-sign', () => b * b + 4 * a * c),
     wrongNumber('neg-b-squared', () => -(b * b) - 4 * a * c),
+    // Review 10: 4x^2 - x - 5 answered as 80 = -4ac, as if "-x" had no coefficient.
+    Math.abs(b) === 1 ? wrongNumber('hidden-one', () => -4 * a * c) : null,
   ]);
   const count = D > 0 ? 0 : D === 0 ? 1 : 2;
   const labels = ['Two real solutions', 'Exactly one real solution', 'No real solutions', 'Infinitely many solutions'];
@@ -295,6 +297,9 @@ function formulaLevel(rng: Rng, level: 2 | 3 | 4 | 5, s: Setup): Body {
     { id: 'no-sqrt', wrong: roots(-B, D * D, 2 * A) },
     { id: 'divide-only-sqrt', wrong: roots(-B, D, 2 * A, 'sqrtOnly') },
     Math.abs(A) !== 1 ? { id: 'two-not-2a', wrong: roots(-B, D, 2) } : null,
+    // Review 10: x^2 - 3x - 1 = 0 answered as (3 ± sqrt(13))/6 (-0.10, 1.10), and a factoring
+    // item as (… ± 5)/110 with b = -55: the denominator built from b instead of a.
+    B !== 0 && Math.abs(B) !== Math.abs(A) ? { id: 'b-not-a', wrong: roots(-B, D, 2 * Math.abs(B)) } : null,
   ];
 
   const body: Body = {
@@ -440,6 +445,16 @@ export const quadraticFormula: SkillDefinition = {
       name: 'Divided only the square root by 2a',
       explanation:
         'The fraction bar covers the whole numerator: $x = \\dfrac{-b \\pm \\sqrt{D}}{2a}$. Dividing only $\\sqrt{D}$ by $2a$ leaves $-b$ undivided. Work out $-b \\pm \\sqrt{D}$ first, then divide.',
+    },
+    'b-not-a': {
+      name: 'Built the denominator from b instead of a',
+      explanation:
+        'The denominator is $2a$, twice the coefficient of $x^2$. For $x^2 - 3x - 1 = 0$, $a = 1$, so $x = \\dfrac{3 \\pm \\sqrt{13}}{2}$ (about $-0.30$ and $3.30$), not $\\dfrac{3 \\pm \\sqrt{13}}{6}$. Write $a = \\dots,\\ b = \\dots,\\ c = \\dots$ before you substitute.',
+    },
+    'hidden-one': {
+      name: 'Read -x as having no coefficient',
+      explanation:
+        'A bare $x$ term has coefficient $1$, and $-x$ has $b = -1$, so $b^2 = 1$. For $4x^2 - x - 5 = 0$: $D = (-1)^2 - 4(4)(-5) = 1 + 80 = 81$, not $80$.',
     },
     'two-not-2a': {
       name: 'Divided by 2 instead of 2a',

@@ -82,31 +82,34 @@ function polyAnswer(a: Poly): ReturnType<typeof expressionAnswer> {
 
 interface Context {
   x: string;
+  /** The letter for the starting variable, so the prompt can write f(g(c)) instead of f(g(·)). */
+  v: string;
   mid: string;
   out: string;
   setup: string;
 }
 const CONTEXTS: Context[] = [
-  { x: 'cost', mid: 'price', out: 'quantity sold', setup: 'Price depends on cost, $P = g(c)$, and quantity sold depends on price, $Q = f(P)$.' },
-  { x: 'tax rate', mid: 'price', out: 'quantity demanded', setup: 'A tax rate $t$ sets the price, $P = g(t)$, and the price sets quantity demanded, $Q = f(P)$.' },
-  { x: 'hours worked', mid: 'output', out: 'revenue', setup: 'Hours worked $h$ set output, $y = g(h)$, and output sets revenue, $R = f(y)$.' },
+  { x: 'cost', v: 'c', mid: 'price', out: 'quantity sold', setup: 'Price depends on cost, $P = g(c)$, and quantity sold depends on price, $Q = f(P)$.' },
+  { x: 'tax rate', v: 't', mid: 'price', out: 'quantity demanded', setup: 'A tax rate $t$ sets the price, $P = g(t)$, and the price sets quantity demanded, $Q = f(P)$.' },
+  { x: 'hours worked', v: 'h', mid: 'output', out: 'revenue', setup: 'Hours worked $h$ set output, $y = g(h)$, and output sets revenue, $R = f(y)$.' },
 ];
 
+// Review 10: 0/9 on the old wording ("Revenue, as a function of output"), 5 of them picking f
+// alone. Options now say what goes in and what comes out, and the prompt names the input.
 function interpretation(rng: Rng): InterpretationQuestion {
   const ctx = rng.pick(CONTEXTS);
-  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   const labels = [
-    `${cap(ctx.out)}, as a function of ${ctx.x}`,
-    `${cap(ctx.mid)}, as a function of ${ctx.x}`,
-    `${cap(ctx.out)}, as a function of ${ctx.mid}`,
-    `${cap(ctx.x)}, as a function of ${ctx.out}`,
+    `It takes ${ctx.x} and gives ${ctx.out}`,
+    `It takes ${ctx.x} and gives ${ctx.mid}`,
+    `It takes ${ctx.mid} and gives ${ctx.out}`,
+    `It takes ${ctx.out} and gives ${ctx.x}`,
   ];
   const options = rng.shuffle(labels.map((label, i) => ({ id: `o${i}`, label })));
   return {
-    prompt: `${ctx.setup} What does the composition $f(g(\\cdot))$ give?`,
+    prompt: `${ctx.setup} What does the composition $f(g(${ctx.v}))$ do?`,
     options,
     correct: 'o0',
-    explanation: `$g$ turns ${ctx.x} into ${ctx.mid}, then $f$ turns ${ctx.mid} into ${ctx.out}. Chaining them skips the middle step: $f(g(\\cdot))$ takes ${ctx.x} straight to ${ctx.out}. The inner function is applied first.`,
+    explanation: `Read it from the inside: the input is $${ctx.v}$ (${ctx.x}). $g$ turns ${ctx.x} into ${ctx.mid}, then $f$ turns ${ctx.mid} into ${ctx.out}. So $f(g(${ctx.v}))$ takes ${ctx.x} straight to ${ctx.out}. Taking ${ctx.mid} and giving ${ctx.out} is $f$ on its own; the composition starts one link earlier, at ${ctx.x}.`,
   };
 }
 
@@ -160,7 +163,7 @@ function evaluateComposition(rng: Rng, level: 1 | 2): Generated {
       key: 'substitute-inner',
       instruction: `Now use that result as the input of $f$: $f(${inner.toLatex()})$.`,
       math: `f(g(${u})) = f(${inner.toLatex()}) = ${latex(f, `(${inner.toLatex()})`)} = ${value.toLatex()}`,
-      why: 'The output of the inner function becomes the input of the outer function.',
+      why: `The output of the inner function becomes the input of the outer function.${inner.sign() < 0 ? ' It is negative, so keep it in brackets: every odd power of it (like the $x$ term) changes sign.' : ''}`,
       ask: { prompt: `$f(g(${u})) = \\;?$`, answer, verify },
     },
   ];
@@ -170,6 +173,9 @@ function evaluateComposition(rng: Rng, level: 1 | 2): Generated {
   const candidates: (MisconceptionInstance | null)[] = [
     { id: 'order-swapped', wrong: numberAnswer(swapped) },
     { id: 'multiplied-functions', wrong: numberAnswer(product) },
+    // Review 10: g(0) = -3, then -4x at x = -3 taken as -12 (-27 - 12 + 1 = -38, not -14).
+    // Squares don't see the sign, so the slip is exactly f(-g(u)).
+    inner.sign() < 0 ? { id: 'lost-inner-sign', wrong: numberAnswer(evalAt(f, inner.neg())) } : null,
   ];
 
   return {
@@ -445,6 +451,11 @@ export const functionComposition: SkillDefinition = {
       name: 'Multiplied f and g instead of composing',
       explanation:
         '$f(g(x))$ is "feed the output of $g$ into $f$", not $f(x)\\cdot g(x)$. Replace each $x$ in $f$ by the whole expression $g(x)$.',
+    },
+    'lost-inner-sign': {
+      name: 'Dropped the minus of a negative inner value',
+      explanation:
+        'When $g(u)$ is negative, substitute it in brackets: for $f(x) = -3x^2 - 4x + 1$ and $g(0) = -3$, $f(-3) = -3(-3)^2 - 4(-3) + 1 = -27 + 12 + 1 = -14$. The square hides the sign, but the $-4x$ term does not: $-4 \\cdot (-3) = +12$.',
     },
     'square-not-expanded': {
       name: 'Squared term by term',
