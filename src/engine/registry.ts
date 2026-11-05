@@ -23,7 +23,12 @@ export function activePrerequisites(skill: SkillDefinition): string[] {
 }
 
 /** Deterministic: the same (skill, level, seed, variant) always yields the same problem. */
-export function makeProblem(skill: SkillDefinition, level: Level, seed: number, variant?: 'story', storyVersion?: 1): Problem {
+export function makeProblem(skill: SkillDefinition, level: Level, seed: number, variant?: 'story' | 'contrast', storyVersion?: 1): Problem {
+  if (variant === 'contrast') {
+    if (skill.contrast?.level !== level) throw new Error(`${skill.id} has no contrast variant at level ${level}`);
+    const body = skill.contrast.generate(createRng(seed));
+    return { id: `${skill.id}:${level}:${seed}:c`, skillId: skill.id, level, seed, variant, ...body };
+  }
   if (variant === 'story') {
     if (!hasStory(skill, level)) throw new Error(`${skill.id} has no story variant at level ${level}`);
     const story = skill.story!;
@@ -40,8 +45,8 @@ export function makeProblem(skill: SkillDefinition, level: Level, seed: number, 
 
 export function problemFromId(id: string): Problem {
   const [skillId, level, seed, variant] = id.split(':');
-  const story = variant === 's' || variant === 's2' ? 'story' : undefined;
-  return makeProblem(getSkill(skillId), Number(level) as Level, Number(seed), story, variant === 's' ? 1 : undefined);
+  const kind = variant === 's' || variant === 's2' ? 'story' : variant === 'c' ? 'contrast' : undefined;
+  return makeProblem(getSkill(skillId), Number(level) as Level, Number(seed), kind, variant === 's' ? 1 : undefined);
 }
 
 export const hasStory = (skill: SkillDefinition, level: Level) => !!skill.story?.levels.includes(level);

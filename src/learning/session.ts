@@ -50,6 +50,8 @@ export interface Session {
   pendingFollowUp?: string;
   /** The misconception the miss matched: the follow-up should give it a chance to recur. */
   pendingTrap?: string;
+  /** The follow-up comes after a contrasting case: an ordinary item, to see the rule transfer. */
+  pendingPlain?: boolean;
   followUpsUsed: number;
   answered: number;
   correct: number;
@@ -262,13 +264,24 @@ export function nextProblem(s: Session, p: Progress, now = new Date()): { sessio
     const working = gentleLevel(s, workingLevel(skillOf(p, id)));
     // A follow-up after the finisher is the session's last problem: keep it gentle.
     const level = (s.index >= s.slots.length ? Math.max(1, working - 1) : working) as Level;
+    // A miss the skill has a contrasting case for gets that instead: the same numbers with only
+    // the confused feature changed, side by side (review 10: the coefficient took the inner
+    // exponent three times, after its explanation was added).
+    const skill = getSkill(id);
+    if (s.pendingTrap && !s.pendingPlain && skill.contrast?.targets.includes(s.pendingTrap)) {
+      const problem = makeProblem(skill, skill.contrast.level, seed, 'contrast');
+      return { session: { ...s, pendingFollowUp: undefined, pendingTrap: undefined }, next: { problem, kind: 'followup', hideSkill: false } };
+    }
+    // After a contrast, the transfer item is at the level where the trap fired.
+    const trapLevel = s.pendingPlain && skill.contrast ? skill.contrast.level : undefined;
     // Review 8: after three "added 4ac" misses with c < 0, every follow-up drew c > 0, where the
     // mistake can't happen, so a correct follow-up proved nothing.
-    let problem = make(id, level);
+    const at = (trapLevel ?? level) as Level;
+    let problem = make(id, at);
     for (let i = 0; s.pendingTrap && i < TRAP_TRIES && !problem.misconceptions.some((m) => m.id === s.pendingTrap); i++) {
-      problem = make(id, level, false, randomSeed());
+      problem = make(id, at, false, randomSeed());
     }
-    return { session: { ...s, pendingFollowUp: undefined, pendingTrap: undefined }, next: { problem, kind: 'followup', hideSkill: false } };
+    return { session: { ...s, pendingFollowUp: undefined, pendingTrap: undefined, pendingPlain: undefined }, next: { problem, kind: 'followup', hideSkill: false } };
   }
 
   const slot = s.slots[s.index];
@@ -357,6 +370,14 @@ export function afterProblem(
     next.pendingFollowUp = problem.skillId;
     next.pendingTrap = misconception;
     next.followUpsUsed += 1;
+  }
+  // A contrasting case, right or wrong, is followed by an ordinary item that sets the same trap:
+  // telling two cases apart side by side is only worth something if it transfers.
+  if (problem.variant === 'contrast' && next.followUpsUsed < MAX_FOLLOWUPS) {
+    if (!next.pendingFollowUp) next.followUpsUsed += 1;
+    next.pendingFollowUp = problem.skillId;
+    next.pendingTrap = misconception ?? getSkill(problem.skillId).contrast?.targets[0];
+    next.pendingPlain = true;
   }
   return next;
 }

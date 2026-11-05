@@ -123,6 +123,30 @@ describe('session builder', () => {
     }
   });
 
+  it('a targeted misconception gets a contrasting case, then an ordinary item with the same trap', () => {
+    const p = emptyProgress();
+    p.skills['exponent-rules'] = { ...emptySkill(), attempts: 30, lastPracticed: '2026-01-01' };
+    const missed = makeProblem(getSkill('exponent-rules'), 2, 1);
+    for (const contrastRight of [true, false]) {
+      let s = afterProblem(startSession(p, 10), missed, false, true, 0, [], 'coefficient-raised-to-inner');
+      const c = nextProblem(s, p)!;
+      expect(c.next.problem.variant).toBe('contrast');
+      expect(c.next.problem.id).toMatch(/^exponent-rules:2:\d+:c$/);
+      s = afterProblem(c.session, c.next.problem, contrastRight, !contrastRight, 0, [], contrastRight ? undefined : 'coefficient-raised-to-inner');
+      const t = nextProblem(s, p)!.next.problem;
+      expect(t.variant).toBeUndefined();
+      expect(t.level).toBe(2);
+      expect(t.misconceptions.map((m) => m.id)).toContain('coefficient-raised-to-inner');
+    }
+  });
+
+  it('other misconceptions keep the ordinary same-trap follow-up', () => {
+    const p = emptyProgress();
+    p.skills['exponent-rules'] = { ...emptySkill(), attempts: 30, lastPracticed: '2026-01-01' };
+    const s = afterProblem(startSession(p, 10), makeProblem(getSkill('exponent-rules'), 2, 1), false, true, 0, [], 'add-for-power');
+    expect(nextProblem(s, p)!.next.problem.variant).not.toBe('contrast');
+  });
+
   it('terminates', () => {
     let s = startSession(emptyProgress(), 5);
     let n = 0;

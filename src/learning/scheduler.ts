@@ -4,6 +4,7 @@
 // Day-granular: short-term (minutes) learning steps are disabled.
 
 import { createEmptyCard, fsrs, generatorParameters, Rating, type Card, type Grade } from 'ts-fsrs';
+import { FITTED } from './fitted-params';
 import type { Help } from './mastery';
 
 /** JSON-safe Card (dates as ISO strings) for localStorage / progress.json. */
@@ -20,7 +21,12 @@ export interface StoredCard {
   last_review?: string;
 }
 
-const scheduler = fsrs(generatorParameters({ enable_fuzz: false, enable_short_term: false, request_retention: 0.9 }));
+/** A scheduler with these weights (default: ts-fsrs's, or the learner's fit from `npm run fit`). */
+export function makeScheduler(w?: number[]) {
+  return fsrs(generatorParameters({ enable_fuzz: false, enable_short_term: false, request_retention: 0.9, ...(w ? { w } : {}) }));
+}
+
+const scheduler = makeScheduler(FITTED.fsrsW ?? undefined);
 
 const toStored = (c: Card): StoredCard => ({
   ...c,

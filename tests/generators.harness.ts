@@ -8,7 +8,7 @@ import katex from 'katex';
 import { describe, expect, it } from 'vitest';
 import { checkAnswer } from '../src/engine/checker';
 import { matchMisconception } from '../src/engine/misconceptions';
-import { makeProblem, SKILLS } from '../src/engine/registry';
+import { makeProblem, problemFromId, SKILLS } from '../src/engine/registry';
 import { parseRichText } from '../src/engine/richtext';
 import { LEVELS, type AnswerInput, type AnswerSpec, type Problem, type SkillDefinition } from '../src/engine/types';
 import { verifyAnswer } from './verify-check';
@@ -208,6 +208,25 @@ describe.each(SKILLS.filter((_, i) => i % SHARDS === shard).map((s) => [s.id, s]
           expect(p.id).toBe(`${skill.id}:${level}:${seed}:s`);
           checkProblem(skill, p, seed);
         }
+    });
+
+  // Contrasting cases (follow-ups after a targeted misconception) get every plain check too, and
+  // every target must be predictable on them, or the follow-up can't tell whether it was fixed.
+  const contrast = skill.contrast;
+  if (contrast)
+    it(`contrast variant (level ${contrast.level}): ${N} seeds`, () => {
+      const seen = new Set<string>();
+      const hit = new Set<string>();
+      for (let seed = 1; seed <= N; seed++) {
+        const p = makeProblem(skill, contrast.level, seed, 'contrast');
+        expect(p.id).toBe(`${skill.id}:${contrast.level}:${seed}:c`);
+        expect(problemFromId(p.id)).toEqual(p);
+        checkProblem(skill, p, seed);
+        p.misconceptions.forEach((m) => hit.add(m.id));
+        seen.add(p.prompt);
+      }
+      expect(contrast.targets.filter((t) => !hit.has(t)), 'targets the contrast never predicts').toEqual([]);
+      expect(seen.size, 'distinct contrast prompts').toBeGreaterThan(Math.min(N, 100) * 0.3);
     });
 
   it('is deterministic for a given seed', () => {

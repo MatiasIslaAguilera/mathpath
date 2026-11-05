@@ -16,6 +16,7 @@ for each item, is its §8.
 | `npm run test:e2e` | Playwright on an Android phone profile (Pixel 7, 412×839): session, hints, guided mode, misconceptions, back gesture, export/import |
 | `npm run analyze -- <progress.json>` | Weak-spot report for an exported progress file: replays the event log, re-diagnoses every wrong answer with today's misconceptions, first-of-day vs later accuracy, levels served |
 | `npm run measure -- <progress.json>` | Model checks: rating-model Brier vs a constant baseline, calibration, FSRS recall, time on task, learning curve, content runway |
+| `npm run fit -- <progress.json>` | Fits the rating model and FSRS weights to the log (first 70% by time), judges them on the last 30% against the defaults, prints the pacing trade-off. `--write` saves fits that gain ≥ 1% into `src/learning/fitted-params.ts` |
 | `npm run import:gre-bank` | Re-import the 200-question GRE challenge bank (`python tools/import_gre_bank.py`) |
 | `npm run typecheck` / `npm run build` | `tsc -b` / production build |
 | `SCREENS=<dir> npx playwright test screens` | Review PNGs (Pixel 7): Home in 4 learner states × light/dark, exercise, tree, the working pad on econ problems. Skipped in the normal e2e run. The user approves UI changes from these before any commit |

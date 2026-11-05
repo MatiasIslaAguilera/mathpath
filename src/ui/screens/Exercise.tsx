@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { checkAnswer, previewLatex } from '../../engine/checker';
 import { latexToMath } from '../../engine/latex';
 import { matchMisconception } from '../../engine/misconceptions';
@@ -9,6 +9,7 @@ import { prefilledSteps } from '../../learning/fading';
 import type { Help } from '../../learning/mastery';
 import type { AttemptResult, SkillEvent } from '../../learning/record';
 import type { SlotKind } from '../../learning/session';
+import { isFastMiss } from '../../learning/timing';
 import { AnswerDisplay, FigureView } from '../components/AnswerDisplay';
 import { AnswerInput, initialValue } from '../components/AnswerInput';
 import { MathText, Tex } from '../components/MathText';
@@ -41,6 +42,29 @@ interface Outcome {
   events: SkillEvent[];
   /** Line-by-line verdicts on the working pad, if it was used. */
   working?: WorkingReport;
+  /** Set when the miss came fast enough to be a likely slip (learning/timing.ts): its seconds. */
+  fastSeconds?: number;
+}
+
+/** Milliseconds the item has been on screen with the app in the foreground. */
+function useVisibleTime(): () => number {
+  const ref = useRef<{ total: number; since: number | null }>({
+    total: 0,
+    since: typeof document === 'undefined' || document.visibilityState === 'visible' ? performance.now() : null,
+  });
+  useEffect(() => {
+    const onChange = () => {
+      const t = ref.current;
+      if (document.visibilityState === 'visible') t.since ??= performance.now();
+      else if (t.since !== null) {
+        t.total += performance.now() - t.since;
+        t.since = null;
+      }
+    };
+    document.addEventListener('visibilitychange', onChange);
+    return () => document.removeEventListener('visibilitychange', onChange);
+  }, []);
+  return () => ref.current.total + (ref.current.since !== null ? performance.now() - ref.current.since : 0);
 }
 
 const inputText = (v: Value) => (Array.isArray(v) ? v.join(', ') : v);
@@ -65,6 +89,7 @@ export function Exercise({ problem, rating, kind, hideSkill, firstTime, onAttemp
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [interpIndex, setInterpIndex] = useState(0);
   const [interpChoice, setInterpChoice] = useState<string | null>(null);
+  const elapsed = useVisibleTime();
 
   // Test hook for Playwright (only with ?e2e in the URL).
   useEffect(() => {
@@ -120,6 +145,7 @@ export function Exercise({ problem, rating, kind, hideSkill, firstTime, onAttemp
     const help: Help = hints === 0 ? 'none' : hints >= problem.steps.length ? 'reveal' : 'hint';
     const misconception = r.correct ? undefined : matchMisconception(problem, value);
     const working = workingReport();
+    const durationMs = elapsed();
     const { xp, events } = onAttempt({
       problem,
       correct: r.correct,
@@ -129,13 +155,15 @@ export function Exercise({ problem, rating, kind, hideSkill, firstTime, onAttemp
       misconception,
       missedSteps: hintKeys(),
       working: working && { lines: workingMath.map((m) => m ?? '?'), firstWrong: working.firstWrong },
+      durationMs,
     });
-    setOutcome({ correct: r.correct, help, misconception, parts: 'parts' in r ? r.parts : undefined, xp, events, working });
+    const fastSeconds = isFastMiss({ correct: r.correct, help, misconception, durationMs }) ? Math.max(1, Math.round(durationMs / 1000)) : undefined;
+    setOutcome({ correct: r.correct, help, misconception, parts: 'parts' in r ? r.parts : undefined, xp, events, working, fastSeconds });
     setPhase('feedback');
   };
 
   const finishGuided = (g: GuidedResult) => {
-    const { xp, events } = onAttempt({ problem, correct: g.finishedAlone, help: 'guided', hintsUsed: hints, missedSteps: [...new Set([...hintKeys(), ...g.missedSteps])] });
+    const { xp, events } = onAttempt({ problem, correct: g.finishedAlone, help: 'guided', hintsUsed: hints, missedSteps: [...new Set([...hintKeys(), ...g.missedSteps])], durationMs: elapsed() });
     setOutcome({ correct: g.finishedAlone, help: 'guided', xp, events });
     setPhase('feedback');
   };
@@ -157,7 +185,13 @@ export function Exercise({ problem, rating, kind, hideSkill, firstTime, onAttemp
           </button>
         )}
       </div>
-      {kind === 'followup' && <p className="followup-note">Same method, new numbers. Try this one on your own.</p>}
+      {kind === 'followup' && (
+        <p className="followup-note" data-testid="followup-note">
+          {problem.variant === 'contrast'
+            ? 'Two at once: they differ in one place only. Spot it before you compute.'
+            : 'Same method, new numbers. Try this one on your own.'}
+        </p>
+      )}
       {kind === 'stretch' && phase !== 'feedback' && (
         <p className="followup-note" data-testid="stretch-note">
           Stretch: one level above your usual. A solve here moves you up faster, and a miss costs less than usual.
@@ -257,6 +291,11 @@ export function Exercise({ problem, rating, kind, hideSkill, firstTime, onAttemp
             <div className="callout warn" data-testid="misconception">
               <strong>{skill.misconceptions[outcome.misconception].name}.</strong>{' '}
               <MathText text={skill.misconceptions[outcome.misconception].explanation} />
+            </div>
+          )}
+          {outcome.fastSeconds !== undefined && (
+            <div className="callout info" data-testid="fast-miss">
+              That took {outcome.fastSeconds} {outcome.fastSeconds === 1 ? 'second' : 'seconds'}. Misses this quick are usually slips, not gaps: before you submit, re-read the signs and put your answer back into the question.
             </div>
           )}
           {outcome.working && (

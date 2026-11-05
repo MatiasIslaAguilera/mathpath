@@ -136,8 +136,8 @@ export type Figure =
 export interface Problem {
   /** `${skillId}:${level}:${seed}`, plus `:s` (or `:s2`, see `story.original`) for a story variant — enough to regenerate it. */
   id: string;
-  /** 'story' when built by `SkillDefinition.story` (a word problem with a setup step). */
-  variant?: 'story';
+  /** 'story' when built by `SkillDefinition.story` (a word problem with a setup step); 'contrast' by `SkillDefinition.contrast`. */
+  variant?: 'story' | 'contrast';
   skillId: string;
   level: Level;
   seed: number;
@@ -238,6 +238,17 @@ export interface SkillDefinition {
      * Add patterns by drawing them after `original` inside `generate`; never edit `original`.
      */
     original?(rng: import('./rng').Rng, level: Level): Omit<Problem, 'id' | 'skillId' | 'level' | 'seed'>;
+  };
+  /**
+   * Optional contrasting case (ids `…:c`): two items side by side that differ only in the feature
+   * a misconception gets wrong, so the rule has to be told apart rather than recalled. Served as
+   * the follow-up after a miss diagnosed as one of `targets`, instead of a same-trap problem. Its
+   * params must fit `levels[level].ranges`.
+   */
+  contrast?: {
+    level: Level;
+    targets: string[];
+    generate(rng: import('./rng').Rng): Omit<Problem, 'id' | 'skillId' | 'level' | 'seed'>;
   };
   /**
    * Optional custom checker. Default: engine/checker.ts by AnswerSpec kind.

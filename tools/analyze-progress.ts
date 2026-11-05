@@ -14,11 +14,12 @@
 //   4. new interpretation misses (with the chosen option) and missed steps
 
 import { readFileSync, writeFileSync } from 'node:fs';
-import { evalExact } from '../src/engine/checker';
+import { checkAnswer, evalExact } from '../src/engine/checker';
 import { matchMisconception } from '../src/engine/misconceptions';
 import { problemFromId } from '../src/engine/registry';
 import type { AnswerInput, Problem } from '../src/engine/types';
 import { skillState, workingLevel } from '../src/learning/states';
+import { FAST_MISS_MS } from '../src/learning/timing';
 import { sortEvents, type AttemptEvent, type InterpretationEvent, type LearningEvent } from '../src/storage/events';
 import { dateKey, emptyProgress, emptySkill } from '../src/storage/progress';
 import { applyEvent } from '../src/storage/replay';
@@ -111,17 +112,29 @@ interface Served {
   firstOfDay: boolean;
   /** Misconception under today's code (wrong answers with an input). */
   now?: string;
+  /** Time on the item: logged (durationMs), or else the gap since the previous event (under 15 min). */
+  ms?: number;
+  msLogged?: boolean;
 }
 const progress = emptyProgress();
 const served: Served[] = [];
 const interps: InterpretationEvent[] = [];
 const seenToday = new Set<string>();
+let prevTs = 0;
 for (const e of events) {
   if (e.type === 'attempt') {
     const key = `${dateKey(new Date(e.ts))}|${e.skillId}`;
-    served.push({ e, working: workingLevel(progress.skills[e.skillId] ?? emptySkill()), firstOfDay: !seenToday.has(key) });
+    const gap = e.ts - prevTs;
+    served.push({
+      e,
+      working: workingLevel(progress.skills[e.skillId] ?? emptySkill()),
+      firstOfDay: !seenToday.has(key),
+      ms: e.durationMs ?? (prevTs && gap < 900_000 ? gap : undefined),
+      msLogged: e.durationMs !== undefined,
+    });
     seenToday.add(key);
   } else if (e.type === 'interpretation') interps.push(e);
+  if (e.type !== 'baseline') prevTs = e.ts;
   applyEvent(progress, e);
 }
 for (const s of served) {
@@ -227,20 +240,31 @@ console.log(`\n## New wrong answers: ${wrong.length} (${diagnosed.length} diagno
 const byMis: Record<string, number> = {};
 for (const s of diagnosed) byMis[`${s.e.skillId}/${s.now}`] = (byMis[`${s.e.skillId}/${s.now}`] ?? 0) + 1;
 for (const [k, n] of Object.entries(byMis).sort((a, b) => b[1] - a[1])) console.log(`${String(n).padStart(3)}  ${k}`);
-if (undiagnosed.length) console.log('\nUndiagnosed: work out what mistake produces each input.\n');
-for (const { e } of undiagnosed) {
+if (undiagnosed.length)
+  console.log(
+    `\nUndiagnosed: work out what mistake produces each input. Tags: "likely slip" = under ${FAST_MISS_MS / 1000} s (logged time, or ~ the gap since the previous event); "now accepted" = today's checker marks the input correct.\n`,
+  );
+for (const { e, ms, msLogged } of undiagnosed) {
   const p = regen(e.problemId);
   if (!p) {
     console.log(`- ${e.problemId}  input ${e.input}  (skill no longer exists)`);
     continue;
   }
+  const tags: string[] = [];
+  if (ms !== undefined) tags.push(`${msLogged ? '' : '~'}${Math.round(ms / 1000)} s${ms < FAST_MISS_MS && e.help === 'none' ? ', likely slip' : ''}`);
+  try {
+    if (checkAnswer(p.answer, toInput(p, e.input!)).correct) tags.push('now accepted');
+  } catch {
+    // unreadable under today's parser: leave it untagged
+  }
+  const tag = tags.length ? `  [${tags.join('; ')}]` : '';
   let gap = '';
   if (p.answer.kind === 'number') {
     const d = Number(e.input) - evalExact(p.answer.value);
     if (Number.isFinite(d)) gap = `  (off by ${+d.toFixed(4)})`;
   }
   const working = e.working ? `\n      working: ${e.working.join('  |  ')} (${e.workingFirstWrong === undefined ? 'no line flagged' : `first wrong line ${e.workingFirstWrong + 1}`})` : '';
-  console.log(`- ${e.problemId}  L${e.level}  input ${e.input}  answer ${answerText(p)}${gap}\n      ${clip(p.prompt)}${working}`);
+  console.log(`- ${e.problemId}  L${e.level}  input ${e.input}  answer ${answerText(p)}${gap}${tag}\n      ${clip(p.prompt)}${working}`);
 }
 
 // ---------- 4. interpretation and missed steps ----------

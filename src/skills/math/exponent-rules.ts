@@ -175,6 +175,14 @@ export const exponentRules: SkillDefinition = {
     }
   },
 
+  // Review 10: the coefficient took the INNER exponent three times ((2x^3)^2 -> 8, (5x^4)^3 -> 625),
+  // the last after its explanation was added in review 4. Same numbers, exponents swapped.
+  contrast: {
+    level: 2,
+    targets: ['coefficient-raised-to-inner'],
+    generate: powerContrast,
+  },
+
   story: {
     levels: [1],
     generate(rng) {
@@ -301,6 +309,82 @@ function level1Story(rng: Rng): Body {
 }
 
 // ---------- Level 2: power of a power, coefficient ----------
+
+/**
+ * Contrasting case for level 2: (c x^a)^b next to (c x^b)^a. The exponent of x is ab in both;
+ * only the coefficient changes (c^b vs c^a), so the learner has to see which exponent it takes.
+ */
+function powerContrast(rng: Rng): Body {
+  let a = 2;
+  let b = 2;
+  let c = 2;
+  // Distinct exponents; both coefficients small enough to work out by hand (at most 1024).
+  while (a === b || c ** Math.max(a, b) > 1024) {
+    a = rng.int(2, 6);
+    b = rng.int(2, 5);
+    c = rng.int(2, 5);
+  }
+  const params = { form: 1, a, b, c };
+  const k1 = c ** b;
+  const k2 = c ** a;
+  const e = a * b;
+  const first = `(${c}x^{${a}})^{${b}}`;
+  const second = `(${c}x^{${b}})^{${a}}`;
+  const labels = ['k (first)', 'k (second)', 'e (both)'];
+  // Shown as math in the answer card: k_1, k_2 and e, not the box labels.
+  const tuple = (vals: number[]) => tupleAnswer(labels, vals, ['k_1', 'k_2', 'e']);
+  const answer = tuple([k1, k2, e]);
+  const verify = {
+    type: 'solve' as const,
+    equations: [`u = (${c})^(${b})`, `v = (${c})^(${a})`, `w = (${a})*(${b})`],
+    unknowns: ['u', 'v', 'w'],
+  };
+  return {
+    params,
+    prompt: `Simplify both to the form $k\\,x^{e}$. $$${first} \\qquad\\text{and}\\qquad ${second}$$ Enter $k$ for the first, $k$ for the second, and $e$ (it is the same for both).`,
+    answer,
+    steps: [
+      {
+        key: 'rule',
+        instruction: 'Look at what changed: the two exponents swapped places. The power outside the brackets is the one the coefficient is raised to.',
+        math: `(cx^{a})^{b} = c^{b}\\,x^{ab}`,
+        why: 'The outside power applies to every factor inside, the number included. The inside exponent belongs to $x$ only.',
+        ask: {
+          prompt: `In $${first}$, which power is the coefficient ${c} raised to?`,
+          answer: choice(rng, `The outside one, ${b}`, [`The inside one, ${a}`, `Their product, ${e}`]),
+        },
+      },
+      {
+        key: 'power',
+        instruction: 'The exponent of $x$ multiplies the two exponents, so the swap doesn\'t change it.',
+        math: `x^{${a}\\cdot ${b}} = x^{${b}\\cdot ${a}} = x^{${e}}`,
+        why: 'Power rule: $(x^a)^b = x^{ab}$, and $ab = ba$.',
+        ask: { prompt: `What is $e$ in both?`, answer: numberAnswer(e), verify: { type: 'evaluate', expr: `(${a})*(${b})` } },
+      },
+      {
+        key: 'coefficient',
+        instruction: `First: the outside power is ${b}, so the coefficient is $${c}^{${b}}$.`,
+        math: `${c}^{${b}} = ${k1}`,
+        why: 'Only the power outside the brackets reaches the coefficient.',
+        ask: { prompt: `What is $${c}^{${b}}$?`, answer: numberAnswer(k1), verify: { type: 'evaluate', expr: `(${c})^(${b})` } },
+      },
+      {
+        key: 'combine',
+        instruction: `Second: now the outside power is ${a}, so the coefficient is $${c}^{${a}} = ${k2}$. Same $x^{${e}}$, a different number in front.`,
+        math: `${first} = ${k1}x^{${e}}, \\qquad ${second} = ${k2}x^{${e}}`,
+        why: `If you got ${k2} for the first, you raised ${c} to the inside exponent: that is the second expression's coefficient.`,
+        ask: { prompt: 'Enter $k$ for the first, $k$ for the second, and $e$.', answer, verify },
+      },
+    ],
+    misconceptions: distinctMisconceptions(answer, [
+      { id: 'coefficient-raised-to-inner', wrong: tuple([k2, k1, e]) },
+      { id: 'coefficient-not-raised', wrong: tuple([c, c, e]) },
+      { id: 'add-for-power', wrong: tuple([k1, k2, a + b]) },
+      { id: 'power-as-product', wrong: tuple([c, c, a + b]) },
+    ]),
+    verify,
+  };
+}
 
 function level2(rng: Rng): Body {
   const form = rng.int(0, 1);

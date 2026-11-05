@@ -24,6 +24,8 @@ export interface AttemptEvent extends EventBase {
   misconception?: string;
   missedSteps: string[];
   retentionCheck?: boolean;
+  /** Time from the problem appearing to the answer, excluding time with the app in the background. */
+  durationMs?: number;
   /** Lines of working typed on the working pad (any attempt). */
   workingLines?: number;
   /** Wrong attempts only: the lines (mathjs syntax) and the index of the first wrong one. */

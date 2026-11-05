@@ -15,6 +15,7 @@ import { readFileSync } from 'node:fs';
 import { SKILLS } from '../src/engine/registry';
 import { pCorrect } from '../src/learning/mastery';
 import { retrievability } from '../src/learning/scheduler';
+import { FAST_MISS_MS } from '../src/learning/timing';
 import { TREE } from '../src/skills/tree';
 import { sortEvents, type LearningEvent } from '../src/storage/events';
 import { dateKey, emptyProgress, emptySkill } from '../src/storage/progress';
@@ -37,6 +38,8 @@ interface Row {
   secs?: number;
   ts: number;
   story: boolean;
+  /** A contrasting case (two items side by side): kept out of the story-vs-plain comparison. */
+  contrast: boolean;
 }
 const p = emptyProgress();
 const rows: Row[] = [];
@@ -59,9 +62,11 @@ for (const e of events) {
         y: e.correct ? 1 : 0,
         n: sp.attempts,
         recall: firstOfDay && sp.fsrs ? retrievability(sp.fsrs, new Date(e.ts)) : undefined,
-        secs: gap < 900 ? gap : undefined,
+        // Logged time on the item when the build recorded it; else the gap since the last event.
+        secs: e.durationMs !== undefined ? e.durationMs / 1000 : gap < 900 ? gap : undefined,
         ts: e.ts,
         story: /:s2?$/.test(e.problemId),
+        contrast: e.problemId.endsWith(':c'),
       });
   }
   prevTs = e.ts;
@@ -95,9 +100,15 @@ for (const L of [1, 2, 3, 4, 5]) {
 }
 
 // 2. FSRS
+// A first-of-day solve needs the skill remembered (R) AND this item solved (the rating model's p).
+// Comparing R alone with solves blames memory for every slip on a hard item (2026-11-04: R 0.91
+// vs 0.74 solved, while R·p was 0.68 vs 0.67). `npm run fit` tests personal weights held out.
 const fod = rows.filter((r) => r.recall !== undefined);
-console.log(`\n## 2. FSRS on first-of-day attempts (n ${fod.length}): predicted recall ${f2(mean(fod.map((r) => r.recall!)))} → actual ${f2(mean(fod.map((r) => r.y)))}`);
-console.log('   (fit personal FSRS parameters once n ≥ 50; until then, treat this as a hint, not a verdict)');
+const fodBrier = (f: (r: Row) => number) => mean(fod.map((r) => (f(r) - r.y) ** 2)).toFixed(4);
+console.log(`\n## 2. FSRS on first-of-day attempts (n ${fod.length})\n`);
+console.log(`  recall × item p: ${f2(mean(fod.map((r) => r.recall! * r.pred)))} → actual ${f2(mean(fod.map((r) => r.y)))}   (memory alone predicts ${f2(mean(fod.map((r) => r.recall!)))})`);
+console.log(`  Brier: recall × item p ${fodBrier((r) => r.recall! * r.pred)}   item p alone ${fodBrier((r) => r.pred)}   constant ${fodBrier(() => mean(fod.map((r) => r.y)))}`);
+console.log('  (`npm run fit -- <file>` checks personal FSRS weights on held-out reviews)');
 
 // 3. Time on task
 console.log('\n## 3. Time on task (gap from the previous event, under 15 min)\n');
@@ -106,7 +117,7 @@ for (const s of [...new Set(timed.map((r) => r.skill))]) {
   const b = timed.filter((r) => r.skill === s);
   const right = b.filter((r) => r.y).map((r) => r.secs!);
   const wrong = b.filter((r) => !r.y).map((r) => r.secs!);
-  console.log(`  ${s.padEnd(26)} right ${median(right).padStart(5)}   wrong ${median(wrong).padStart(5)}   fast misses (<12s) ${wrong.filter((x) => x < 12).length}/${wrong.length}`);
+  console.log(`  ${s.padEnd(26)} right ${median(right).padStart(5)}   wrong ${median(wrong).padStart(5)}   fast misses (<${FAST_MISS_MS / 1000}s) ${wrong.filter((x) => x < FAST_MISS_MS / 1000).length}/${wrong.length}`);
 }
 const days = new Set(rows.map((r) => dateKey(new Date(r.ts)))).size;
 console.log(`  ${Math.round(mean([timed.reduce((a, r) => a + r.secs!, 0) / 60 / days]))} timed minutes per active day over ${days} days`);
@@ -137,7 +148,7 @@ for (const cell of cells) {
   const [skill, level] = cell.split('|');
   const at = rows.filter((r) => r.skill === skill && r.level === Number(level));
   const st = at.filter((r) => r.story);
-  const pl = at.filter((r) => !r.story);
+  const pl = at.filter((r) => !r.story && !r.contrast);
   const secs = (xs: Row[]) => median(xs.filter((r) => r.secs !== undefined && r.y).map((r) => r.secs!));
   console.log(
     `  ${`${skill} L${level}`.padEnd(30)} story ${f2(mean(st.map((r) => r.y)))} (n ${st.length}, ${secs(st)})   plain ${f2(mean(pl.map((r) => r.y)))} (n ${pl.length}, ${secs(pl)})   gap ${(100 * (mean(pl.map((r) => r.y)) - mean(st.map((r) => r.y)))).toFixed(0)} pts`,

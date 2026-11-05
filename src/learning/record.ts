@@ -25,6 +25,8 @@ export interface AttemptResult {
   working?: { lines: string[]; firstWrong: number | null };
   /** This problem was a scheduled cold retention check. */
   retentionCheck?: boolean;
+  /** Time on the item, excluding time with the app in the background. */
+  durationMs?: number;
 }
 
 export type SkillEvent =
@@ -51,6 +53,7 @@ export function attemptEvent(r: AttemptResult, now = new Date()): AttemptEvent {
     misconception: r.misconception,
     missedSteps: r.missedSteps,
     retentionCheck: r.retentionCheck || undefined,
+    durationMs: r.durationMs !== undefined ? Math.round(r.durationMs) : undefined,
     workingLines: r.working?.lines.length || undefined,
     working: r.correct ? undefined : r.working?.lines,
     workingFirstWrong: r.correct ? undefined : (r.working?.firstWrong ?? undefined),
