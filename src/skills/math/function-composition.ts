@@ -109,7 +109,7 @@ function interpretation(rng: Rng): InterpretationQuestion {
     prompt: `${ctx.setup} What does the composition $f(g(${ctx.v}))$ do?`,
     options,
     correct: 'o0',
-    explanation: `Read it from the inside: the input is $${ctx.v}$ (${ctx.x}). $g$ turns ${ctx.x} into ${ctx.mid}, then $f$ turns ${ctx.mid} into ${ctx.out}. So $f(g(${ctx.v}))$ takes ${ctx.x} straight to ${ctx.out}. Taking ${ctx.mid} and giving ${ctx.out} is $f$ on its own; the composition starts one link earlier, at ${ctx.x}.`,
+    explanation: `Read it from the inside: the input is $${ctx.v}$ (${ctx.x}). $g$ turns ${ctx.x} into ${ctx.mid}, then $f$ turns ${ctx.mid} into ${ctx.out}. So $f(g(${ctx.v}))$ takes ${ctx.x} straight to ${ctx.out}. Taking ${ctx.mid} and giving ${ctx.out} is $f$ on its own; the composition starts one link earlier, at ${ctx.x}. Stopping at ${ctx.mid} is $g$ on its own; the composition goes one link further, to ${ctx.out}.`,
   };
 }
 
@@ -176,6 +176,8 @@ function evaluateComposition(rng: Rng, level: 1 | 2): Generated {
     // Review 10: g(0) = -3, then -4x at x = -3 taken as -12 (-27 - 12 + 1 = -38, not -14).
     // Squares don't see the sign, so the slip is exactly f(-g(u)).
     inner.sign() < 0 ? { id: 'lost-inner-sign', wrong: numberAnswer(evalAt(f, inner.neg())) } : null,
+    // Review 11: f(g(4)) answered as g(4) = 66, and "takes tax rate, gives price" picked twice.
+    { id: 'inner-only', wrong: numberAnswer(inner) },
   ];
 
   return {
@@ -456,6 +458,11 @@ export const functionComposition: SkillDefinition = {
       name: 'Dropped the minus of a negative inner value',
       explanation:
         'When $g(u)$ is negative, substitute it in brackets: for $f(x) = -3x^2 - 4x + 1$ and $g(0) = -3$, $f(-3) = -3(-3)^2 - 4(-3) + 1 = -27 + 12 + 1 = -14$. The square hides the sign, but the $-4x$ term does not: $-4 \\cdot (-3) = +12$.',
+    },
+    'inner-only': {
+      name: 'Stopped after the inner function',
+      explanation:
+        'That is $g$ of the input, which is only the first half. $f(g(4))$ has two layers: find $g(4)$, then put that number into $f$. For $f(x) = -4x + 3$ and $g(4) = 66$: $f(66) = -4 \\cdot 66 + 3 = -261$.',
     },
     'square-not-expanded': {
       name: 'Squared term by term',

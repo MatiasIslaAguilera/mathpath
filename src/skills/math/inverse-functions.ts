@@ -80,6 +80,8 @@ function linearPoint(rng: Rng): Generated {
     wrongNumber('evaluate-instead', () => q(m * k + b)),
     wrongNumber('undo-order', () => q(k, m).sub(b)),
     wrongNumber('skipped-divide', () => q(k - b)),
+    // Review 11: -2x - 1 = 5 answered as -2 (5 - 1 = 4, then / -2): b crossed without changing sign.
+    wrongNumber('constant-sign', () => q(k + b, m)),
   ];
 
   // Interpretation: drawn last so the problem itself is unchanged.
@@ -175,6 +177,8 @@ function linearInverse(rng: Rng): Generated {
     { id: 'undo-order', wrong: tupleAnswer(['Slope p', 'Intercept q'], [p, -b], ['p', 'q']) },
     { id: 'negative-reciprocal-slope', wrong: tupleAnswer(['Slope p', 'Intercept q'], [p.neg(), q(b, m)], ['p', 'q']) },
     { id: 'intercept-sign', wrong: tupleAnswer(['Slope p', 'Intercept q'], [p, q(b, m)], ['p', 'q']) },
+    // Review 11: -4x - 7 answered as p = -1/4, q = -1/7: each number inverted on its own.
+    { id: 'reciprocal-each', wrong: tupleAnswer(['Slope p', 'Intercept q'], [p, q(1, b)], ['p', 'q']) },
   ];
 
   return {
@@ -543,6 +547,16 @@ export const inverseFunctions: SkillDefinition = {
       name: 'Divided b by m but dropped the minus from subtracting b',
       explanation:
         'Subtracting $b$ leaves $x - b$, so the intercept is $\\frac{-b}{m}$, not $\\frac{b}{m}$. For $f(x) = -2x + 7$: $-2y = x - 7$, so $y = \\frac{x - 7}{-2} = -\\frac{1}{2}x + \\frac{7}{2}$. Check: $f(\\tfrac{7}{2}) = -7 + 7 = 0$, so $f^{-1}(0) = \\tfrac{7}{2}$.',
+    },
+    'constant-sign': {
+      name: 'Moved the constant across without changing its sign',
+      explanation:
+        'To undo "$+\\,b$" you subtract $b$ from both sides, so a negative $b$ gets *added*. For $-2x - 1 = 5$: add 1 to both sides to get $-2x = 6$, so $x = -3$ (not $-2x = 4$). Check: $f(-3) = 6 - 1 = 5$.',
+    },
+    'reciprocal-each': {
+      name: 'Took the reciprocal of each number separately',
+      explanation:
+        'The slope of the inverse is $\\frac{1}{m}$, but the intercept is not $\\frac{1}{b}$. Dividing $x - b$ by $m$ divides *both* terms by $m$: the intercept is $\\frac{-b}{m}$. For $f(x) = -4x - 7$: $-4y = x + 7$, so $y = -\\frac{1}{4}x - \\frac{7}{4}$, not $-\\frac{1}{4}x - \\frac{1}{7}$.',
     },
     'negative-reciprocal-slope': {
       name: 'Used the perpendicular slope',

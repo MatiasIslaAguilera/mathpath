@@ -164,6 +164,8 @@ function level1(rng: Rng): Body {
     wrongNumber('neg-b-squared', () => -(b * b) - 4 * a * c),
     // Review 10: 4x^2 - x - 5 answered as 80 = -4ac, as if "-x" had no coefficient.
     Math.abs(b) === 1 ? wrongNumber('hidden-one', () => -4 * a * c) : null,
+    // Review 11: 5x^2 + 3x + 8 answered as 151 = 160 - 9, the subtraction turned around.
+    D < 0 ? wrongNumber('reversed-subtraction', () => -D) : null,
   ]);
   const count = D > 0 ? 0 : D === 0 ? 1 : 2;
   const labels = ['Two real solutions', 'Exactly one real solution', 'No real solutions', 'Infinitely many solutions'];
@@ -455,6 +457,11 @@ export const quadraticFormula: SkillDefinition = {
       name: 'Read -x as having no coefficient',
       explanation:
         'A bare $x$ term has coefficient $1$, and $-x$ has $b = -1$, so $b^2 = 1$. For $4x^2 - x - 5 = 0$: $D = (-1)^2 - 4(4)(-5) = 1 + 80 = 81$, not $80$.',
+    },
+    'reversed-subtraction': {
+      name: 'Subtracted the smaller from the larger (lost the minus)',
+      explanation:
+        '$D = b^2 - 4ac$ in that order, even when $4ac$ is the bigger number. For $5x^2 + 3x + 8 = 0$: $D = 9 - 160 = -151$, not $151$. The minus sign is the whole message: a negative $D$ means no real roots.',
     },
     'two-not-2a': {
       name: 'Divided by 2 instead of 2a',

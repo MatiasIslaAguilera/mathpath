@@ -365,7 +365,8 @@ function signQuestion(rng: Rng, b: Built, level: Level): InterpretationQuestion 
   const mid = b.r1.add(b.r2).div(2);
   const val = mid.mul(mid).mul(A).add(mid.mul(B)).add(C);
   const positive = val.sign() > 0; // equals: A < 0
-  const profit = A < 0 && rng.chance(0.5);
+  // Review 11: profit wording needs break-even quantities that can be quantities (no q < 0).
+  const profit = A < 0 && rng.chance(0.5) && b.r1.sign() >= 0;
   const labelsPlain = ['Positive', 'Negative', 'Zero', 'It depends on the value of $x$'];
   const labelsProfit = ['Positive (a profit)', 'Negative (a loss)', 'Zero (break-even)', 'It depends on the quantity'];
   const labels = profit ? labelsProfit : labelsPlain;
@@ -379,8 +380,10 @@ function signQuestion(rng: Rng, b: Built, level: Level): InterpretationQuestion 
   const v = profit ? 'q' : 'x';
   return {
     prompt: profit
-      ? `A firm's profit is $\\pi(q) = ${f}$. For quantities strictly between the two break-even quantities, profit is... (Try $q = ${mid.toLatex()}$, halfway between them.)`
-      : `Between the two roots, the expression $${f}$ is... (Try $x = ${mid.toLatex()}$, halfway between them.)`,
+      ? // Review 11: 0/3 with the bracketed hint ("it depends" twice, answered in 2-4 s). The prompt
+        // now names the roots and leads with why one test value settles the whole interval.
+        `A firm's profit is $\\pi(q) = ${f}$, with break-even quantities $q = ${b.r1.toLatex()}$ and $q = ${b.r2.toLatex()}$. Profit can only change sign at a break-even quantity, so one test value settles everything in between. Work out $\\pi(${mid.toLatex()})$: between the break-even quantities, profit is...`
+      : `The expression $${f}$ has roots $${b.r1.toLatex()}$ and $${b.r2.toLatex()}$. It can only change sign at a root, so one test value settles everything in between. Work out its value at $x = ${mid.toLatex()}$: between the roots, the expression is...`,
     options,
     correct,
     explanation: `At $${v} = ${mid.toLatex()}$ the value is $${val.toLatex()}$, which is ${positive ? 'positive' : 'negative'}, and the sign cannot change between two neighbouring roots. The parabola ${shape} (leading coefficient $${A}$), so it is ${positive ? 'below' : 'above'} the axis *outside* the roots and ${positive ? 'above' : 'below'} it *between* them: ${A > 0 ? 'a smile dips below zero in the middle' : 'a frown rises above zero in the middle'}.`,

@@ -53,6 +53,11 @@
       "date": "2026-11-04",
       "through": 1793813712468,
       "summary": "Inverse L2 negative slope: intercept-sign (q = b/m, 2x) + fraction-first step; composition interpretation 0/9 reworded as takes/gives; factoring sign-between-roots 1/5: midpoint hint; checker accepts 4.7 for 4.70; b-not-a, hidden-one, lost-inner-sign, one-worker-time"
+    },
+    {
+      "date": "2026-11-11",
+      "through": 1794447815291,
+      "summary": "Inner-only (composition stopped at g, numeric and interpretation); inverse constant-sign (L1) and reciprocal-each (L2); discriminant reversed-subtraction; factoring sign question 0/3 again: prompt names the roots and why one test value settles it, profit wording only for non-negative roots; about 10 of 18 undiagnosed are arithmetic slips or typos"
     }
   ]
 }
