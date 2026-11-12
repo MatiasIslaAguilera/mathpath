@@ -1,24 +1,36 @@
 import { getSkill } from '../../engine/registry';
+import { milestoneProgress } from '../../learning/milestones';
+import { recentMisses, redoItems } from '../../learning/notebook';
+import { paceReport } from '../../learning/pace';
 import { skillStats, streakCalendar, topMisconceptions, topMissedSteps, weakestSkills } from '../../learning/stats';
 import { MIN_SESSION, streakReport } from '../../learning/streak';
-import { dateKey, type Progress } from '../../storage/progress';
+import { dayKey, type Progress } from '../../storage/progress';
 import { MathText } from '../components/MathText';
 import { shortDate } from '../shortDate';
 
 interface Props {
   progress: Progress;
   onPractice(skillId: string): void;
+  /** Start a session that redoes the notebook's recent misses with new numbers. */
+  onRedo(): void;
   onBack(): void;
 }
+
+/** Misses listed in the notebook (the redo session covers up to 8 distinct ones). */
+const NOTEBOOK_SHOWN = 6;
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-export function Stats({ progress, onPractice, onBack }: Props) {
+export function Stats({ progress, onPractice, onRedo, onBack }: Props) {
+  const pace = paceReport(progress);
+  const milestones = milestoneProgress(progress);
+  const misses = recentMisses(progress);
+  const redo = redoItems(progress);
   const report = streakReport(progress.days);
   const calendar = streakCalendar(progress);
-  const todayKey = dateKey();
+  const todayKey = dayKey();
   const skills = skillStats(progress);
   const weakest = weakestSkills(progress);
   const missedSteps = topMissedSteps(progress);
@@ -33,6 +45,86 @@ export function Stats({ progress, onPractice, onBack }: Props) {
         <h1>Stats</h1>
         <span />
       </header>
+
+      <section className="card" data-testid="road-card">
+        <h2>Road to the MA</h2>
+        <dl className="kv">
+          <div>
+            <dt>Core skills solid</dt>
+            <dd>
+              {pace.solid} of {pace.total}
+            </dd>
+          </div>
+          <div>
+            <dt>Pace</dt>
+            <dd>{pace.perWeek !== undefined ? `${pace.perWeek.toFixed(1)} a week` : 'Too early to say'}</dd>
+          </div>
+          {pace.neededPerWeek !== undefined && Number.isFinite(pace.neededPerWeek) && (
+            <div>
+              <dt>Needed for {shortDate(pace.target!)}</dt>
+              <dd>{pace.neededPerWeek.toFixed(1)} a week</dd>
+            </div>
+          )}
+          {pace.projected && (
+            <div>
+              <dt>At this pace, all solid by</dt>
+              <dd>{pace.projected}</dd>
+            </div>
+          )}
+        </dl>
+        <ul className="plain-list milestones">
+          {milestones.map((m) => (
+            <li key={m.milestone.id} className="row stack" data-testid={`milestone-${m.milestone.id}`}>
+              <strong>
+                {m.reached ? '✓ ' : ''}
+                {m.milestone.title}
+              </strong>
+              <span className="fine">
+                {m.milestone.goal} · {m.solid} of {m.total} solid{m.built < m.total ? ` · ${m.total - m.built} not built yet` : ''}
+              </span>
+              <div className="bar thin" role="progressbar" aria-valuenow={m.solid} aria-valuemax={m.total} aria-label={`${m.milestone.title}: ${m.solid} of ${m.total} skills solid`}>
+                <div className="bar-fill" style={{ width: `${(m.solid / m.total) * 100}%` }} />
+              </div>
+            </li>
+          ))}
+        </ul>
+        <p className="fine">Solid means you'd likely solve a level-2 problem on your own: enough to build the next skill on.{pace.target ? '' : ' Set a target date in Settings to see the pace you need.'}</p>
+      </section>
+
+      <section className="card" data-testid="notebook-card">
+        <h2>Notebook</h2>
+        {misses.length === 0 ? (
+          <p className="fine">Wrong answers from the last two weeks show up here, ready to redo with new numbers.</p>
+        ) : (
+          <>
+            <ul className="plain-list">
+              {misses.slice(0, NOTEBOOK_SHOWN).map((m, i) => {
+                const skill = getSkill(m.skillId);
+                const named = m.misconception ? skill.misconceptions[m.misconception]?.name : undefined;
+                return (
+                  <li key={`${m.ts}-${i}`} className="row stack">
+                    <strong>
+                      {skill.title} · level {m.level}
+                    </strong>
+                    <span className="fine">
+                      {named ?? (m.input ? `You answered ${m.input}` : 'Wrong answer')}
+                      {m.fixed ? ' · fixed on the second try' : ''}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="btn-row">
+              <button className="btn primary" onClick={onRedo} data-testid="redo-misses">
+                Redo {redo.length} {redo.length === 1 ? 'miss' : 'misses'} with new numbers
+              </button>
+            </div>
+            <p className="fine">
+              {plural(misses.length, 'wrong answer')} in the last two weeks. Each kind of mistake is redone once: same skill and level, and the same trap where one was spotted.
+            </p>
+          </>
+        )}
+      </section>
 
       <section className="card">
         <h2>Streak</h2>

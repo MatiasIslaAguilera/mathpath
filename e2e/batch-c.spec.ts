@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { correctInput, currentProblem, fillAnswer, finishFeedback, freshStart } from './helpers';
+import { checkWrong, correctInput, currentProblem, fillAnswer, finishFeedback, freshStart } from './helpers';
 
 /** Seed progress whose `days` are given as offsets from today (e.g. -3 → 3 days ago). */
 async function seed(page: Page, dayOffsets: Record<number, number>, skills: Record<string, unknown> = {}) {
@@ -75,7 +75,7 @@ test('stats page fills in after practice', async ({ page }) => {
   const p = await currentProblem(page);
   const wrong = p.misconceptions[0];
   await fillAnswer(page, p.answer, wrong ? correctInput(wrong.wrong) : '99999');
-  await page.getByRole('button', { name: 'Check', exact: true }).click();
+  await checkWrong(page);
   await page.getByRole('button', { name: 'End session' }).click();
   await page.getByTestId('home').click();
   await page.getByTestId('nav-stats').click();

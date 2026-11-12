@@ -6,10 +6,11 @@ import { lockedBy } from '../../learning/unlock';
 import { fragileReport, skillState, type SkillState } from '../../learning/states';
 import { catMood, catSays, gardenPlots, gardenSummary, ratchet, weekDots, type Stage } from '../../learning/garden';
 import { attemptLog, dailyActivity, overallProgress, weeklyAccuracy } from '../../learning/stats';
-import { comebackStatus, problemsToday, streakReport } from '../../learning/streak';
+import { paceLine, paceReport } from '../../learning/pace';
+import { comebackStatus, daysThisWeek, MIN_SESSION, problemsToday, streakReport } from '../../learning/streak';
 import type { LearningEvent, Profile } from '../../storage/events';
 import { syncConfigured, type SyncStatus } from '../../sync/sync';
-import { dateKey, emptySkill, type Progress, type SkillProgress } from '../../storage/progress';
+import { dayKey, emptySkill, type Progress, type SkillProgress } from '../../storage/progress';
 import { Cat } from '../components/Cat';
 import { AccuracyChart, ActivityChart } from '../components/Charts';
 import { Garden } from '../components/Garden';
@@ -84,7 +85,7 @@ export function Home({ progress, events, syncStatus, updateProfile, onStart, onP
   const today = problemsToday(progress.days);
   const goal = progress.settings.dailyGoal;
   const report = streakReport(progress.days);
-  const todayKey = dateKey();
+  const todayKey = dayKey();
   const overall = overallProgress(progress);
   const agenda = todaysAgenda(progress);
   const agendaParts = [
@@ -113,6 +114,9 @@ export function Home({ progress, events, syncStatus, updateProfile, onStart, onP
   const mood = catMood(progress, onboarding);
   const says = catSays(progress, onboarding);
   const week = weekDots(progress);
+  const weeklyDays = progress.settings.weeklyDays;
+  const weekDone = daysThisWeek(progress.days);
+  const pace = paceLine(paceReport(progress));
   const gardenLabel = `Your garden: ${garden.bloom} in bloom, ${garden.growing} growing, ${garden.thirsty} need water, ${garden.toPlant} ready to plant. Open the skill tree.`;
 
   return (
@@ -213,6 +217,17 @@ export function Home({ progress, events, syncStatus, updateProfile, onStart, onP
                 {agendaParts.length > 0 && <span data-testid="agenda"> · {agendaParts.join(' · ')}</span>}
               </span>
             </div>
+            {/* A low-energy day still counts: three problems keep the streak and the reviews moving. */}
+            {today < MIN_SESSION && (
+              <button className="btn subtle" onClick={() => onStart(MIN_SESSION)} data-testid="short-session">
+                Short on time? Do {MIN_SESSION}
+              </button>
+            )}
+            {pace && (
+              <p className="fine pace-line" data-testid="pace-line">
+                {pace}
+              </p>
+            )}
           </>
         )}
       </section>
@@ -233,7 +248,7 @@ export function Home({ progress, events, syncStatus, updateProfile, onStart, onP
             <strong>{report.totalDays}</strong>
             <span>days practiced</span>
             <span className="stat-note" data-testid="this-week">
-              {report.lastSevenDays}/7 this week
+              {weeklyDays ? `${weekDone} of ${weeklyDays} days this week${weekDone >= weeklyDays ? ' ✓' : ''}` : `${report.lastSevenDays}/7 this week`}
             </span>
           </div>
         </div>

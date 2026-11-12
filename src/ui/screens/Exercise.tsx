@@ -44,7 +44,14 @@ interface Outcome {
   working?: WorkingReport;
   /** Set when the miss came fast enough to be a likely slip (learning/timing.ts): its seconds. */
   fastSeconds?: number;
+  /** The first answer was wrong and the second try fixed it. */
+  fixed?: boolean;
+  /** A second try was used (fixed or not). */
+  retried?: boolean;
 }
+
+/** After this long on one item with no hint taken, offer one (PLAN §8 item 5). */
+const STUCK_AFTER_MS = 120_000;
 
 /** Milliseconds the item has been on screen with the app in the foreground. */
 function useVisibleTime(): () => number {
@@ -90,6 +97,17 @@ export function Exercise({ problem, rating, kind, hideSkill, firstTime, onAttemp
   const [interpIndex, setInterpIndex] = useState(0);
   const [interpChoice, setInterpChoice] = useState<string | null>(null);
   const elapsed = useVisibleTime();
+  /** The wrong first answer, while the learner takes their second try. */
+  const [firstTry, setFirstTry] = useState<{ input: string; misconception?: string; durationMs: number } | null>(null);
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setSlow(true), STUCK_AFTER_MS);
+    return () => clearTimeout(t);
+  }, []);
+  // One more try before the solution shows, for typed answers only (a second pick on a choice is a
+  // coin flip) and never on a cold check, which has to be the first answer.
+  const cold = kind === 'retention' || kind === 'testout';
+  const typed = problem.answer.kind === 'number' || problem.answer.kind === 'expression' || problem.answer.kind === 'tuple';
 
   // Test hook for Playwright (only with ?e2e in the URL).
   useEffect(() => {
@@ -143,22 +161,31 @@ export function Exercise({ problem, rating, kind, hideSkill, firstTime, onAttemp
     }
     setError(null);
     const help: Help = hints === 0 ? 'none' : hints >= problem.steps.length ? 'reveal' : 'hint';
-    const misconception = r.correct ? undefined : matchMisconception(problem, value);
+    const matched = r.correct ? undefined : matchMisconception(problem, value);
+    if (!r.correct && !firstTry && typed && !cold && hints === 0) {
+      setFirstTry({ input: inputText(value), misconception: matched, durationMs: elapsed() });
+      return;
+    }
+    // With a second try, the first answer is what gets recorded and diagnosed.
+    const misconception = firstTry ? firstTry.misconception : matched;
     const working = workingReport();
     const durationMs = elapsed();
     const { xp, events } = onAttempt({
       problem,
-      correct: r.correct,
+      correct: firstTry ? false : r.correct,
       help,
       hintsUsed: hints,
-      input: inputText(value),
+      input: firstTry ? firstTry.input : inputText(value),
       misconception,
       missedSteps: hintKeys(),
       working: working && { lines: workingMath.map((m) => m ?? '?'), firstWrong: working.firstWrong },
       durationMs,
+      retry: firstTry ? { input: inputText(value), correct: r.correct } : undefined,
     });
-    const fastSeconds = isFastMiss({ correct: r.correct, help, misconception, durationMs }) ? Math.max(1, Math.round(durationMs / 1000)) : undefined;
-    setOutcome({ correct: r.correct, help, misconception, parts: 'parts' in r ? r.parts : undefined, xp, events, working, fastSeconds });
+    // How fast the first answer came is what tells a slip from a gap.
+    const firstMs = firstTry?.durationMs ?? durationMs;
+    const fastSeconds = isFastMiss({ correct: r.correct, help, misconception, durationMs: firstMs }) ? Math.max(1, Math.round(firstMs / 1000)) : undefined;
+    setOutcome({ correct: r.correct, help, misconception, parts: 'parts' in r ? r.parts : undefined, xp, events, working, fastSeconds, fixed: !!firstTry && r.correct, retried: !!firstTry });
     setPhase('feedback');
   };
 
@@ -202,6 +229,16 @@ export function Exercise({ problem, rating, kind, hideSkill, firstTime, onAttemp
           Today's GRE question. No timer: take the time you need.
         </p>
       )}
+      {kind === 'redo' && phase !== 'feedback' && (
+        <p className="followup-note" data-testid="redo-note">
+          From your notebook: the kind of problem you missed, with new numbers.
+        </p>
+      )}
+      {kind === 'testout' && phase !== 'feedback' && (
+        <p className="followup-note" data-testid="testout-note">
+          Test out: solve both problems on your own, first answer, and {skill.title} starts at level 3.
+        </p>
+      )}
       {kind === 'retention' && phase !== 'feedback' && (
         <p className="followup-note" data-testid="retention-note">
           Memory check: you haven't seen this skill for a few days. Solve it on your own, no hints, to confirm you've mastered it.
@@ -238,6 +275,22 @@ export function Exercise({ problem, rating, kind, hideSkill, firstTime, onAttemp
           {/* With a working pad, don't focus the answer box: on a phone that would open the system keyboard. */}
           <AnswerInput spec={problem.answer} value={input} onChange={setInput} onEnter={check} autoFocus={!padSpec} />
           {error && <p className="input-error" role="alert">{error}</p>}
+          {firstTry && (
+            <div className="callout warn" role="status" data-testid="retry-note">
+              <strong>Not yet. One more try before the answer shows.</strong>{' '}
+              {problem.verify.type === 'solve'
+                ? 'Put your answer back into the original equation: the two sides should give the same number. Then find the line where they stop matching.'
+                : 'Re-read what is asked, then check each sign and each step of arithmetic.'}
+            </div>
+          )}
+          {slow && !firstTry && hints === 0 && problem.steps.length > 0 && (
+            <div className="callout info" data-testid="slow-note">
+              A couple of minutes on this one. Taking the first step as a hint is fine: you still do the rest.{' '}
+              <button className="link" onClick={() => setHints(1)}>
+                Show the first step
+              </button>
+            </div>
+          )}
           <div className="btn-row three">
             <button className="btn primary" onClick={check}>
               Check
@@ -262,7 +315,9 @@ export function Exercise({ problem, rating, kind, hideSkill, firstTime, onAttemp
           <div className={`banner ${outcome.correct && outcome.help !== 'guided' ? 'good' : outcome.help === 'guided' ? 'info' : 'bad'}`} data-testid="result-banner">
             {outcome.help === 'guided'
               ? 'Worked through it with guidance. Next up: one like it on your own.'
-              : outcome.correct
+              : outcome.fixed
+                ? `Fixed on the second try.${outcome.xp ? ` +${outcome.xp} XP (half)` : ''} Catching your own slip is the skill.`
+                : outcome.correct
                 ? outcome.help === 'none'
                   ? `Correct! +${outcome.xp} XP`
                   : outcome.help === 'hint'
@@ -289,6 +344,7 @@ export function Exercise({ problem, rating, kind, hideSkill, firstTime, onAttemp
 
           {outcome.misconception && (
             <div className="callout warn" data-testid="misconception">
+              {outcome.retried && 'Your first answer: '}
               <strong>{skill.misconceptions[outcome.misconception].name}.</strong>{' '}
               <MathText text={skill.misconceptions[outcome.misconception].explanation} />
             </div>

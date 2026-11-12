@@ -13,7 +13,7 @@ import { hasSkill, makeProblem, SKILLS } from '../engine/registry';
 import type { Level, Problem } from '../engine/types';
 import { builtAncestors } from '../skills/tree';
 import { newEventId, type PlacementEvent } from '../storage/events';
-import { dateKey, emptySkill, type PlacementRecord, type PlacementResult, type Progress } from '../storage/progress';
+import { dayKey, emptySkill, type PlacementRecord, type PlacementResult, type Progress } from '../storage/progress';
 import { reviewCard } from './scheduler';
 
 export const PLACEMENT_LEVEL: Level = 3;
@@ -107,7 +107,7 @@ export function placementEvent(st: PlacementState, now = new Date()): PlacementE
 /** Apply a placement (mutates `p`). Only raises ratings; never lowers or un-masters anything. */
 export function applyPlacementEvent(p: Progress, e: PlacementEvent): void {
   const now = new Date(e.ts);
-  const today = dateKey(now);
+  const today = dayKey(now);
   for (const [id, result] of Object.entries(e.results)) {
     if (result !== 'passed' && result !== 'credited' && result !== 'partial') continue;
     const sp = p.skills[id] ?? emptySkill();
@@ -116,8 +116,14 @@ export function applyPlacementEvent(p: Progress, e: PlacementEvent): void {
     if (result !== 'partial' && !sp.fsrs) sp.fsrs = reviewCard(undefined, now, Rating.Good);
     p.skills[id] = sp;
   }
+  if (e.testOut) return;
   p.onboarding = 'placed';
   p.placement = { date: today, results: e.results, items: e.items };
+}
+
+/** Both test-out probes solved alone: the skill is placed as if it had passed the placement test. */
+export function testOutEvent(skillId: string, now = new Date()): PlacementEvent {
+  return { id: newEventId(), ts: now.getTime(), type: 'placement', results: { [skillId]: 'passed' }, items: [], testOut: true };
 }
 
 /** Write the results into a copy of Progress (tests and previews; the app records the event). */

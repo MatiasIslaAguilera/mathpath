@@ -496,6 +496,36 @@ built at the time (34 now, after batches I and J), 4 started, 3.1 weeks of runwa
 | 7 | **Working pad: identity working** | 6 skills had the pad before Oct 23, 15 now. Still off: exponent rules, log rules, all derivative skills, inverse L2–3, because their working is identities in free letters ($(xy)^3/(x^7y^5) = x^{-4}y^{-2}$, $f'(x) = 6x + 2$), which substitution can't judge. Also off, with reasons in the skill files: concavity L5 (its method lists the rejected critical point), inverse L4 and GRE word problems L2 (only some variants are equations). | In `engine/working.ts`: a line whose free letters aren't unknowns is checked as an identity by sampling, like `checker.ts` does for expression answers (both sides equal at random points). Derivative lines: `f'(x) = …` compared with the problem's derivative via the step's `diff` (or, for the batch I skills, `partial`) verify. Then opt in exponent rules, log rules, derivatives. Run the worked-solution guard on each. | `tests/working.test.ts` worked-solution guard green for the new skills; share of practice items offering the pad (from the event log) rises; no rise in `wrong` lines on correct final answers. | open |
 | 8 | **Home: the rest of the design review** | The adversarial review (Oct 23) left these: Home has ~80 buttons, mostly the 38-row skill list that repeats the skill tree (PLAN: "Home shows one button"); the cat stands beside the garden, not in it (no watering pose); no radius scale (3–999 px, 9 values); XP is still a volume reward on Home. | Move the skill list to the skill tree screen (a dozen e2e specs click `skill-*` rows on Home: move them to the tree first); put the cat on a tile with a pose per mood; 3 radius tokens; XP to the Stats page. | Playwright: buttons on Home ≤ 6; `npm run test:e2e` green; review PNGs approved. | open |
 
+### Pace and error handling (Nov 11, from the Nov 12 export: 916 attempts, 24 days)
+
+Evidence: 9 of 54 core skills started in 25 days (2.6 a week); zero econ attempts, because the
+current skill was picked in tree order and econ sits after all the math; 48% of settled attempts
+at level 1 and 4 at level 4; hints on 3% of attempts, 73 of 154 wrong answers undiagnosed, most of
+them slips; volume down from ~61 to ~19 problems a day.
+
+Built (`tests/pace.test.ts`, `e2e/pace.spec.ts`):
+- **Session:** a second skill from another track beside the current one; new skills opened by
+  syllabus weight (`learning/milestones.ts`); stuck skills demoted to one trap-targeted item a
+  session; no level-1 warm-ups for practiced skills; a weekly level-4 try for practiced skills;
+  test-out from the skill tree; timed sessions; a three-problem short session on Home.
+- **Errors:** one more try after a wrong typed answer (first answer recorded, fix graded like a
+  hint); a hint offer after two minutes on an item; the notebook and "redo my misses" on Stats.
+- **Habit:** optional weekly goal; target date with pace on Home and Stats; program milestones;
+  the learning day turns over at 4:00 for new events (retroactively it un-mastered linear
+  equations and cost a streak day on the real log, so history keeps its midnight days).
+
+Checks, on the next export: econ attempts > 0 within a week; core skills started per week above
+2.6; share of settled attempts at level 1 below 48% and level-4 attempts above 4; share of wrong
+first answers with `fixedOnRetry` (slips caught); follow-ups per session down.
+
+Not built, with the reason:
+- **Self-label after an undiagnosed miss** (typo / slip / gap): needs a new event type, and the
+  Supabase `events.type` check constraint only allows the four existing ones, so it needs a
+  migration run by hand first.
+- **Arithmetic-fluency skill:** a full new skill (tree entry, generator, harness, SymPy); do it as
+  its own batch with a spec.
+- **Working pad for identities and derivatives:** still item 7 below.
+
 ### Done in review 6 (Oct 23 evening, for context)
 
 The read-backwards fix works once deployed: inequality stories 10/12 solo after it, 1/4 on the

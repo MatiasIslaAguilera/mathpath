@@ -21,7 +21,7 @@ import type { AnswerInput, Problem } from '../src/engine/types';
 import { skillState, workingLevel } from '../src/learning/states';
 import { FAST_MISS_MS } from '../src/learning/timing';
 import { sortEvents, type AttemptEvent, type InterpretationEvent, type LearningEvent } from '../src/storage/events';
-import { dateKey, emptyProgress, emptySkill } from '../src/storage/progress';
+import { dateKey, dayKey, emptyProgress, emptySkill } from '../src/storage/progress';
 import { applyEvent } from '../src/storage/replay';
 
 const LEDGER = new URL('../docs/review-ledger.json', import.meta.url);
@@ -123,7 +123,7 @@ const seenToday = new Set<string>();
 let prevTs = 0;
 for (const e of events) {
   if (e.type === 'attempt') {
-    const key = `${dateKey(new Date(e.ts))}|${e.skillId}`;
+    const key = `${dayKey(new Date(e.ts))}|${e.skillId}`;
     const gap = e.ts - prevTs;
     served.push({
       e,
@@ -145,7 +145,7 @@ for (const s of served) {
 
 const fresh = served.filter((s) => isNew(s.e.ts));
 const old = served.filter((s) => !isNew(s.e.ts));
-const freshDays = [...new Set(fresh.map((s) => dateKey(new Date(s.e.ts))))];
+const freshDays = [...new Set(fresh.map((s) => dayKey(new Date(s.e.ts))))];
 const solo = (xs: Served[]) => xs.filter((s) => s.e.help === 'none');
 const ok = (xs: Served[]) => xs.filter((s) => s.e.correct).length;
 

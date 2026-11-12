@@ -18,7 +18,7 @@ import { retrievability } from '../src/learning/scheduler';
 import { FAST_MISS_MS } from '../src/learning/timing';
 import { TREE } from '../src/skills/tree';
 import { sortEvents, type LearningEvent } from '../src/storage/events';
-import { dateKey, emptyProgress, emptySkill } from '../src/storage/progress';
+import { dayKey, emptyProgress, emptySkill } from '../src/storage/progress';
 import { applyEvent } from '../src/storage/replay';
 
 const path = process.argv[2];
@@ -49,7 +49,7 @@ let prevTs = 0;
 for (const e of events) {
   if (e.type === 'attempt') {
     const sp = p.skills[e.skillId] ?? emptySkill();
-    const key = `${dateKey(new Date(e.ts))}|${e.skillId}`;
+    const key = `${dayKey(new Date(e.ts))}|${e.skillId}`;
     const firstOfDay = !seenToday.has(key);
     seenToday.add(key);
     firstSeen[e.skillId] ??= e.ts;
@@ -119,7 +119,7 @@ for (const s of [...new Set(timed.map((r) => r.skill))]) {
   const wrong = b.filter((r) => !r.y).map((r) => r.secs!);
   console.log(`  ${s.padEnd(26)} right ${median(right).padStart(5)}   wrong ${median(wrong).padStart(5)}   fast misses (<${FAST_MISS_MS / 1000}s) ${wrong.filter((x) => x < FAST_MISS_MS / 1000).length}/${wrong.length}`);
 }
-const days = new Set(rows.map((r) => dateKey(new Date(r.ts)))).size;
+const days = new Set(rows.map((r) => dayKey(new Date(r.ts)))).size;
 console.log(`  ${Math.round(mean([timed.reduce((a, r) => a + r.secs!, 0) / 60 / days]))} timed minutes per active day over ${days} days`);
 
 // 4. Learning curve

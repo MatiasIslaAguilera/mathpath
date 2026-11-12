@@ -5,9 +5,16 @@
 // With SCREENS=<dir> it also writes review PNGs of both screens.
 
 import { expect, test, type Page } from '@playwright/test';
-import { correctInput, currentProblem, fillAnswer, finishFeedback } from './helpers';
+import { checkWrong, correctInput, currentProblem, fillAnswer, finishFeedback } from './helpers';
 
 const OUT = process.env.SCREENS;
+
+/**
+ * A plain (c x^a)^b item where the trap gives a different answer: with a = b, raising the
+ * coefficient to the inner exponent is the right answer, and the test would "miss" correctly.
+ */
+const isTrapItem = (p: { level: number; variant?: string; params: Record<string, unknown> }) =>
+  p.level === 2 && p.params.form === 1 && p.variant === undefined && p.params.a !== p.params.b;
 
 async function seedExponentRulesAtLevel2(page: Page) {
   await page.goto('/?e2e');
@@ -41,7 +48,7 @@ test('a coefficient-raised-to-inner miss brings the contrasting case, then an or
 
   // Answer correctly until a (c x^a)^b item comes up.
   let p = await currentProblem(page);
-  for (let i = 0; i < 25 && !(p.level === 2 && p.params.form === 1 && p.variant === undefined); i++) {
+  for (let i = 0; i < 25 && !isTrapItem(p); i++) {
     await fillAnswer(page, p.answer, correctInput(p.answer));
     await page.getByRole('button', { name: 'Check', exact: true }).first().click();
     await finishFeedback(page, p);
@@ -52,7 +59,7 @@ test('a coefficient-raised-to-inner miss brings the contrasting case, then an or
   // The trap: the coefficient raised to the inner exponent.
   const { a, b, c } = p.params;
   await fillAnswer(page, p.answer, [String(c ** a), String(a * b)]);
-  await page.getByRole('button', { name: 'Check', exact: true }).first().click();
+  await checkWrong(page);
   await expect(page.getByTestId('misconception')).toContainText('Raised the coefficient');
   await page.getByTestId('next').click();
 
@@ -63,7 +70,7 @@ test('a coefficient-raised-to-inner miss brings the contrasting case, then an or
 
   // A fast wrong answer that no misconception predicts: the slip note.
   await fillAnswer(page, contrast.answer, ['1', '1', '1']);
-  await page.getByRole('button', { name: 'Check', exact: true }).first().click();
+  await checkWrong(page);
   await expect(page.getByTestId('result-banner')).toContainText('Not quite');
   await expect(page.getByTestId('fast-miss')).toContainText('usually slips');
   await expect(page.getByTestId('misconception')).toHaveCount(0);
@@ -80,7 +87,7 @@ test('a coefficient-raised-to-inner miss brings the contrasting case, then an or
 test('a diagnosed misconception never gets the slip note, however fast', async ({ page }) => {
   await seedExponentRulesAtLevel2(page);
   let p = await currentProblem(page);
-  for (let i = 0; i < 25 && !(p.level === 2 && p.params.form === 1 && p.variant === undefined); i++) {
+  for (let i = 0; i < 25 && !isTrapItem(p); i++) {
     await fillAnswer(page, p.answer, correctInput(p.answer));
     await page.getByRole('button', { name: 'Check', exact: true }).first().click();
     await finishFeedback(page, p);
@@ -88,7 +95,7 @@ test('a diagnosed misconception never gets the slip note, however fast', async (
   }
   const { a, b, c } = p.params;
   await fillAnswer(page, p.answer, [String(c ** a), String(a * b)]);
-  await page.getByRole('button', { name: 'Check', exact: true }).first().click();
+  await checkWrong(page);
   await expect(page.getByTestId('misconception')).toBeVisible();
   await expect(page.getByTestId('fast-miss')).toHaveCount(0);
 });

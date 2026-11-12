@@ -18,7 +18,7 @@ import { createEmptyCard, default_w, Rating, type Card } from 'ts-fsrs';
 import { DEFAULT_MODEL, pCorrect, TARGET_P, updateRating, type RatingModel } from '../src/learning/mastery';
 import { gradeFor, makeScheduler } from '../src/learning/scheduler';
 import { sortEvents, type AttemptEvent, type LearningEvent } from '../src/storage/events';
-import { dateKey } from '../src/storage/progress';
+import { dayKey } from '../src/storage/progress';
 
 /** Relative held-out improvement a fit needs before it may be written (below this it's noise). */
 const MIN_GAIN = 0.01;
@@ -180,7 +180,7 @@ const reviews: Review[] = [];
   const st: Record<string, { r: number; n: number }> = {};
   for (const e of attempts) {
     const s = (st[e.skillId] ??= { r: itemModel.initial, n: 0 });
-    const key = `${dateKey(new Date(e.ts))}|${e.skillId}`;
+    const key = `${dayKey(new Date(e.ts))}|${e.skillId}`;
     if (!seen.has(key)) {
       seen.add(key);
       const grade = gradeFor(e.correct, e.help);

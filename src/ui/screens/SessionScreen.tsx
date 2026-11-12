@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { recordAttempt, recordInterpretation, type AttemptResult } from '../../learning/record';
-import { afterProblem, nextProblem, type NextUp, type Session } from '../../learning/session';
+import { applyPlacementEvent, testOutEvent } from '../../learning/placement';
+import { afterProblem, nextProblem, TEST_OUT_ITEMS, wrapUp, type NextUp, type Session } from '../../learning/session';
 import type { LearningEvent } from '../../storage/events';
 import { emptySkill, type Progress } from '../../storage/progress';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -36,6 +37,8 @@ export function SessionScreen({ initial, progress, record, onFinish, onQuit, bac
   const [learnOpen, setLearnOpen] = useState(false);
   const [confirmQuit, setConfirmQuit] = useState(false);
   const seenBack = useRef(backPress);
+  const startedAt = useRef(performance.now());
+  const elapsed = () => performance.now() - startedAt.current;
   useEffect(() => {
     if (backPress === seenBack.current) return;
     seenBack.current = backPress;
@@ -49,14 +52,24 @@ export function SessionScreen({ initial, progress, record, onFinish, onQuit, bac
   const onAttempt = (r: AttemptResult) => {
     const { progress: next, xp, events, logged } = recordAttempt(progress, { ...r, retentionCheck: current.kind === 'retention' });
     record([logged], next);
-    const needsFollowUp = !r.correct || r.help !== 'none';
+    // A slip the learner caught and fixed alone needs no repeat; a diagnosed mistake still does.
+    const fixedSlip = !!r.retry?.correct && !r.misconception && r.help === 'none';
+    const needsFollowUp = !fixedSlip && (!r.correct || r.help !== 'none');
     setState((st) => ({ ...st, session: afterProblem(st.session, problem, r.correct && r.help === 'none', needsFollowUp, xp, events, r.misconception) }));
     return { xp, events };
   };
 
   const onNext = () => {
-    const n = nextProblem(session, progress);
+    // A timed session that has run out of time skips ahead to its finisher.
+    const n = nextProblem(wrapUp(session, elapsed()), progress);
     if (!n) {
+      // Tested out: both probes solved alone places the skill, like passing it on the placement test.
+      if (session.testOut && session.correct >= TEST_OUT_ITEMS) {
+        const placed = testOutEvent(session.testOut);
+        const next = structuredClone(progress);
+        applyPlacementEvent(next, placed);
+        record([placed], next);
+      }
       onFinish(session);
       return;
     }
@@ -65,6 +78,8 @@ export function SessionScreen({ initial, progress, record, onFinish, onQuit, bac
   };
 
   const total = session.slots.length + session.followUpsUsed;
+  // A timed session fills by the clock (it ends on time, not when the plan runs out).
+  const done = session.timeLimitMs ? Math.min(1, elapsed() / session.timeLimitMs) : session.answered / total;
 
   return (
     <div className="screen session">
@@ -72,8 +87,8 @@ export function SessionScreen({ initial, progress, record, onFinish, onQuit, bac
         <button className="icon-btn" onClick={() => onQuit(session)} aria-label="End session">
           ✕
         </button>
-        <div className="bar" role="progressbar" aria-valuenow={session.answered} aria-valuemax={total} aria-label="Session progress">
-          <div className="bar-fill" style={{ width: `${Math.min(100, (session.answered / total) * 100)}%` }} />
+        <div className="bar" role="progressbar" aria-valuenow={Math.round(done * 100)} aria-valuemax={100} aria-label="Session progress">
+          <div className="bar-fill" style={{ width: `${Math.min(100, done * 100)}%` }} />
         </div>
         <span className="xp-pill">{session.xp} XP</span>
       </header>

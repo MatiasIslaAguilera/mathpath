@@ -23,7 +23,11 @@ test('Enter on a wrong answer shows the explanation, not the next problem', asyn
   const box = page.getByLabel('Your answer');
   await box.fill('123456');
   await box.press('Enter');
+  // The first wrong answer gets one more try: no solution yet, same problem.
+  await expect(page.getByTestId('retry-note')).toBeVisible();
+  await expect(page.getByTestId('result-banner')).toHaveCount(0);
+  await box.press('Enter');
   await page.waitForTimeout(300);
-  await expect(page.getByTestId('result-banner')).toBeVisible();
+  await expect(page.getByTestId('result-banner')).toContainText('Not quite');
   await expect(page.getByTestId('exercise')).toHaveAttribute('data-problem-id', p.id);
 });

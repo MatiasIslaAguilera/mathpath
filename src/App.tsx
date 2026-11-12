@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { redoItems } from './learning/notebook';
 import { startSession, type Session } from './learning/session';
 import { problemsToday } from './learning/streak';
 import { msUntilReminder, showReminder } from './reminders/notify';
@@ -56,8 +57,15 @@ export default function App() {
     // A practice run on one skill is a short focused set; the daily session uses the goal.
     // goalOverride is for the welcome-back "Do 3 problems" restart.
     const goal = goalOverride ?? (only ? 5 : progress.settings.dailyGoal);
-    setScreen({ name: 'session', session: startSession(progress, goal, { only }) });
+    // The daily session can run by the clock instead (Settings); a short or one-skill run never does.
+    const minutes = !only && goalOverride === undefined ? progress.settings.sessionMinutes : undefined;
+    setScreen({ name: 'session', session: startSession(progress, goal, { only, minutes }) });
   };
+  const startRedo = () => {
+    const redo = redoItems(progress);
+    if (redo.length) setScreen({ name: 'session', session: startSession(progress, redo.length, { redo }) });
+  };
+  const startTestOut = (id: string) => setScreen({ name: 'session', session: startSession(progress, 2, { testOut: id }) });
   const home = () => setScreen({ name: 'home' });
 
   // Android back gesture / browser back. Every screen above Home is guarded by ONE history entry:
@@ -167,8 +175,8 @@ export default function App() {
           onLeave={() => leaveScreen({ name: 'home' })}
         />
       )}
-      {screen.name === 'tree' && <SkillTree progress={progress} onPractice={(id) => start(id)} onLearn={setLearnSkill} onBack={home} />}
-      {screen.name === 'stats' && <Stats progress={progress} onPractice={(id) => start(id)} onBack={home} />}
+      {screen.name === 'tree' && <SkillTree progress={progress} onPractice={(id) => start(id)} onTestOut={startTestOut} onLearn={setLearnSkill} onBack={home} />}
+      {screen.name === 'stats' && <Stats progress={progress} onPractice={(id) => start(id)} onRedo={startRedo} onBack={home} />}
       {screen.name === 'challenge' && <Challenge onBack={home} />}
       {learnSkill && <LearnCard skillId={learnSkill} onClose={() => setLearnSkill(null)} />}
     </div>

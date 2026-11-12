@@ -8,6 +8,10 @@ import type { Progress } from '../../storage/progress';
 import { shortDate } from '../shortDate';
 
 const GOALS = [3, 5, 10, 15];
+/** Session length by the clock; 0 = by the daily goal's problem count. */
+const MINUTES = [0, 10, 15, 20, 30];
+/** Practice days per week; 0 = no weekly goal. */
+const WEEK_DAYS = [0, 3, 4, 5, 6, 7];
 
 function ago(ms: number): string {
   const min = Math.floor((Date.now() - ms) / 60000);
@@ -240,6 +244,45 @@ export function Settings({ progress, updateProfile, importText, exportJson, sync
             </button>
           ))}
         </div>
+      </section>
+
+      <section className="card" data-testid="pace-card">
+        <h2>Session length</h2>
+        <p className="fine">By problems uses the daily goal. By minutes keeps going until the time is up, then ends on an easy one.</p>
+        <div className="seg" role="radiogroup" aria-label="Session length">
+          {MINUTES.map((m) => {
+            const on = (progress.settings.sessionMinutes ?? 0) === m;
+            return (
+              <button key={m} role="radio" aria-checked={on} className={`seg-btn ${on ? 'selected' : ''}`} onClick={() => saveSettings({ sessionMinutes: m || undefined })} data-testid={`minutes-${m}`}>
+                {m ? `${m} min` : 'Problems'}
+              </button>
+            );
+          })}
+        </div>
+        <h2>Weekly goal</h2>
+        <p className="fine">Days of practice per week (Monday to Sunday). Kinder to a busy job than a daily streak alone.</p>
+        <div className="seg" role="radiogroup" aria-label="Weekly goal">
+          {WEEK_DAYS.map((d) => {
+            const on = (progress.settings.weeklyDays ?? 0) === d;
+            return (
+              <button key={d} role="radio" aria-checked={on} className={`seg-btn ${on ? 'selected' : ''}`} onClick={() => saveSettings({ weeklyDays: d || undefined })} data-testid={`weekly-${d}`}>
+                {d || 'Off'}
+              </button>
+            );
+          })}
+        </div>
+        <h2>Target date</h2>
+        <label className="field-row">
+          <span>Core skills solid by</span>
+          <input
+            type="date"
+            className="time-input"
+            value={progress.settings.targetDate ?? ''}
+            onChange={(e) => saveSettings({ targetDate: e.target.value || undefined })}
+            data-testid="target-date"
+          />
+        </label>
+        <p className="fine">For example the day your program starts. Home and Stats then show the pace that gets you there.</p>
       </section>
 
       <section className="card" data-testid="reminder-card">

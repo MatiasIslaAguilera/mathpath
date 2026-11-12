@@ -134,6 +134,36 @@ export function isAboveTargetBand(sp: SkillProgress): boolean {
   return count >= ABOVE_BAND_MIN && accuracy > BAND_TOP;
 }
 
+/** A skill with this many attempts that still isn't a foundation is a candidate for "stuck". */
+export const STUCK_ATTEMPTS = 40;
+/** …and it is stuck when recent solo accuracy is also below the band, i.e. it isn't converging. */
+const STUCK_ACCURACY = 0.8;
+
+/**
+ * More of the same isn't working: 40+ attempts, still not solid at level 2, and recent solo
+ * accuracy under 80%. The session stops spending most of its items here (session.ts): the skill
+ * gets one trap-targeted item a day and new material moves on. A skill that is slow but accurate
+ * is not stuck; it is about to become a foundation.
+ */
+export function isStuck(sp: SkillProgress): boolean {
+  if (sp.attempts < STUCK_ATTEMPTS || sp.readyAt || sp.masteredAt || isFoundation(sp)) return false;
+  const { accuracy, count } = recentSoloAccuracy(sp);
+  return count >= ABOVE_BAND_MIN && accuracy < STUCK_ACCURACY;
+}
+
+/** A practiced skill gets a level-4 try when it hasn't seen one for this long. */
+const MASTERY_TRY_EVERY_DAYS = 7;
+
+/**
+ * Practiced, working at level 3, no memory check earned yet, and no level-4 item in the last week:
+ * time for one (session.ts serves it in a review slot, marked as a stretch).
+ */
+export function dueForMasteryTry(sp: SkillProgress, now = new Date()): boolean {
+  if (skillState(sp) !== 'practiced' || sp.rusty || workingLevel(sp) !== MASTERY_LEVEL - 1) return false;
+  const since = now.getTime() - MASTERY_TRY_EVERY_DAYS * 86_400_000;
+  return !sp.history.some((a) => a.level >= MASTERY_LEVEL && a.ts >= since);
+}
+
 export function addDays(dateKey: string, days: number): string {
   const [y, m, d] = dateKey.split('-').map(Number);
   const dt = new Date(y, m - 1, d + days);

@@ -5,7 +5,7 @@
 
 import type { Problem } from '../engine/types';
 import { newEventId, type AttemptEvent, type InterpretationEvent } from '../storage/events';
-import { dateKey, emptySkill, HISTORY_CAP, MISTAKE_CAP, type MistakeEntry, type Progress } from '../storage/progress';
+import { dayKey, emptySkill, HISTORY_CAP, MISTAKE_CAP, type MistakeEntry, type Progress } from '../storage/progress';
 import { heldLevel, pCorrect, TARGET_P, updateRating, type Help } from './mastery';
 import { gradeFor, reviewCard } from './scheduler';
 import { countsTowardMastery, xpFor } from './scoring';
@@ -13,7 +13,10 @@ import { addDays, CHECK_START_LEVEL, MASTERY_LEVEL, RETENTION_DELAY_DAYS, skillS
 
 export interface AttemptResult {
   problem: Problem;
-  /** Final answer correct (in guided mode: the learner entered the last step themselves). */
+  /**
+   * The first answer was correct (in guided mode: the learner entered the last step themselves).
+   * With a `retry`, this is false and `input` / `misconception` describe the first answer.
+   */
   correct: boolean;
   help: Help;
   hintsUsed: number;
@@ -27,6 +30,8 @@ export interface AttemptResult {
   retentionCheck?: boolean;
   /** Time on the item, excluding time with the app in the background. */
   durationMs?: number;
+  /** The second try after a wrong first answer (Exercise offers one before showing the solution). */
+  retry?: { input: string; correct: boolean };
 }
 
 export type SkillEvent =
@@ -57,13 +62,25 @@ export function attemptEvent(r: AttemptResult, now = new Date()): AttemptEvent {
     workingLines: r.working?.lines.length || undefined,
     working: r.correct ? undefined : r.working?.lines,
     workingFirstWrong: r.correct ? undefined : (r.working?.firstWrong ?? undefined),
+    fixedOnRetry: r.retry && !r.correct ? r.retry.correct : undefined,
+    retryInput: r.retry && !r.correct && !r.retry.correct ? r.retry.input : undefined,
   };
+}
+
+/**
+ * How an attempt is graded. A wrong answer the learner fixed on the second try is partial
+ * evidence, exactly like a hinted solve: half XP, FSRS Hard, and it never raises the rating.
+ * It still isn't a solo solve (accuracy, mastery and the retention check use `e.correct`).
+ */
+export function graded(e: Pick<AttemptEvent, 'correct' | 'help' | 'fixedOnRetry'>): { correct: boolean; help: Help } {
+  if (!e.correct && e.fixedOnRetry) return { correct: true, help: e.help === 'none' ? 'hint' : e.help };
+  return { correct: e.correct, help: e.help };
 }
 
 /** Apply one attempt (mutates `p`). Returns XP earned and state-change events for the UI. */
 export function applyAttemptEvent(p: Progress, e: AttemptEvent): { xp: number; events: SkillEvent[] } {
   const now = new Date(e.ts);
-  const today = dateKey(now);
+  const today = dayKey(now);
   const id = e.skillId;
   const skill = p.skills[id] ?? emptySkill();
   const events: SkillEvent[] = [];
@@ -72,7 +89,8 @@ export function applyAttemptEvent(p: Progress, e: AttemptEvent): { xp: number; e
   const firstOfDay = skill.lastPracticed !== today;
   const stateBefore = skillState(skill);
   const levelBefore = heldLevel(skill.rating, skill.held);
-  skill.rating = updateRating(skill.rating, skill.attempts, e.level, e.correct, e.help);
+  const g = graded(e);
+  skill.rating = updateRating(skill.rating, skill.attempts, e.level, g.correct, g.help);
   skill.held = heldLevel(skill.rating, skill.held);
   skill.attempts += 1;
   if (solo) skill.correctUnassisted += 1;
@@ -81,7 +99,7 @@ export function applyAttemptEvent(p: Progress, e: AttemptEvent): { xp: number; e
   if (skill.history.length > HISTORY_CAP) skill.history.splice(0, skill.history.length - HISTORY_CAP);
 
   // Spaced repetition: only the first attempt of the day is a real memory test.
-  if (firstOfDay) skill.fsrs = reviewCard(skill.fsrs, now, gradeFor(e.correct, e.help));
+  if (firstOfDay) skill.fsrs = reviewCard(skill.fsrs, now, gradeFor(g.correct, g.help));
 
   // A level-3 start also needs the app's own "practiced" bar and a strong recent solo record:
   // 90%+ over the last 25 unassisted attempts (states.ts). Otherwise level 4 stays the gate.
@@ -118,7 +136,7 @@ export function applyAttemptEvent(p: Progress, e: AttemptEvent): { xp: number; e
   if (levelAfter > levelBefore) events.push({ type: 'level-up', skillId: id, level: levelAfter });
   p.skills[id] = skill;
 
-  const xp = xpFor(e.level, e.correct, e.help);
+  const xp = xpFor(e.level, g.correct, g.help);
   p.xp += xp;
   const day = (p.days[today] ??= { problems: 0, xp: 0 });
   day.problems += 1; // every finished problem counts toward the daily goal, help or not
@@ -137,6 +155,7 @@ export function applyAttemptEvent(p: Progress, e: AttemptEvent): { xp: number; e
       missedSteps: e.missedSteps,
       working: e.working,
       workingFirstWrong: e.workingFirstWrong,
+      ...(e.fixedOnRetry && { fixed: true }),
     });
     if (p.mistakes.length > MISTAKE_CAP) p.mistakes.splice(0, p.mistakes.length - MISTAKE_CAP);
   }

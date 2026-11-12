@@ -2,7 +2,7 @@
 
 import { getSkill, hasSkill, SKILLS } from '../engine/registry';
 import { TREE, type TreeNode } from '../skills/tree';
-import { dateKey, emptySkill, type Progress } from '../storage/progress';
+import { dateKey, dayOf, emptySkill, type Progress } from '../storage/progress';
 import { fragileReport, skillState, type SkillState } from './states';
 import type { LearningEvent } from '../storage/events';
 import type { Help } from './mastery';
@@ -85,8 +85,9 @@ export interface CalendarDay {
 }
 
 /** The last `weeks` full weeks (Monday-first), ending with the week containing today. */
-export function streakCalendar(p: Progress, weeks = 8, today = new Date()): CalendarDay[] {
-  const frozen = new Set(streakReport(p.days, today).frozenDays);
+export function streakCalendar(p: Progress, weeks = 8, now = new Date()): CalendarDay[] {
+  const frozen = new Set(streakReport(p.days, now).frozenDays);
+  const today = dayOf(now);
   const todayKey = dateKey(today);
   // The Sunday that ends this week (weeks run Monday → Sunday).
   const sunday = new Date(today.getFullYear(), today.getMonth(), today.getDate() + ((7 - today.getDay()) % 7));
@@ -153,7 +154,8 @@ export interface DayActivity {
 }
 
 /** Problems answered per day, oldest first, for Home's activity chart. */
-export function dailyActivity(p: Progress, days = 14, today = new Date()): DayActivity[] {
+export function dailyActivity(p: Progress, days = 14, now = new Date()): DayActivity[] {
+  const today = dayOf(now);
   return Array.from({ length: days }, (_, i) => {
     const date = dateKey(new Date(today.getFullYear(), today.getMonth(), today.getDate() - (days - 1) + i));
     return { date, problems: p.days[date]?.problems ?? 0 };
@@ -194,14 +196,17 @@ export function attemptLog(events: LearningEvent[]): LoggedAttempt[] {
  * any help, the share solved. Helped attempts are left out entirely (not counted as misses), so
  * taking a hint never lowers the line.
  */
-export function weeklyAccuracy(attempts: LoggedAttempt[], weeks = 8, today = new Date()): WeekAccuracy[] {
+export function weeklyAccuracy(attempts: LoggedAttempt[], weeks = 8, now = new Date()): WeekAccuracy[] {
+  const today = dayOf(now);
   const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - ((today.getDay() + 6) % 7));
   const starts = Array.from({ length: weeks }, (_, i) => new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() - 7 * (weeks - 1 - i)));
   const tally = starts.map(() => ({ n: 0, ok: 0 }));
   for (const a of attempts) {
     if (a.help !== 'none') continue;
     let i = starts.length - 1;
-    while (i >= 0 && a.ts < starts[i].getTime()) i--;
+    // Weeks start with Monday's learning day (4:00, storage/progress.ts).
+    const at = dayOf(new Date(a.ts)).getTime();
+    while (i >= 0 && at < starts[i].getTime()) i--;
     if (i < 0) continue;
     tally[i].n++;
     if (a.correct) tally[i].ok++;

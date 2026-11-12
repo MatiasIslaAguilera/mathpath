@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { Problem } from '../src/engine/types';
-import { currentProblem, freshStart } from './helpers';
+import { checkWrong, currentProblem, freshStart } from './helpers';
 
 // The working pad on an equation problem (the first session item is a linear equation).
 
@@ -46,7 +46,7 @@ test('a wrong line is pinpointed after Check', async ({ page }) => {
   await typeLine(page, 1, `x=${x + 1}`);
   await page.getByTestId('working-use-answer').click();
   await expect(page.getByLabel('Your answer')).toHaveValue(String(x + 1));
-  await page.getByRole('button', { name: 'Check', exact: true }).click();
+  await checkWrong(page);
   await expect(page.getByTestId('result-banner')).toContainText('Not quite');
   await expect(page.getByTestId('working-first-wrong')).toContainText('line 2');
   await expect(page.getByTestId('working-review').locator('[data-status="wrong"]')).toHaveCount(1);

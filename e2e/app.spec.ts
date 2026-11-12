@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { correctInput, currentProblem, fillAnswer, finishFeedback, freshStart } from './helpers';
+import { checkWrong, correctInput, currentProblem, fillAnswer, finishFeedback, freshStart } from './helpers';
 
 test('full daily session ends on the summary and updates home', async ({ page }) => {
   await freshStart(page);
@@ -86,7 +86,7 @@ test('a known wrong answer names the misconception', async ({ page }) => {
     if (p.misconceptions.length) {
       const m = p.misconceptions[0];
       await fillAnswer(page, p.answer, correctInput(m.wrong));
-      await page.getByRole('button', { name: 'Check', exact: true }).click();
+      await checkWrong(page);
       await expect(page.getByTestId('misconception')).toBeVisible();
       // A wrong solve also gets the "put it back into the equation" check habit.
       await expect(page.getByTestId('substitute-nudge')).toBeVisible();

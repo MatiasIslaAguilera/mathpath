@@ -13,31 +13,44 @@
 // misconception, one whose numbers set the same trap. Problems are generated lazily so
 // difficulty adapts within the session.
 
-import { getSkill, makeProblem, SKILLS, storyVariant } from '../engine/registry';
+import { getSkill, hasSkill, makeProblem, SKILLS, storyVariant } from '../engine/registry';
 import { randomSeed } from '../engine/rng';
 import type { Level, Problem } from '../engine/types';
-import { dateKey, emptySkill, type Progress, type SkillProgress } from '../storage/progress';
+import { dayKey, emptySkill, type Progress, type SkillProgress } from '../storage/progress';
 import { nextLevel, pCorrect } from './mastery';
+import { skillPriority } from './milestones';
+import type { RedoItem } from './notebook';
 import type { SkillEvent } from './record';
 import { isDue, retrievability, type StoredCard } from './scheduler';
-import { fragileReport, isAboveTargetBand, isFoundation, isSolid, MASTERY_LEVEL, retentionCheckDue, skillState, workingLevel } from './states';
+import { dueForMasteryTry, fragileReport, isAboveTargetBand, isFoundation, isSolid, isStuck, MASTERY_LEVEL, retentionCheckDue, skillState, workingLevel } from './states';
 import { daysAway, GENTLE_AFTER_DAYS } from './streak';
 import { unlockedSkills } from './unlock';
 
-export type SlotKind = 'warmup' | 'current' | 'review' | 'retention' | 'gre' | 'finisher' | 'followup' | 'stretch';
+export type SlotKind = 'warmup' | 'current' | 'review' | 'retention' | 'gre' | 'finisher' | 'followup' | 'stretch' | 'redo' | 'testout';
 
 export interface Slot {
-  kind: Exclude<SlotKind, 'followup' | 'stretch'>;
-  /** Fixed skill for retention slots. */
+  kind: Exclude<SlotKind, 'followup' | 'stretch' | 'redo' | 'testout'>;
+  /** Fixed skill: retention checks, a stuck skill's daily item, notebook redos, test-outs. */
   skillId?: string;
+  /** Fixed level (notebook redos and test-outs); otherwise the working level. */
+  level?: Level;
+  /** Draw numbers that set this misconception's trap. */
+  trap?: string;
   /** A current-skill (or GRE) item served one level above the working level. */
   stretch?: boolean;
+  /** A current slot that goes to the session's second skill. */
+  second?: boolean;
 }
 
 export interface Session {
   goal: number;
   slots: Slot[];
   currentSkill?: string;
+  /**
+   * A second skill learned in parallel, from another track when one is open (econ beside math),
+   * so one slow skill can't hold up everything behind it. Takes about 40% of the current slots.
+   */
+  secondSkill?: string;
   /** Due reviews in priority order, then other skills to explore. */
   reviewQueue: string[];
   reviewCursor: number;
@@ -46,6 +59,13 @@ export interface Session {
   /** Comeback after a long break: review only, one level easier. */
   gentle: boolean;
   only?: string;
+  /** A timed session: once this much time has passed, it skips ahead to the finisher (`wrapUp`). */
+  timeLimitMs?: number;
+  wrapped?: boolean;
+  /** Notebook session: every slot redoes a recent miss with new numbers. */
+  redo?: boolean;
+  /** Test-out: two cold level-3 items on this skill; solving both alone places it (placement.ts). */
+  testOut?: string;
   index: number;
   pendingFollowUp?: string;
   /** The misconception the miss matched: the follow-up should give it a chance to recur. */
@@ -99,20 +119,63 @@ const coreSkills = (p: Progress) => availableSkills(p).filter((id) => !isGre(id)
 const greSkills = (p: Progress) => availableSkills(p).filter(isGre);
 
 /**
- * The skill to spend ~70% of the session on, in tree order: one you're still learning that isn't
- * yet a foundation (solid at level 2), else the next new one, else any you're learning, else one
- * that's practiced but not yet at mastery level. (Foundation and practiced skills keep climbing
- * toward level 4 and the retention check through reviews, so new material isn't held up.)
+ * The skill to spend most of the session on: one you're still learning that isn't yet a
+ * foundation (solid at level 2), in tree order; else the new skill the program leans on hardest
+ * (milestones.ts `skillPriority`, tree order on ties); else any you're learning, else one that's
+ * practiced but not yet at mastery level. (Foundation and practiced skills keep climbing toward
+ * level 4 and the retention check through reviews, so new material isn't held up.)
+ *
+ * A stuck skill (40+ attempts, still not a foundation, recent accuracy under 80%) is passed over:
+ * more of the same wasn't working, so it gets one targeted item a session instead (`startSession`)
+ * and new material moves on. It is the last resort only when nothing else is open.
  */
 export function pickCurrentSkill(p: Progress, candidates: string[]): string | undefined {
   const find = (ok: (id: string) => boolean) => candidates.find(ok);
   const state = (id: string) => skillState(skillOf(p, id));
+  const stuck = (id: string) => isStuck(skillOf(p, id));
+  const fresh = candidates.filter((id) => state(id) === 'new');
+  const nextNew = fresh.length ? fresh.reduce((a, b) => (skillPriority(b) > skillPriority(a) ? b : a)) : undefined;
   return (
-    find((id) => state(id) === 'learning' && !isFoundation(skillOf(p, id))) ??
-    find((id) => state(id) === 'new') ??
-    find((id) => state(id) === 'learning') ??
-    find((id) => state(id) === 'practiced')
+    find((id) => state(id) === 'learning' && !isFoundation(skillOf(p, id)) && !stuck(id)) ??
+    nextNew ??
+    find((id) => state(id) === 'learning' && !stuck(id)) ??
+    find((id) => state(id) === 'practiced') ??
+    find((id) => state(id) === 'learning')
   );
+}
+
+/**
+ * The second skill: something to learn (same rules as the current skill) from a different track
+ * than the current one, else from a different unit. Undefined when nothing else is worth opening.
+ */
+export function pickSecondSkill(p: Progress, candidates: string[], current: string | undefined): string | undefined {
+  if (!current) return undefined;
+  const cur = getSkill(current);
+  const toLearn = (id: string) => {
+    const sp = skillOf(p, id);
+    const st = skillState(sp);
+    return id !== current && (st === 'new' || (st === 'learning' && !isFoundation(sp) && !isStuck(sp)));
+  };
+  const pool = candidates.filter(toLearn);
+  const pick = (ids: string[]) => pickCurrentSkill(p, ids);
+  return pick(pool.filter((id) => getSkill(id).track !== cur.track)) ?? pick(pool.filter((id) => getSkill(id).unit !== cur.unit));
+}
+
+/** Of every 5 current slots, the 2nd and 4th go to the second skill (about 40%). */
+const isSecondSlot = (i: number) => i % 5 === 1 || i % 5 === 3;
+
+/** Stuck skills get this many guaranteed, trap-targeted review items per session, in total. */
+const MAX_STUCK_SLOTS = 2;
+
+/** The misconception this learner has hit most often on a skill, if any. */
+function topTrap(p: Progress, id: string): string | undefined {
+  let best: string | undefined;
+  let count = 0;
+  for (const [key, n] of Object.entries(p.misconceptionCounts)) {
+    const [skillId, m] = key.split('/');
+    if (skillId === id && n > count && m in getSkill(id).misconceptions) [best, count] = [m, n];
+  }
+  return best;
 }
 
 const recall = (card: StoredCard | undefined, now = new Date()) => (card ? retrievability(card, now) : 0);
@@ -133,7 +196,7 @@ export function isGentleDay(p: Progress, now = new Date()): boolean {
 
 /** What's waiting today: shown on Home and used to build the session. */
 export function todaysAgenda(p: Progress, now = new Date()): Agenda {
-  const today = dateKey(now);
+  const today = dayKey(now);
   const ids = coreSkills(p);
   const retentionChecks = ids.filter((id) => retentionCheckDue(skillOf(p, id), today));
   const due = ids
@@ -147,11 +210,42 @@ export function todaysAgenda(p: Progress, now = new Date()): Agenda {
   return { reviewsDue: due, retentionChecks };
 }
 
-export function startSession(p: Progress, goal: number, options: { only?: string; random?: () => number; now?: Date } = {}): Session {
+export interface StartOptions {
+  only?: string;
+  random?: () => number;
+  now?: Date;
+  /** Session length by the clock: enough slots are planned to fill it, and it wraps up when time is up. */
+  minutes?: number;
+  /** Notebook session: redo these misses (learning/notebook.ts). */
+  redo?: RedoItem[];
+  /** Test out of this skill: two cold items at the placement level. */
+  testOut?: string;
+}
+
+/** Items planned per minute of a timed session (more than anyone answers, so time ends it, not the plan). */
+const SLOTS_PER_MINUTE = 2;
+const TEST_OUT_LEVEL: Level = 3;
+export const TEST_OUT_ITEMS = 2;
+
+export function startSession(p: Progress, goal: number, options: StartOptions = {}): Session {
   const rand = options.random ?? Math.random;
   const now = options.now ?? new Date();
-  const n = Math.max(3, goal);
-  const base = { goal: n, index: 0, followUpsUsed: 0, answered: 0, correct: 0, xp: 0, events: [], reviewCursor: 0, gentle: false };
+  const timed = !!options.minutes && !options.only && !options.redo && !options.testOut;
+  const n = Math.max(3, timed ? Math.max(goal, Math.round(options.minutes! * SLOTS_PER_MINUTE)) : goal);
+  const base = {
+    goal: n, index: 0, followUpsUsed: 0, answered: 0, correct: 0, xp: 0, events: [], reviewCursor: 0, gentle: false,
+    ...(timed && { timeLimitMs: options.minutes! * 60_000 }),
+  };
+
+  if (options.testOut) {
+    const slots: Slot[] = Array.from({ length: TEST_OUT_ITEMS }, () => ({ kind: 'review' as const, skillId: options.testOut, level: TEST_OUT_LEVEL }));
+    return { ...base, goal: slots.length, slots, reviewQueue: [options.testOut], interleaved: false, testOut: options.testOut };
+  }
+  if (options.redo?.length) {
+    const items = options.redo.filter((r) => hasSkill(r.skillId));
+    const slots: Slot[] = items.map((r) => ({ kind: 'review' as const, skillId: r.skillId, level: r.level, trap: r.trap }));
+    return { ...base, goal: slots.length, slots, reviewQueue: [...new Set(items.map((r) => r.skillId))], interleaved: false, redo: true };
+  }
 
   if (options.only) {
     const slots: Slot[] = [
@@ -183,8 +277,14 @@ export function startSession(p: Progress, goal: number, options: { only?: string
     p,
     available.filter((id) => !retention.includes(id)),
   );
-  const explore = available.filter((id) => id !== currentSkill && !retention.includes(id) && !agenda.reviewsDue.includes(id));
-  let reviewQueue = [...agenda.reviewsDue.filter((id) => id !== currentSkill), ...explore.filter((id) => skillOf(p, id).attempts > 0), ...explore.filter((id) => skillOf(p, id).attempts === 0)];
+  const secondSkill = pickSecondSkill(
+    p,
+    available.filter((id) => !retention.includes(id)),
+    currentSkill,
+  );
+  const learning = (id: string) => id === currentSkill || id === secondSkill;
+  const explore = available.filter((id) => !learning(id) && !retention.includes(id) && !agenda.reviewsDue.includes(id));
+  let reviewQueue = [...agenda.reviewsDue.filter((id) => !learning(id)), ...explore.filter((id) => skillOf(p, id).attempts > 0), ...explore.filter((id) => skillOf(p, id).attempts === 0)];
   // Everything mastered and nothing due: keep practicing anything (gently).
   if (!currentSkill && !reviewQueue.length) reviewQueue = available.filter((id) => !retention.includes(id));
   const interleaved = available.filter((id) => isSolid(skillState(skillOf(p, id)))).length >= 3;
@@ -197,6 +297,14 @@ export function startSession(p: Progress, goal: number, options: { only?: string
     [mid[i], mid[j]] = [mid[j], mid[i]];
   }
   const midSlots = toSlots(mid, cadenceFor(currentSkill ? skillOf(p, currentSkill) : emptySkill()));
+  if (secondSkill) {
+    let c = 0;
+    for (const slot of midSlots) if (slot.kind === 'current' && isSecondSlot(c++)) slot.second = true;
+  }
+  // A stuck skill: one review slot a session is its, with numbers that set its most frequent trap.
+  const stuck = available.filter((id) => !learning(id) && !retention.includes(id) && isStuck(skillOf(p, id))).slice(0, MAX_STUCK_SLOTS);
+  const open = midSlots.filter((slot) => slot.kind === 'review');
+  stuck.slice(0, open.length).forEach((skillId, i) => Object.assign(open[i], { skillId, trap: topTrap(p, skillId) }));
   // GRE items spread evenly through the middle: at 1/2, or at 1/3 and 2/3.
   const cuts = greSlots.map((_, i) => Math.ceil((midSlots.length * (i + 1)) / (greSlots.length + 1)));
   const middleWithGre = [...midSlots];
@@ -210,9 +318,16 @@ export function startSession(p: Progress, goal: number, options: { only?: string
       { kind: 'finisher' },
     ],
     currentSkill,
+    secondSkill,
     reviewQueue,
     interleaved,
   };
+}
+
+/** A timed session is out of time: skip to the finisher (once), so it still ends on a likely win. */
+export function wrapUp(s: Session, elapsedMs: number): Session {
+  if (!s.timeLimitMs || s.wrapped || elapsedMs < s.timeLimitMs) return s;
+  return { ...s, wrapped: true, index: Math.max(s.index, s.slots.length - 1) };
 }
 
 const gentleLevel = (s: Session, level: Level) => (s.gentle ? (Math.max(1, level - 1) as Level) : level);
@@ -221,11 +336,15 @@ export const sessionDone = (s: Session) => s.index >= s.slots.length && !s.pendi
 
 /** A warm-up or finisher should be a likely win. */
 const EASY_MIN_P = 0.8;
+/** Once a skill is practiced, level 1 is retired: its easy items start here. */
+const EASY_FLOOR_SOLID: Level = 2;
 
 /**
  * Warm-up and finisher: a likely win, rotated. Among skills you'd likely solve, the one seen
- * least recently, one level below its working level (at the working level once you're above the
- * 75–85% band, where one below is a giveaway). With no likely win, the most likely one. Always
+ * least recently, at its working level when that is already a likely win or you're above the
+ * 75–85% band (one below is then a giveaway), otherwise one level below; never level 1 for a
+ * skill that's practiced or better (Nov 2026 log: linear equations, mastered, was served 72 items
+ * below its working level). With no likely win, the most likely one. Always
  * taking the most likely one served the same fastest skill at level 1 in every session (review 6:
  * 45 level-1 exponent-rules items in 6 days, 100% correct, and the skill never climbed).
  */
@@ -233,7 +352,9 @@ function easiest(p: Progress, ids: string[], gentle: boolean): { id: string; lev
   const options = ids.map((id) => {
     const s = skillOf(p, id);
     const working = workingLevel(s);
-    const level = (!gentle && isAboveTargetBand(s) ? working : Math.max(1, working - 1)) as Level;
+    const atWorking = !gentle && (isAboveTargetBand(s) || pCorrect(s.rating, working) >= EASY_MIN_P);
+    const floor = !gentle && isSolid(skillState(s)) ? Math.min(working, EASY_FLOOR_SOLID) : 1;
+    const level = (atWorking ? working : Math.max(floor, working - 1)) as Level;
     return { id, level, prob: s.attempts ? pCorrect(s.rating, level) : 0, seen: s.history.at(-1)?.ts ?? 0 };
   });
   const likely = options.filter((o) => o.prob >= EASY_MIN_P);
@@ -257,7 +378,15 @@ export function nextProblem(s: Session, p: Progress, now = new Date()): { sessio
     const skill = SKILLS.find((k) => k.id === id)!;
     return makeProblem(skill, level, sd, plain ? undefined : storyVariant(skill, level, sd));
   };
-  const today = dateKey(now);
+  const today = dayKey(now);
+  /** A problem whose numbers give `trap` a chance to recur (any problem if none turns up). */
+  const withTrap = (id: string, level: Level, trap: string | undefined, plain = false) => {
+    let problem = make(id, level, plain);
+    for (let i = 0; trap && i < TRAP_TRIES && !problem.misconceptions.some((m) => m.id === trap); i++) {
+      problem = make(id, level, plain, randomSeed());
+    }
+    return problem;
+  };
 
   if (s.pendingFollowUp) {
     const id = s.pendingFollowUp;
@@ -277,17 +406,14 @@ export function nextProblem(s: Session, p: Progress, now = new Date()): { sessio
     // Review 8: after three "added 4ac" misses with c < 0, every follow-up drew c > 0, where the
     // mistake can't happen, so a correct follow-up proved nothing.
     const at = (trapLevel ?? level) as Level;
-    let problem = make(id, at);
-    for (let i = 0; s.pendingTrap && i < TRAP_TRIES && !problem.misconceptions.some((m) => m.id === s.pendingTrap); i++) {
-      problem = make(id, at, false, randomSeed());
-    }
+    const problem = withTrap(id, at, s.pendingTrap);
     return { session: { ...s, pendingFollowUp: undefined, pendingTrap: undefined, pendingPlain: undefined }, next: { problem, kind: 'followup', hideSkill: false } };
   }
 
   const slot = s.slots[s.index];
   const advanced: Session = { ...s, index: s.index + 1 };
   const pendingChecks = s.slots.slice(s.index).filter((x) => x.kind === 'retention').map((x) => x.skillId!);
-  const pool = [...new Set([s.currentSkill, ...s.reviewQueue, ...(s.only ? [s.only] : [])])].filter((id): id is string => !!id);
+  const pool = [...new Set([s.currentSkill, s.secondSkill, ...s.reviewQueue, ...(s.only ? [s.only] : [])])].filter((id): id is string => !!id);
   const practiced = pool.filter((id) => skillOf(p, id).attempts > 0 && !pendingChecks.includes(id));
 
   switch (slot.kind) {
@@ -309,7 +435,7 @@ export function nextProblem(s: Session, p: Progress, now = new Date()): { sessio
       return { session: advanced, next: { problem: make(id, level, true), kind: 'retention', hideSkill: s.interleaved } };
     }
     case 'current': {
-      const id = s.currentSkill ?? s.reviewQueue[0];
+      const id = (slot.second ? s.secondSkill : undefined) ?? s.currentSkill ?? s.reviewQueue[0];
       const sp = skillOf(p, id);
       const working = gentleLevel(s, workingLevel(sp));
       const stretch = !!slot.stretch && !s.gentle && !sp.rusty && working < 5 && sp.attempts >= STRETCH_MIN_ATTEMPTS;
@@ -325,12 +451,24 @@ export function nextProblem(s: Session, p: Progress, now = new Date()): { sessio
       return { session: advanced, next: { problem: make(id, (stretch ? working + 1 : working) as Level), kind: 'gre', hideSkill: false } };
     }
     case 'review': {
+      if (slot.skillId) {
+        // A fixed item: a test-out probe (plain, cold), a notebook redo, or a stuck skill's daily item.
+        const id = slot.skillId;
+        const level = slot.level ?? gentleLevel(s, workingLevel(skillOf(p, id)));
+        const kind: SlotKind = s.testOut ? 'testout' : s.redo ? 'redo' : 'review';
+        return { session: advanced, next: { problem: withTrap(id, level, slot.trap, !!s.testOut), kind, hideSkill: false } };
+      }
       const queue = s.reviewQueue.length ? s.reviewQueue : [s.currentSkill!];
       const id = queue[s.reviewCursor % queue.length];
-      return {
-        session: { ...advanced, reviewCursor: s.reviewCursor + 1 },
-        next: { problem: make(id, gentleLevel(s, workingLevel(skillOf(p, id)))), kind: 'review', hideSkill: s.interleaved },
-      };
+      const sp = skillOf(p, id);
+      const session = { ...advanced, reviewCursor: s.reviewCursor + 1 };
+      // A practiced skill sitting at level 3 gets one level-4 try a week: only a solo level-4 solve
+      // (or a 90% record) starts the memory check, and the rating alone rarely serves one
+      // (Nov 2026 log: 4 level-4 items in 702 settled attempts).
+      if (!s.gentle && dueForMasteryTry(sp, now)) {
+        return { session, next: { problem: make(id, MASTERY_LEVEL as Level), kind: 'stretch', hideSkill: s.interleaved } };
+      }
+      return { session, next: { problem: make(id, gentleLevel(s, workingLevel(sp))), kind: 'review', hideSkill: s.interleaved } };
     }
   }
 }
@@ -342,7 +480,7 @@ export function nextProblem(s: Session, p: Progress, now = new Date()): { sessio
 export function pickGreSkill(p: Progress, now = new Date()): string | undefined {
   const ids = greSkills(p);
   if (!ids.length) return undefined;
-  const today = dateKey(now);
+  const today = dayKey(now);
   const due = ids
     .filter((id) => {
       const sp = skillOf(p, id);
@@ -366,6 +504,8 @@ export function afterProblem(
   misconception?: string,
 ): Session {
   const next = { ...s, answered: s.answered + 1, correct: s.correct + (correct ? 1 : 0), xp: s.xp + xp, events: [...s.events, ...events] };
+  // A test-out is two cold probes: a follow-up would turn it into practice.
+  if (s.testOut) return next;
   if (needsFollowUp && next.followUpsUsed < MAX_FOLLOWUPS) {
     next.pendingFollowUp = problem.skillId;
     next.pendingTrap = misconception;

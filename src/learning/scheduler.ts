@@ -5,6 +5,7 @@
 
 import { createEmptyCard, fsrs, generatorParameters, Rating, type Card, type Grade } from 'ts-fsrs';
 import { FITTED } from './fitted-params';
+import { dayOf, dayOffsetMs } from '../storage/progress';
 import type { Help } from './mastery';
 
 /** JSON-safe Card (dates as ISO strings) for localStorage / progress.json. */
@@ -53,10 +54,11 @@ export function reviewCard(card: StoredCard | undefined, now: Date, grade: Grade
   return toStored(scheduler.next(current, now, grade).card);
 }
 
+/** The last moment of the learning day `d` falls in (it turns over at 4:00, storage/progress.ts). */
 function endOfDay(d: Date): Date {
-  const e = new Date(d);
+  const e = dayOf(d);
   e.setHours(23, 59, 59, 999);
-  return e;
+  return new Date(e.getTime() + dayOffsetMs(d));
 }
 
 /** Due if its due time falls on or before the end of today (reviews are a once-a-day thing). */

@@ -34,6 +34,18 @@ export async function fillAnswer(page: Page, spec: AnswerSpec, values: string | 
   }
 }
 
+/**
+ * Submit a wrong typed answer all the way to the feedback: the first Check offers one more try
+ * (no solution yet), the second one resolves the problem.
+ */
+export async function checkWrong(page: Page) {
+  const check = page.getByRole('button', { name: 'Check', exact: true }).first();
+  await check.click();
+  await expect(page.getByTestId('retry-note')).toBeVisible();
+  await expect(page.getByTestId('feedback')).toHaveCount(0);
+  await check.click();
+}
+
 export const correctInput = (spec: AnswerSpec): string | string[] =>
   spec.kind === 'tuple' ? spec.values : spec.kind === 'choice' ? spec.correct : spec.value;
 

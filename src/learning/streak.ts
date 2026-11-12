@@ -4,10 +4,11 @@
 //   - every FREEZE_EVERY-th streak day earns a freeze (hold at most MAX_FREEZES)
 //   - a missed day is covered automatically by a freeze, but only while a streak is running
 //   - today never breaks anything: it isn't over yet
+//   - "today" is the learning day, which turns over at 4:00 (storage/progress.ts `dayOf`)
 // The streak is the motivator; total days and weekly consistency are shown just as prominently,
 // so a break never erases visible progress.
 
-import { dateKey, type DayRecord } from '../storage/progress';
+import { dateKey, dayOf, type DayRecord } from '../storage/progress';
 
 export const MIN_SESSION = 3;
 export const FREEZE_EVERY = 7;
@@ -40,7 +41,8 @@ export interface StreakReport {
   lastPracticeDay?: string;
 }
 
-export function streakReport(days: Record<string, DayRecord>, today = new Date()): StreakReport {
+export function streakReport(days: Record<string, DayRecord>, now = new Date()): StreakReport {
+  const today = dayOf(now);
   const keys = Object.keys(days).filter((k) => qualifies(days, k)).sort();
   const todayKey = dateKey(today);
   const report: StreakReport = { current: 0, longest: 0, freezes: 0, frozenDays: [], breaks: [], totalDays: keys.length, lastSevenDays: 0, lastPracticeDay: keys.at(-1) };
@@ -68,6 +70,15 @@ export function streakReport(days: Record<string, DayRecord>, today = new Date()
   return report;
 }
 
+/** Qualifying days so far in this calendar week (Monday first), for the weekly goal. */
+export function daysThisWeek(days: Record<string, DayRecord>, now = new Date()): number {
+  const today = dayOf(now);
+  const sinceMonday = (today.getDay() + 6) % 7;
+  let n = 0;
+  for (let i = 0; i <= sinceMonday; i++) if (qualifies(days, dateKey(shift(today, -i)))) n++;
+  return n;
+}
+
 /** Consecutive qualifying days (freezes bridge gaps), ending today or yesterday. */
 export function currentStreak(days: Record<string, DayRecord>, today = new Date()): number {
   return streakReport(days, today).current;
@@ -78,7 +89,7 @@ export function totalPracticeDays(days: Record<string, DayRecord>): number {
 }
 
 export function problemsToday(days: Record<string, DayRecord>, today = new Date()): number {
-  return days[dateKey(today)]?.problems ?? 0;
+  return days[dateKey(dayOf(today))]?.problems ?? 0;
 }
 
 /** Whole days since the last day with any practice (0 = today). Undefined if never practiced. */
@@ -88,7 +99,7 @@ export function daysAway(days: Record<string, DayRecord>, today = new Date()): n
     .sort()
     .at(-1);
   if (!last) return undefined;
-  return Math.round((parse(dateKey(today)).getTime() - parse(last).getTime()) / 86_400_000);
+  return Math.round((parse(dateKey(dayOf(today))).getTime() - parse(last).getTime()) / 86_400_000);
 }
 
 export type Comeback =
@@ -106,7 +117,7 @@ export function comebackStatus(days: Record<string, DayRecord>, today = new Date
   const away = daysAway(days, today);
   if (away === undefined || away < 2 || problemsToday(days, today) > 0) return { kind: 'none' };
   const r = streakReport(days, today);
-  const since = dateKey(shift(today, -away));
+  const since = dateKey(shift(dayOf(today), -away));
   const recentFreezes = r.frozenDays.filter((k) => k > since);
   if (r.current > 0 && recentFreezes.length) return { kind: 'frozen', frozenDays: recentFreezes, streak: r.current };
   return { kind: 'restart', daysAway: away, totalDays: r.totalDays, longest: r.longest, gentle: away > GENTLE_AFTER_DAYS };

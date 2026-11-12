@@ -6,7 +6,7 @@
 
 import { hasSkill } from '../engine/registry';
 import { TREE } from '../skills/tree';
-import { dateKey, emptySkill, type Progress } from '../storage/progress';
+import { dateKey, dayOf, emptySkill, type Progress } from '../storage/progress';
 import { isGentleDay, todaysAgenda } from './session';
 import { skillState } from './states';
 import { MIN_SESSION, problemsToday, streakReport } from './streak';
@@ -115,8 +115,9 @@ export type WeekDot = { date: string; weekday: string; label: string; state: 'do
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 /** The last seven days, oldest first, for the streak row. */
-export function weekDots(p: Progress, now = new Date()): WeekDot[] {
-  const frozen = new Set(streakReport(p.days, now).frozenDays);
+export function weekDots(p: Progress, at = new Date()): WeekDot[] {
+  const frozen = new Set(streakReport(p.days, at).frozenDays);
+  const now = dayOf(at);
   const todayKey = dateKey(now);
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6 + i);

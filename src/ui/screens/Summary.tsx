@@ -1,10 +1,10 @@
 import { getSkill } from '../../engine/registry';
 import { nextLevel } from '../../learning/mastery';
 import type { SkillEvent } from '../../learning/record';
-import { todaysAgenda, type Session } from '../../learning/session';
+import { TEST_OUT_ITEMS, todaysAgenda, type Session } from '../../learning/session';
 import { currentStreak } from '../../learning/streak';
 import { addDays } from '../../learning/states';
-import { dateKey, emptySkill, type Progress } from '../../storage/progress';
+import { dayKey, emptySkill, type Progress } from '../../storage/progress';
 import { shortDate } from '../shortDate';
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
@@ -76,7 +76,7 @@ export function Summary({ session, progress, onHome }: { session: Session; progr
   const events = dedupeLevelUps(session.events);
 
   // Tomorrow's agenda, from the progress as it stands now.
-  const tomorrow = addDays(dateKey(), 1);
+  const tomorrow = addDays(dayKey(), 1);
   const [ty, tm, td] = tomorrow.split('-').map(Number);
   const agenda = todaysAgenda(progress, new Date(ty, tm - 1, td, 12));
   const current = session.currentSkill ? getSkill(session.currentSkill) : undefined;
@@ -95,6 +95,17 @@ export function Summary({ session, progress, onHome }: { session: Session; progr
         <p>problems · {session.correct} solved on your own · {session.xp} XP</p>
         {streak > 0 && <p className="streak-line">🔥 {streak} day streak</p>}
       </div>
+      {session.testOut && (
+        <div className={`callout ${session.correct >= TEST_OUT_ITEMS ? 'good' : 'info'}`} data-testid="test-out-result">
+          {session.correct >= TEST_OUT_ITEMS ? (
+            <>
+              <strong>Tested out: {getSkill(session.testOut).title}.</strong> It starts at level 3, and a review in a few days checks that it holds.
+            </>
+          ) : (
+            <>Not this time: {getSkill(session.testOut).title} starts from the beginning, which is what practice is for.</>
+          )}
+        </div>
+      )}
       {events.length > 0 && (
         <div className="events" data-testid="events">
           {events.map((e, i) => (

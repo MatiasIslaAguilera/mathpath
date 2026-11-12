@@ -202,8 +202,15 @@ describe('session builder', () => {
     const warm = nextProblem(s, p)!;
     expect(warm.next.kind).toBe('warmup');
     expect(warm.next.problem.level).toBe(3);
-    // Inside the band (80% recent), it stays one level below: a likely win.
+    // Inside the band (80% recent) it is still served at the working level when that is itself a
+    // likely win (P = 0.83 here)…
     p.skills[LIN].history = [...solved(LIN, 2, 1000, 16), ...solved(LIN, 2, 1100, 4, false)];
+    expect(nextProblem(startSession(p, 5, { only: LIN }), p)!.next.problem.level).toBe(3);
+    // …and one level below when it isn't (P = 0.77), but never level 1 for a practiced skill.
+    p.skills[LIN].rating = 1.2;
+    expect(nextProblem(startSession(p, 5, { only: LIN }), p)!.next.problem.level).toBe(2);
+    p.skills[LIN] = { ...p.skills[LIN], rating: 1.1, held: 2 };
+    expect(skillState(p.skills[LIN])).toBe('practiced');
     expect(nextProblem(startSession(p, 5, { only: LIN }), p)!.next.problem.level).toBe(2);
   });
 

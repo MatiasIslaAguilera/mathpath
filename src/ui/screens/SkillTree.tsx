@@ -6,6 +6,8 @@ import type { Progress } from '../../storage/progress';
 interface Props {
   progress: Progress;
   onPractice(skillId: string): void;
+  /** Two cold level-3 problems; solving both starts the skill at level 3. */
+  onTestOut(skillId: string): void;
   onLearn(skillId: string): void;
   onBack(): void;
 }
@@ -40,7 +42,7 @@ function statusLine(item: TreeItem): string {
   }
 }
 
-export function SkillTree({ progress, onPractice, onLearn, onBack }: Props) {
+export function SkillTree({ progress, onPractice, onTestOut, onLearn, onBack }: Props) {
   const view = treeView(progress);
   // One tile open at a time, to show its Learn / Practice buttons.
   const [open, setOpen] = useState<string | null>(null);
@@ -71,6 +73,11 @@ export function SkillTree({ progress, onPractice, onLearn, onBack }: Props) {
                       {status !== 'locked' && (
                         <button className="btn small" onClick={() => onPractice(node.id)}>
                           Practice
+                        </button>
+                      )}
+                      {status === 'new' && (
+                        <button className="btn small" onClick={() => onTestOut(node.id)} data-testid={`test-out-${node.id}`}>
+                          Test out
                         </button>
                       )}
                     </div>

@@ -57,10 +57,10 @@ const FIXTURES: Fixture[] = [
   },
 ];
 
-async function seed(page: Page, f: Fixture) {
+async function seed(page: Page, f: Fixture, extra: { settings?: Record<string, unknown>; mistakes?: unknown[] } = {}) {
   await page.goto('/?e2e');
   await page.evaluate(
-    ([f, ids]) => {
+    ([f, ids, extra]) => {
       const key = (o: number) => {
         const d = new Date();
         d.setDate(d.getDate() + o);
@@ -103,16 +103,16 @@ async function seed(page: Page, f: Fixture) {
         xp: f.xp,
         days,
         skills,
-        mistakes: [],
+        mistakes: extra.mistakes ?? [],
         misconceptionCounts: {},
         stepMisses: {},
-        settings: { dailyGoal: 10 },
+        settings: { dailyGoal: 10, ...extra.settings },
         ...(f.skills.length ? { onboarding: 'skipped', welcomeShownOn: key(0) } : {}),
       };
       localStorage.clear();
       localStorage.setItem('mathpath.progress', JSON.stringify(progress));
     },
-    [f, BUILT] as const,
+    [f, BUILT, extra] as const,
   );
   await page.goto('/?e2e');
 }
@@ -195,3 +195,45 @@ for (const [skillId, working] of [
     await page.screenshot({ path: `${OUT}/pad-${skillId}.png`, fullPage: true });
   });
 }
+
+// Pace and error handling (Nov 2026): the pace line and weekly goal on Home, Stats with the road
+// and the notebook, the new Settings card, Test out on the tree, and the second-try note.
+test('pace, notebook, settings, test-out and second try', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  const target = new Date(Date.now() + 280 * 86400000);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const miss = (i: number, daysAgo: number, input: string, misconception?: string, fixed?: boolean) => ({
+    ts: Date.now() - daysAgo * 86400000, skillId: BUILT[i], problemId: `${BUILT[i]}:2:${daysAgo}`, level: 2, kind: 'wrong', input, misconception, missedSteps: [], ...(fixed ? { fixed: true } : {}),
+  });
+  await seed(page, FIXTURES[2], {
+    settings: { weeklyDays: 5, targetDate: `${target.getFullYear()}-${pad(target.getMonth() + 1)}-${pad(target.getDate())}` },
+    mistakes: [miss(4, 6, '-3', 'neg-c-sign'), miss(0, 4, '7', 'sign-x-term'), miss(1, 2, 'x > 6'), miss(0, 1, '12', undefined, true)],
+  });
+  await page.goto('/?e2e');
+  await page.getByTestId('garden').waitFor();
+  await page.screenshot({ path: `${OUT}/pace-home.png`, fullPage: true });
+  await page.getByTestId('nav-stats').click();
+  await page.getByTestId('road-card').waitFor();
+  await page.screenshot({ path: `${OUT}/pace-stats.png`, fullPage: true });
+  await page.goto('/?e2e');
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByTestId('pace-card').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${OUT}/pace-settings.png`, fullPage: true });
+  await page.goto('/?e2e');
+  await page.getByTestId('nav-tree').click();
+  const fresh = page.locator('.tree-tile[data-status="new"]').first();
+  await fresh.getByRole('button').first().click();
+  await fresh.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${OUT}/pace-tree-test-out.png` });
+  await fresh.getByRole('button', { name: 'Test out' }).click();
+  await page.getByTestId('exercise').waitFor();
+  await page.screenshot({ path: `${OUT}/pace-test-out-item.png`, fullPage: true });
+  // A practice item with a wrong first answer: the second-try note.
+  await page.goto('/?e2e');
+  await page.getByTestId('skill-linear-equations').getByRole('button', { name: 'Practice' }).click();
+  await page.getByTestId('exercise').waitFor();
+  await page.getByLabel('Your answer').fill('123456');
+  await page.getByRole('button', { name: 'Check', exact: true }).first().click();
+  await page.getByTestId('retry-note').waitFor();
+  await page.screenshot({ path: `${OUT}/pace-second-try.png`, fullPage: true });
+});

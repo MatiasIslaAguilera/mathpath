@@ -1483,6 +1483,7 @@ details[open] summary {
 }
 .tree-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   padding: 0 10px 10px;
 }
@@ -1933,4 +1934,23 @@ details[open] summary {
 }
 .keyboard-bar .btn.primary {
   min-width: 96px;
+}
+
+/* pace, milestones, settings sections (Nov 2026) */
+.pace-line {
+  text-align: center;
+}
+.milestones .row.stack {
+  align-items: stretch;
+  gap: 2px;
+}
+.milestones .bar.thin {
+  margin-top: 4px;
+}
+.settings .card .seg + h2,
+.settings .card .field-row + h2 {
+  margin-top: 18px;
+}
+.callout .link {
+  padding: 0;
 }

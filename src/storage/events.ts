@@ -31,6 +31,14 @@ export interface AttemptEvent extends EventBase {
   /** Wrong attempts only: the lines (mathjs syntax) and the index of the first wrong one. */
   working?: string[];
   workingFirstWrong?: number;
+  /**
+   * The first answer was wrong (so `correct` is false and `input` is that first answer) and the
+   * learner got one more try before the solution showed: true if that second answer was right.
+   * Graded like a hinted solve: half XP, FSRS Hard, never raises the rating.
+   */
+  fixedOnRetry?: boolean;
+  /** The second answer, when it was wrong too. */
+  retryInput?: string;
 }
 
 export interface InterpretationEvent extends EventBase {
@@ -48,6 +56,8 @@ export interface PlacementEvent extends EventBase {
   type: 'placement';
   results: Record<string, PlacementResult>;
   items: PlacementRecord['items'];
+  /** A one-skill test-out from the skill tree: credits the skill, leaves the placement record alone. */
+  testOut?: boolean;
 }
 
 /** Progress recorded before the event log existed (or imported from an old file): replay starts from it. */

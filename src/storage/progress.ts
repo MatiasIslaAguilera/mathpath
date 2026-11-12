@@ -63,6 +63,8 @@ export interface MistakeEntry {
   /** Lines of working (mathjs syntax) and the index of the first wrong one, if the working pad was used. */
   working?: string[];
   workingFirstWrong?: number;
+  /** Wrong first answer, fixed by the learner on the second try (no solution shown in between). */
+  fixed?: boolean;
 }
 
 export interface DayRecord {
@@ -76,6 +78,12 @@ export interface Settings {
   reminderTime?: string;
   /** Also show a best-effort notification while the app is open. */
   inAppReminder?: boolean;
+  /** Daily session length in minutes; unset = by the daily goal's problem count. */
+  sessionMinutes?: number;
+  /** Practice days aimed for per calendar week (Mon–Sun); unset = no weekly goal. */
+  weeklyDays?: number;
+  /** When the learner wants the core tree solid (YYYY-MM-DD), e.g. the program's start. */
+  targetDate?: string;
 }
 
 export interface Progress {
@@ -128,11 +136,37 @@ export function emptySkill(): SkillProgress {
   return { rating: INITIAL_RATING, attempts: 0, correctUnassisted: 0, history: [], interpretation: { correct: 0, total: 0 } };
 }
 
-/** Local calendar date, YYYY-MM-DD. */
+/** Local calendar date, YYYY-MM-DD. For "which day is this moment", use `dayKey`. */
 export function dateKey(d = new Date()): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
+
+/**
+ * The learning day turns over at 4:00, not midnight: a session that runs past midnight is still
+ * "today" (Nov 2026 log: 113 of 1,096 events fell between 0:00 and 2:00, splitting one evening's
+ * practice over two days and making its second half "first of the day").
+ */
+export const DAY_START_HOUR = 4;
+
+/**
+ * The 4:00 rule applies from this moment on (Nov 13 2026, 12:00 UTC). Progress is rebuilt by
+ * replaying every event, so applying it to older events would re-date them: on the Nov 2026 log
+ * that turned a passed memory check into a later-in-the-day attempt (un-mastering linear
+ * equations) and cost a streak day. History before the rule keeps its midnight days.
+ */
+export const DAY_SHIFT_FROM = Date.UTC(2026, 10, 13, 12);
+
+/** How far a moment is shifted back to find its learning day: 4 h, or 0 before the rule began. */
+export const dayOffsetMs = (now: Date): number => (now.getTime() >= DAY_SHIFT_FROM ? DAY_START_HOUR * 3_600_000 : 0);
+
+/** The moment shifted so that its calendar date is its learning day. Do calendar math on this. */
+export function dayOf(now = new Date()): Date {
+  return new Date(now.getTime() - dayOffsetMs(now));
+}
+
+/** The learning day a moment belongs to, YYYY-MM-DD. */
+export const dayKey = (now = new Date()): string => dateKey(dayOf(now));
 
 // ---------- validation / migration ----------
 
